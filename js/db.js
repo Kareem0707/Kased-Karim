@@ -113,28 +113,28 @@ class KasedKarimDB {
   }
 
   // --------------------------------------------------------------------------
-  // CLOUD DATABASE SYNC ENGINE (Vercel Serverless & Cloud REST Integration)
+  // CLOUD DATABASE SYNC ENGINE (Vercel Serverless & Cloud Storage)
   // --------------------------------------------------------------------------
   initCloudSync() {
+    this.cloudBinFallback = "https://extendsclass.com/api/json-storage/bin/faabcdf";
+
     // Attempt initial sync from Cloud
     setTimeout(() => {
       this.syncFromCloud();
-    }, 1500);
+    }, 1000);
 
-    // Periodic silent background poll (every 10 seconds)
-    // Ensures admin gets notified in real-time if a customer orders from phone!
+    // Periodic fast background poll (every 4 seconds)
+    // Ensures admin gets notified in real-time when a customer orders from ANY phone or browser!
     setInterval(() => {
       this.syncFromCloud(true);
-    }, 10000);
+    }, 4000);
   }
 
   getCloudApiEndpoint(route) {
-    // Custom configured endpoint in localStorage takes priority
     const savedCustom = localStorage.getItem("kk_custom_cloud_url");
     if (savedCustom && savedCustom.trim()) {
       return savedCustom.trim().replace(/\/$/, "") + (route.startsWith("/") ? route : "/" + route);
     }
-    // Default Vercel relative path
     return route;
   }
 
@@ -143,56 +143,80 @@ class KasedKarimDB {
     this.isSyncing = true;
 
     try {
-      const endpoint = this.getCloudApiEndpoint("/api/orders");
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      let orders = null;
 
-      const res = await fetch(endpoint, {
-        signal: controller.signal,
-        headers: { "Accept": "application/json" }
-      });
-      clearTimeout(timeoutId);
+      // 1. Try Vercel Serverless Endpoint
+      try {
+        const endpoint = this.getCloudApiEndpoint("/api/orders");
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success && Array.isArray(data.orders)) {
-          this.cloudProvider = "Vercel Cloud Serverless API";
-          this.lastSyncTimestamp = Date.now();
+        const res = await fetch(endpoint, {
+          signal: controller.signal,
+          headers: { "Accept": "application/json" }
+        });
+        clearTimeout(timeoutId);
 
-          // Check for newly arrived orders
-          let hasNewCloudOrders = false;
-          let latestNewOrder = null;
-
-          const localOrders = this.getOrders();
-          const orderMap = new Map();
-          localOrders.forEach(o => orderMap.set(o.id, o));
-
-          data.orders.forEach(cloudOrder => {
-            if (!this.knownOrderIds.has(cloudOrder.id)) {
-              this.knownOrderIds.add(cloudOrder.id);
-              hasNewCloudOrders = true;
-              latestNewOrder = cloudOrder;
-            }
-            // Update or add
-            orderMap.set(cloudOrder.id, cloudOrder);
-          });
-
-          // Save merged orders
-          const mergedOrders = Array.from(orderMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-          localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(mergedOrders));
-
-          if (hasNewCloudOrders && latestNewOrder && isBackgroundPoll) {
-            // New order received from cloud while browsing! Trigger alert:
-            this.playLuxuryChime();
-            window.dispatchEvent(new CustomEvent("kk_new_order_placed", { detail: latestNewOrder }));
-          } else {
-            window.dispatchEvent(new CustomEvent("kk_orders_updated"));
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.orders)) {
+            orders = data.orders;
+            this.cloudProvider = "Vercel Serverless Cloud API";
           }
+        }
+      } catch (errApi) {
+        // Fallback to direct cloud bin
+      }
+
+      // 2. Direct Cloud Storage Fallback (if running locally or API unreachable)
+      if (!orders && this.cloudBinFallback) {
+        try {
+          const binRes = await fetch(this.cloudBinFallback, { headers: { "Accept": "application/json" } });
+          if (binRes.ok) {
+            const binData = await binRes.json();
+            if (binData && Array.isArray(binData.orders)) {
+              orders = binData.orders;
+              this.cloudProvider = "Direct Cloud Storage Bin";
+            }
+          }
+        } catch (errBin) {
+          // Both failed - retain local cache
+        }
+      }
+
+      if (orders && Array.isArray(orders)) {
+        this.lastSyncTimestamp = Date.now();
+
+        // Detect new orders for audio chime and red pulsating alert
+        let hasNewCloudOrders = false;
+        let latestNewOrder = null;
+
+        const localOrders = this.getOrders();
+        const orderMap = new Map();
+        localOrders.forEach(o => orderMap.set(o.id, o));
+
+        orders.forEach(cloudOrder => {
+          if (!this.knownOrderIds.has(cloudOrder.id)) {
+            this.knownOrderIds.add(cloudOrder.id);
+            hasNewCloudOrders = true;
+            latestNewOrder = cloudOrder;
+          }
+          orderMap.set(cloudOrder.id, cloudOrder);
+        });
+
+        // Save merged orders to localStorage
+        const mergedOrders = Array.from(orderMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(mergedOrders));
+
+        if (hasNewCloudOrders && latestNewOrder && isBackgroundPoll) {
+          this.playLuxuryChime();
+          window.dispatchEvent(new CustomEvent("kk_new_order_placed", { detail: latestNewOrder }));
+        } else {
+          window.dispatchEvent(new CustomEvent("kk_orders_updated"));
         }
       }
     } catch (e) {
-      // Local development or offline - silently continues with local database
-      // console.log("Cloud sync note:", e.message);
+      console.warn("Cloud sync note:", e.message);
     } finally {
       this.isSyncing = false;
     }
@@ -201,13 +225,49 @@ class KasedKarimDB {
   async sendOrderToCloud(order) {
     try {
       const endpoint = this.getCloudApiEndpoint("/api/orders");
-      await fetch(endpoint, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(order)
       });
+
+      if (!res.ok && this.cloudBinFallback) {
+        // Fallback: update cloud bin directly
+        const binRes = await fetch(this.cloudBinFallback);
+        if (binRes.ok) {
+          const binData = await binRes.json();
+          if (!Array.isArray(binData.orders)) binData.orders = [];
+          if (!binData.orders.some(o => o.id === order.id)) {
+            binData.orders.unshift(order);
+          }
+          await fetch(this.cloudBinFallback, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(binData)
+          });
+        }
+      }
     } catch (e) {
-      console.warn("Cloud push buffered locally:", e.message);
+      // Local development or network error - push directly to cloud bin fallback
+      try {
+        if (this.cloudBinFallback) {
+          const binRes = await fetch(this.cloudBinFallback);
+          if (binRes.ok) {
+            const binData = await binRes.json();
+            if (!Array.isArray(binData.orders)) binData.orders = [];
+            if (!binData.orders.some(o => o.id === order.id)) {
+              binData.orders.unshift(order);
+            }
+            await fetch(this.cloudBinFallback, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(binData)
+            });
+          }
+        }
+      } catch (err2) {
+        console.warn("Cloud push buffered locally:", err2.message);
+      }
     }
   }
 

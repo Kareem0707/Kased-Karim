@@ -1,5 +1,7 @@
 // Vercel Serverless Function: /api/products
-// Handles Products Catalog Persistence for Kased Karim Lighting Showroom
+// Handles Products Catalog Persistence across devices
+
+const CLOUD_BIN = process.env.CLOUD_BIN_URL || "https://extendsclass.com/api/json-storage/bin/faabcdf";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -10,33 +12,18 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const KV_URL = process.env.KV_REST_API_URL;
-  const KV_TOKEN = process.env.KV_REST_API_TOKEN;
-  const FIREBASE_URL = process.env.FIREBASE_DB_URL || "https://kased-karim-zayed-default-rtdb.firebaseio.com";
-
   try {
     // 1. GET: Fetch products
     if (req.method === "GET") {
       let products = [];
-
-      if (KV_URL && KV_TOKEN) {
-        const kvRes = await fetch(`${KV_URL}/get/products`, {
-          headers: { Authorization: `Bearer ${KV_TOKEN}` }
-        });
-        const kvData = await kvRes.json();
-        products = kvData.result ? (typeof kvData.result === "string" ? JSON.parse(kvData.result) : kvData.result) : [];
-      } else if (FIREBASE_URL) {
-        try {
-          const fbRes = await fetch(`${FIREBASE_URL}/products.json`);
-          if (fbRes.ok) {
-            const fbData = await fbRes.json();
-            if (fbData) {
-              products = Object.keys(fbData).map(k => ({ ...fbData[k], _fbKey: k }));
-            }
-          }
-        } catch (e) {
-          console.warn("Firebase fetch fallback:", e.message);
+      try {
+        const binRes = await fetch(CLOUD_BIN, { headers: { "Accept": "application/json" } });
+        if (binRes.ok) {
+          const binData = await binRes.json();
+          products = Array.isArray(binData.products) ? binData.products : [];
         }
+      } catch (err) {
+        console.error("Cloud fetch products error:", err.message);
       }
 
       return res.status(200).json({ success: true, count: products.length, products });
@@ -53,47 +40,53 @@ export default async function handler(req, res) {
         product.id = "kk-cloud-" + Date.now();
       }
 
-      if (KV_URL && KV_TOKEN) {
-        const kvGet = await fetch(`${KV_URL}/get/products`, {
-          headers: { Authorization: `Bearer ${KV_TOKEN}` }
-        });
-        const kvData = await kvGet.json();
-        let products = kvData.result ? (typeof kvData.result === "string" ? JSON.parse(kvData.result) : kvData.result) : [];
-        products.unshift(product);
+      try {
+        let binData = { orders: [], products: [] };
+        const binRes = await fetch(CLOUD_BIN);
+        if (binRes.ok) {
+          binData = await binRes.json();
+          if (!Array.isArray(binData.products)) binData.products = [];
+        }
 
-        await fetch(`${KV_URL}/set/products`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${KV_TOKEN}`, "Content-Type": "application/json" },
-          body: JSON.stringify(products)
-        });
-      } else if (FIREBASE_URL) {
-        await fetch(`${FIREBASE_URL}/products.json`, {
-          method: "POST",
+        const idx = binData.products.findIndex(p => p.id === product.id);
+        if (idx > -1) {
+          binData.products[idx] = { ...binData.products[idx], ...product };
+        } else {
+          binData.products.unshift(product);
+        }
+
+        await fetch(CLOUD_BIN, {
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(product)
+          body: JSON.stringify(binData)
         });
+      } catch (err) {
+        console.error("Cloud save product error:", err.message);
       }
 
       return res.status(201).json({ success: true, product });
     }
 
-    // 3. DELETE: Remove product
+    // 3. DELETE: Delete product
     if (req.method === "DELETE") {
       const { id } = req.query || {};
       if (!id) return res.status(400).json({ error: "Missing product ID" });
 
-      if (KV_URL && KV_TOKEN) {
-        const kvGet = await fetch(`${KV_URL}/get/products`, {
-          headers: { Authorization: `Bearer ${KV_TOKEN}` }
-        });
-        const kvData = await kvGet.json();
-        let products = kvData.result ? (typeof kvData.result === "string" ? JSON.parse(kvData.result) : kvData.result) : [];
-        products = products.filter(p => p.id !== id);
-        await fetch(`${KV_URL}/set/products`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${KV_TOKEN}`, "Content-Type": "application/json" },
-          body: JSON.stringify(products)
-        });
+      try {
+        const binRes = await fetch(CLOUD_BIN);
+        if (binRes.ok) {
+          const binData = await binRes.json();
+          if (Array.isArray(binData.products)) {
+            binData.products = binData.products.filter(p => p.id !== id);
+            await fetch(CLOUD_BIN, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(binData)
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Cloud delete product error:", err.message);
       }
 
       return res.status(200).json({ success: true, deleted: id });

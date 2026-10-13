@@ -32,6 +32,133 @@ window.showToast = window.showToast || function(message) {
   }, 3500);
 };
 
+// ----------------------------------------------------------------------------
+// 0. ADMIN SECURITY GATE & ACCESS PRIVACY (إخفاء الإدارة عن العامة وبوابة الدخول)
+// ----------------------------------------------------------------------------
+const ADMIN_SECURITY = {
+  SECRET_KEYS: ["kased77", "2025", "kased"],
+  STORAGE_KEY: "kk_admin_authorized"
+};
+
+function checkAdminAccessVisibility() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const key = urlParams.get("key");
+  const adminParam = urlParams.get("admin");
+
+  const hasParamAuth = (key && ADMIN_SECURITY.SECRET_KEYS.includes(key)) ||
+                       adminParam === "kased" || adminParam === "true";
+
+  const isLocallyAuth = localStorage.getItem(ADMIN_SECURITY.STORAGE_KEY) === "true";
+
+  if (hasParamAuth || isLocallyAuth) {
+    document.body.classList.add("is-admin-user");
+    localStorage.setItem(ADMIN_SECURITY.STORAGE_KEY, "true");
+  } else {
+    document.body.classList.remove("is-admin-user");
+  }
+}
+
+function checkAdminSecurityGate() {
+  const gateEl = document.getElementById("adminAuthGate");
+  const rootEl = document.getElementById("adminPageRoot");
+  if (!gateEl || !rootEl) return;
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const key = urlParams.get("key");
+  const adminParam = urlParams.get("admin");
+
+  if ((key && ADMIN_SECURITY.SECRET_KEYS.includes(key)) || adminParam === "kased" || adminParam === "true") {
+    localStorage.setItem(ADMIN_SECURITY.STORAGE_KEY, "true");
+  }
+
+  const isAuthorized = localStorage.getItem(ADMIN_SECURITY.STORAGE_KEY) === "true";
+
+  if (isAuthorized) {
+    gateEl.style.display = "none";
+    rootEl.style.display = "block";
+    document.body.classList.add("is-admin-user");
+  } else {
+    gateEl.style.display = "flex";
+    rootEl.style.display = "none";
+  }
+}
+
+function handleAdminPinSubmit(e) {
+  e.preventDefault();
+  const pinInput = document.getElementById("adminPinInput");
+  const errorEl = document.getElementById("adminPinError");
+  const gateEl = document.getElementById("adminAuthGate");
+  const rootEl = document.getElementById("adminPageRoot");
+
+  if (!pinInput) return;
+  const val = pinInput.value.trim();
+
+  if (ADMIN_SECURITY.SECRET_KEYS.includes(val) || val === "2025" || val === "kased77") {
+    localStorage.setItem(ADMIN_SECURITY.STORAGE_KEY, "true");
+    if (errorEl) errorEl.style.display = "none";
+    if (gateEl) gateEl.style.display = "none";
+    if (rootEl) rootEl.style.display = "block";
+    document.body.classList.add("is-admin-user");
+    showToast("✅ مرحباً بكم في لوحة تحكم معرض قاصد كريم");
+
+    if (window.KK_DB) window.KK_DB.markAllOrdersAsRead();
+    updateAdminHeaderBadge();
+    renderAdminOverview();
+    renderAdminOrders();
+    renderAdminInventory();
+  } else {
+    if (errorEl) errorEl.style.display = "flex";
+    pinInput.value = "";
+    pinInput.focus();
+    showToast("⚠️ رمز الدخول غير صحيح");
+  }
+}
+
+function togglePinVisibility() {
+  const input = document.getElementById("adminPinInput");
+  const icon = document.getElementById("pinEyeIcon");
+  if (!input) return;
+
+  if (input.type === "password") {
+    input.type = "text";
+    if (icon) {
+      icon.classList.remove("fa-eye");
+      icon.classList.add("fa-eye-slash");
+    }
+  } else {
+    input.type = "password";
+    if (icon) {
+      icon.classList.remove("fa-eye-slash");
+      icon.classList.add("fa-eye");
+    }
+  }
+}
+
+function copyAdminSecretLink() {
+  const host = window.location.origin;
+  const path = window.location.pathname.includes("admin.html") ? "/admin.html" : "/admin";
+  const secretLink = `${host}${path}?key=kased77`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(secretLink).then(() => {
+      showToast("📋 تم نسخ رابط الإدارة المخصص بنجاح! يمكنك إرساله للمديرين الآن");
+    }).catch(() => {
+      prompt("رابط الإدارة المخصص لمشاركته مع المديرين:", secretLink);
+    });
+  } else {
+    prompt("رابط الإدارة المخصص لمشاركته مع المديرين:", secretLink);
+  }
+}
+
+function logoutAdmin() {
+  localStorage.removeItem(ADMIN_SECURITY.STORAGE_KEY);
+  sessionStorage.removeItem(ADMIN_SECURITY.STORAGE_KEY);
+  showToast("تم تسجيل خروج الإدارة");
+  setTimeout(() => {
+    window.location.href = "index.html";
+  }, 500);
+}
+
 // Initialize Admin and Checkout systems on page load
 document.addEventListener("DOMContentLoaded", () => {
   initAdminSystem();
@@ -39,6 +166,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function initAdminSystem() {
   const isAdminPage = !!document.getElementById("adminPageRoot");
+
+  checkAdminAccessVisibility();
+  if (isAdminPage) {
+    checkAdminSecurityGate();
+  }
 
   updateAdminHeaderBadge();
   setupAdminListeners();
@@ -674,57 +806,31 @@ function handleAdminAddProductForm(e) {
     return;
   }
 
-  // 2. Optional Fields with Showroom Defaults
-  const enName = form.adminUnitEnName && form.adminUnitEnName.value.trim() 
-    ? form.adminUnitEnName.value.trim() 
-    : unitName;
-
+  // 2. Optional Fields (No default values added - keep empty if user did not provide them)
+  const enName = form.adminUnitEnName ? form.adminUnitEnName.value.trim() : "";
   const category = form.adminUnitCategory ? form.adminUnitCategory.value : "chandeliers";
   const categoryName = form.adminUnitCategory && form.adminUnitCategory.selectedIndex >= 0
     ? form.adminUnitCategory.options[form.adminUnitCategory.selectedIndex].text
     : "ثريات ونجف فاخر";
 
-  const style = form.adminUnitStyle && form.adminUnitStyle.value.trim()
-    ? form.adminUnitStyle.value.trim()
-    : "معاصر فاخر";
-
+  const style = form.adminUnitStyle ? form.adminUnitStyle.value.trim() : "";
   const originalPrice = form.adminUnitOldPrice && form.adminUnitOldPrice.value
     ? parseFloat(form.adminUnitOldPrice.value)
     : null;
 
-  const warranty = form.adminUnitWarranty && form.adminUnitWarranty.value.trim()
-    ? form.adminUnitWarranty.value.trim()
-    : "5 سنوات ضمان شامل";
-
+  const warranty = form.adminUnitWarranty ? form.adminUnitWarranty.value.trim() : "";
   const secImgInput = document.getElementById("adminUnitImage2Final");
   const secondaryImage = secImgInput ? secImgInput.value.trim() : "";
+  const description = form.adminUnitDesc ? form.adminUnitDesc.value.trim() : "";
 
-  const description = form.adminUnitDesc && form.adminUnitDesc.value.trim()
-    ? form.adminUnitDesc.value.trim()
-    : "وحدة إضاءة فاخرة معتمدة من معرض قاصد كريم بالشيخ زايد.";
-
-  const isExclusive = form.adminIsExclusive ? form.adminIsExclusive.checked : true;
+  const isExclusive = form.adminIsExclusive ? form.adminIsExclusive.checked : false;
   const isBestSeller = form.adminIsBestSeller ? form.adminIsBestSeller.checked : false;
 
-  const dimensions = form.adminUnitDimensions && form.adminUnitDimensions.value.trim()
-    ? form.adminUnitDimensions.value.trim()
-    : "حسب المقاس المطلوب";
-
-  const material = form.adminUnitMaterial && form.adminUnitMaterial.value.trim()
-    ? form.adminUnitMaterial.value.trim()
-    : "نحاس وألمنيوم فندقي";
-
-  const colorTemp = form.adminUnitKelvin && form.adminUnitKelvin.value.trim()
-    ? form.adminUnitKelvin.value.trim()
-    : "3000K دافئ";
-
-  const wattage = form.adminUnitWattage && form.adminUnitWattage.value.trim()
-    ? form.adminUnitWattage.value.trim()
-    : "LED موفر عالي الكفاءة";
-
-  const cri = form.adminUnitCri && form.adminUnitCri.value.trim()
-    ? form.adminUnitCri.value.trim()
-    : "CRI > 98";
+  const dimensions = form.adminUnitDimensions ? form.adminUnitDimensions.value.trim() : "";
+  const material = form.adminUnitMaterial ? form.adminUnitMaterial.value.trim() : "";
+  const colorTemp = form.adminUnitKelvin ? form.adminUnitKelvin.value.trim() : "";
+  const wattage = form.adminUnitWattage ? form.adminUnitWattage.value.trim() : "";
+  const cri = form.adminUnitCri ? form.adminUnitCri.value.trim() : "";
 
   const productData = {
     name: unitName,
@@ -736,7 +842,7 @@ function handleAdminAddProductForm(e) {
     originalPrice: originalPrice,
     warranty: warranty,
     image: unitImage,
-    secondaryImage: secondaryImage || unitImage,
+    secondaryImage: secondaryImage,
     description: description,
     isExclusive: isExclusive,
     isBestSeller: isBestSeller,
@@ -746,7 +852,7 @@ function handleAdminAddProductForm(e) {
       colorTemp: colorTemp,
       wattage: wattage,
       cri: cri,
-      voltage: "220V",
+      voltage: "",
       warranty: warranty
     }
   };

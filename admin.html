@@ -23,6 +23,54 @@
 </head>
 <body class="admin-page-body">
 
+  <!-- ====================================================================
+       ADMIN PIN SECURITY GATE (بوابة الدخول السرية الخاصة بالمديرين)
+       ==================================================================== -->
+  <div id="adminAuthGate" class="admin-auth-overlay" style="display: none;">
+    <div class="admin-auth-card">
+      <div class="admin-auth-emblem">
+        <i class="fas fa-shield-halved"></i>
+      </div>
+      <h2 class="admin-auth-title">بوابة الإدارة التنفيذية</h2>
+      <div class="admin-auth-subtitle">معرض قاصد كريم للإضاءة الفاخرة • الشيخ زايد</div>
+      
+      <p class="admin-auth-desc">
+        هذه الصفحة مخصصة لمديري المعرض فقط. يرجى إدخال رمز الدخول السري (PIN):
+      </p>
+
+      <form id="adminPinForm" onsubmit="handleAdminPinSubmit(event)">
+        <div class="admin-pin-input-wrap">
+          <input type="password" id="adminPinInput" class="admin-pin-input" placeholder="••••" maxlength="10" autocomplete="current-password" autofocus required>
+          <button type="button" class="btn-toggle-pin" onclick="togglePinVisibility()" title="إظهار / إخفاء الرمز">
+            <i class="fas fa-eye" id="pinEyeIcon"></i>
+          </button>
+        </div>
+
+        <div id="adminPinError" class="admin-pin-error" style="display: none;">
+          <i class="fas fa-circle-exclamation"></i>
+          <span>رمز الدخول غير صحيح، يرجى المحاولة مرة أخرى</span>
+        </div>
+
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 1rem; margin-top: 1rem;">
+          <i class="fas fa-unlock-keyhole"></i>
+          <span>فتح لوحة التحكم</span>
+        </button>
+
+        <div class="admin-pin-hint">
+          <span>الرمز الافتراضي المعتمد: </span>
+          <strong style="color: var(--accent); letter-spacing: 2px;">2025</strong>
+        </div>
+      </form>
+
+      <div style="margin-top: 1.5rem; border-top: 1px solid #334155; padding-top: 1rem; text-align: center;">
+        <a href="index.html" style="color: #94A3B8; text-decoration: none; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.4rem;">
+          <i class="fas fa-arrow-right"></i>
+          <span>العودة لمتجر المعرض</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
   <div id="adminPageRoot">
     <!-- Executive Top Header -->
     <header class="admin-page-header">
@@ -38,7 +86,7 @@
               <h1 style="font-size: 1.25rem; font-weight: 800; color: #FFFFFF; margin: 0;">لوحة تحكم وسيستم معرض قاصد كريم</h1>
               <span class="cloud-status-badge">
                 <i class="fas fa-circle" style="font-size: 0.55rem;"></i>
-                <span>Vercel Ready</span>
+                <span>Cloud Live</span>
               </span>
             </div>
             <div style="font-size: 0.78rem; color: #94A3B8; margin-top: 0.2rem;">
@@ -47,11 +95,18 @@
           </div>
         </div>
 
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <button type="button" class="btn-copy-admin-link" onclick="copyAdminSecretLink()" title="نسخ رابط الإدارة السري المخصص لمشاركته مع المديرين">
+            <i class="fas fa-link"></i>
+            <span>نسخ رابط الإدارة السري</span>
+          </button>
           <a href="index.html" class="btn-secondary" style="font-size: 0.85rem; padding: 0.55rem 1.15rem; color: #FFFFFF; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2);">
             <i class="fas fa-store"></i>
-            <span>العودة للمعرض والمتجر</span>
+            <span>العودة للمعرض</span>
           </a>
+          <button type="button" class="btn-logout-admin" onclick="logoutAdmin()" title="تسجيل خروج الإدارة">
+            <i class="fas fa-sign-out-alt"></i>
+          </button>
         </div>
       </div>
     </header>
@@ -313,7 +368,7 @@
                   <span>فترة الضمان المعتمد</span>
                   <span class="optional-tag">(اختياري)</span>
                 </label>
-                <input type="text" name="adminUnitWarranty" class="form-input" placeholder="مثال: 5 سنوات ضمان شامل" value="5 سنوات ضمان شامل">
+                <input type="text" name="adminUnitWarranty" class="form-input" placeholder="مثال: 5 سنوات ضمان شامل">
               </div>
 
               <!-- Kelvin (اختياري) -->
@@ -367,7 +422,7 @@
                   <span>مؤشر نقاء اللون (CRI)</span>
                   <span class="optional-tag">(اختياري)</span>
                 </label>
-                <input type="text" name="adminUnitCri" class="form-input" placeholder="CRI > 98" value="CRI > 98">
+                <input type="text" name="adminUnitCri" class="form-input" placeholder="مثال: CRI > 98">
               </div>
 
               <!-- Badges (اختياري) -->

@@ -830,3 +830,173 @@
   }
 }
 
+/* ==========================================================================
+   ADMIN ACCESS PRIVACY (إخفاء أيقونة ورابط الإدارة عن العامة تماماً)
+   ========================================================================== */
+#adminHeaderBtn,
+.mobile-admin-item {
+  display: none !important;
+}
+
+body.is-admin-user #adminHeaderBtn {
+  display: flex !important;
+}
+
+body.is-admin-user .mobile-admin-item {
+  display: list-item !important;
+}
+
+/* ==========================================================================
+   ADMIN PIN SECURITY GATE (بوابة الدخول السرية الخاصة بالمديرين)
+   ========================================================================== */
+.admin-auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: radial-gradient(circle at center, #1E293B 0%, #0F172A 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.admin-auth-card {
+  max-width: 440px;
+  width: 100%;
+  background: #0B1120;
+  border: 1px solid #334155;
+  border-radius: var(--radius-md);
+  padding: 2.5rem 2rem;
+  text-align: center;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(245, 158, 11, 0.1);
+  animation: fadeInAuth 0.35s ease;
+}
+@keyframes fadeInAuth {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.admin-auth-emblem {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--accent);
+  font-size: 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.25rem;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
+}
+.admin-auth-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #FFFFFF;
+  margin-bottom: 0.35rem;
+}
+.admin-auth-subtitle {
+  font-size: 0.8rem;
+  color: #94A3B8;
+  margin-bottom: 1rem;
+}
+.admin-auth-desc {
+  font-size: 0.85rem;
+  color: #CBD5E1;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+.admin-pin-input-wrap {
+  position: relative;
+  width: 100%;
+}
+.admin-pin-input {
+  width: 100%;
+  background: #1E293B;
+  border: 1px solid #475569;
+  border-radius: var(--radius-sm);
+  color: #FFFFFF;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 6px;
+  text-align: center;
+  padding: 0.75rem 1rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+.admin-pin-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
+}
+.btn-toggle-pin {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #94A3B8;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.admin-pin-error {
+  color: #EF4444;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  animation: shakePin 0.3s ease;
+}
+@keyframes shakePin {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+.admin-pin-hint {
+  font-size: 0.78rem;
+  color: #94A3B8;
+  margin-top: 1rem;
+}
+
+/* Header Action Buttons in Admin */
+.btn-copy-admin-link {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--accent);
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+}
+.btn-copy-admin-link:hover {
+  background: var(--accent);
+  color: #0F172A;
+  transform: translateY(-1px);
+}
+.btn-logout-admin {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #EF4444;
+  border-radius: var(--radius-full);
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all var(--transition-fast);
+}
+.btn-logout-admin:hover {
+  background: #EF4444;
+  color: #FFFFFF;
+}
+
