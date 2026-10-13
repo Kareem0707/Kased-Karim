@@ -88,6 +88,25 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Invalid order data" });
       }
 
+      // 1. Strict Validation: Name must be at least two names
+      const name = (order.customer.name || "").trim();
+      const nameParts = name.split(/\s+/).filter(p => p.replace(/[.\-_]/g, "").length >= 2);
+      if (nameParts.length < 2) {
+        return res.status(400).json({ error: "الاسم يجب أن يكون ثنائياً على الأقل" });
+      }
+
+      // 2. Strict Validation: Phone must be complete (11 digits)
+      const phone = (order.customer.phone || "").replace(/[^0-9]/g, "");
+      if (phone.length < 11) {
+        return res.status(400).json({ error: "رقم الهاتف غير مكتمل، يجب أن يكون 11 رقماً" });
+      }
+
+      // 3. Strict Validation: Address must not be less than 15 characters
+      const address = (order.customer.address || "").trim();
+      if (address.length < 15) {
+        return res.status(400).json({ error: "العنوان يجب ألا يقل عن 15 حرفاً" });
+      }
+
       if (!order.id) {
         order.id = "ORD-" + Math.floor(1000 + Math.random() * 9000);
       }

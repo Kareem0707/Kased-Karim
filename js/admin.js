@@ -985,19 +985,261 @@ function closeCheckoutModal() {
   }
 }
 
+// ----------------------------------------------------------------------------
+// CHECKOUT FORM VALIDATION RULES (التحقق الصارم من بيانات العميل)
+// 1. الاسم: أول اسمين على الأقل
+// 2. رقم الهاتف: 11 رقماً كاملاً بدون نقص (010, 011, 012, 015)
+// 3. العنوان: لا يقل عن 15 حرفاً
+// ----------------------------------------------------------------------------
+function validateCustomerName(name) {
+  if (!name || !name.trim()) {
+    return { valid: false, message: "يرجى كتابة الاسم الكريم للعميل أو المهندس المشرف" };
+  }
+  const trimmed = name.trim();
+  // Split by whitespace and ignore single-character honorifics or punctuation
+  const parts = trimmed.split(/\s+/).filter(part => {
+    const clean = part.replace(/[.\-_]/g, "");
+    return clean.length >= 2;
+  });
+
+  if (parts.length < 2) {
+    return {
+      valid: false,
+      message: "⚠️ يرجى كتابة الاسم ثنائياً على الأقل (الاسم الأول واسم العائلة، مثال: كريم محمود)"
+    };
+  }
+  return { valid: true, cleanName: trimmed };
+}
+
+function validateCustomerPhone(phone) {
+  if (!phone || !phone.trim()) {
+    return { valid: false, message: "يرجى إدخال رقم الهاتف / واتساب لتأكيد الطلب" };
+  }
+  const clean = phone.replace(/[\s\-\(\)]/g, "");
+
+  // Egyptian standard mobile format: exactly 11 digits starting with 010, 011, 012, or 015
+  const egStandardRegex = /^(010|011|012|015)[0-9]{8}$/;
+  // Egyptian with country code (+20 or 0020 or 20)
+  const egIntlRegex = /^(\+?20|0020)(10|11|12|15)[0-9]{8}$/;
+  // International complete format: minimum 10 digits
+  const generalIntlRegex = /^\+[0-9]{10,15}$/;
+
+  if (egStandardRegex.test(clean)) {
+    return { valid: true, cleanPhone: clean };
+  }
+  if (egIntlRegex.test(clean)) {
+    return { valid: true, cleanPhone: clean };
+  }
+  if (generalIntlRegex.test(clean)) {
+    return { valid: true, cleanPhone: clean };
+  }
+
+  if (clean.length < 11) {
+    return {
+      valid: false,
+      message: `⚠️ رقم الهاتف ناقص (${clean.length} أرقام فقط)! يجب إدخال 11 رقماً كاملاً (مثال: 01012345678)`
+    };
+  }
+
+  return {
+    valid: false,
+    message: "⚠️ يرجى إدخال رقم هاتف محمول مصري صحيح مكون من 11 رقماً يبدأ بـ 010 أو 011 أو 012 أو 015"
+  };
+}
+
+function validateCustomerAddress(address) {
+  if (!address || !address.trim()) {
+    return { valid: false, message: "يرجى كتابة عنوان العقار بالشيخ زايد" };
+  }
+  const trimmed = address.trim();
+  if (trimmed.length < 15) {
+    return {
+      valid: false,
+      message: `⚠️ تفاصيل العنوان قصيرة (${trimmed.length} حرفاً)! يجب ألا يقل العنوان عن 15 حرفاً (مثال: كمبوند بيفرلي هيلز - فيلا 42)`
+    };
+  }
+  return { valid: true, cleanAddress: trimmed };
+}
+
+function setupCheckoutLiveValidation() {
+  const nameInput = document.getElementById("custNameInput");
+  const phoneInput = document.getElementById("custPhoneInput");
+  const addressInput = document.getElementById("custAddressInput");
+  const addressCounter = document.getElementById("custAddressCounter");
+
+  const nameError = document.getElementById("custNameError");
+  const phoneError = document.getElementById("custPhoneError");
+  const addressError = document.getElementById("custAddressError");
+
+  // Name Live Listener
+  if (nameInput && !nameInput.dataset.hasListener) {
+    nameInput.dataset.hasListener = "true";
+    nameInput.addEventListener("input", () => {
+      const val = validateCustomerName(nameInput.value);
+      if (val.valid) {
+        nameInput.classList.remove("is-invalid");
+        nameInput.classList.add("is-valid");
+        if (nameError) nameError.classList.remove("show");
+      } else if (nameInput.value.trim().length > 3) {
+        nameInput.classList.remove("is-valid");
+      }
+    });
+  }
+
+  // Phone Live Listener
+  if (phoneInput && !phoneInput.dataset.hasListener) {
+    phoneInput.dataset.hasListener = "true";
+    phoneInput.addEventListener("input", () => {
+      // Auto-filter non-digit characters except +
+      phoneInput.value = phoneInput.value.replace(/[^0-9+]/g, "");
+      const val = validateCustomerPhone(phoneInput.value);
+      if (val.valid) {
+        phoneInput.classList.remove("is-invalid");
+        phoneInput.classList.add("is-valid");
+        if (phoneError) phoneError.classList.remove("show");
+      } else if (phoneInput.value.length >= 11) {
+        phoneInput.classList.add("is-invalid");
+        phoneInput.classList.remove("is-valid");
+        if (phoneError) {
+          phoneError.querySelector("span").textContent = val.message;
+          phoneError.classList.add("show");
+        }
+      }
+    });
+  }
+
+  // Address Live Listener with Dynamic Counter
+  if (addressInput && !addressInput.dataset.hasListener) {
+    addressInput.dataset.hasListener = "true";
+    addressInput.addEventListener("input", () => {
+      const len = addressInput.value.trim().length;
+      if (addressCounter) {
+        if (len >= 15) {
+          addressCounter.textContent = `✓ ${len} حرفاً (مكتمل)`;
+          addressCounter.className = "form-char-counter valid";
+        } else {
+          addressCounter.textContent = `${len} / 15 حرفاً كحد أدنى`;
+          addressCounter.className = "form-char-counter invalid";
+        }
+      }
+
+      const val = validateCustomerAddress(addressInput.value);
+      if (val.valid) {
+        addressInput.classList.remove("is-invalid");
+        addressInput.classList.add("is-valid");
+        if (addressError) addressError.classList.remove("show");
+      } else if (len >= 15) {
+        addressInput.classList.remove("is-invalid");
+      }
+    });
+  }
+}
+
 function handleCheckoutSubmit(e) {
   e.preventDefault();
   const form = e.target;
 
-  const customerData = {
-    name: form.custName.value.trim(),
-    phone: form.custPhone.value.trim(),
-    city: "الشيخ زايد",
-    address: form.custAddress.value.trim(),
-    notes: form.custNotes.value.trim()
-  };
+  const rawName = (form.custName ? form.custName.value : "").trim();
+  const rawPhone = (form.custPhone ? form.custPhone.value : "").trim();
+  const rawAddress = (form.custAddress ? form.custAddress.value : "").trim();
+  const rawNotes = form.custNotes ? form.custNotes.value.trim() : "";
+
+  // Perform Strict Validations
+  const nameVal = validateCustomerName(rawName);
+  const phoneVal = validateCustomerPhone(rawPhone);
+  const addressVal = validateCustomerAddress(rawAddress);
+
+  const nameInput = document.getElementById("custNameInput") || form.custName;
+  const phoneInput = document.getElementById("custPhoneInput") || form.custPhone;
+  const addressInput = document.getElementById("custAddressInput") || form.custAddress;
+
+  const nameError = document.getElementById("custNameError");
+  const phoneError = document.getElementById("custPhoneError");
+  const addressError = document.getElementById("custAddressError");
+
+  let hasError = false;
+
+  // 1. Check Name
+  if (!nameVal.valid) {
+    hasError = true;
+    if (nameInput) {
+      nameInput.classList.add("is-invalid");
+      nameInput.classList.remove("is-valid");
+    }
+    if (nameError) {
+      nameError.querySelector("span").textContent = nameVal.message;
+      nameError.classList.add("show");
+    }
+  } else {
+    if (nameInput) {
+      nameInput.classList.remove("is-invalid");
+      nameInput.classList.add("is-valid");
+    }
+    if (nameError) nameError.classList.remove("show");
+  }
+
+  // 2. Check Phone
+  if (!phoneVal.valid) {
+    hasError = true;
+    if (phoneInput) {
+      phoneInput.classList.add("is-invalid");
+      phoneInput.classList.remove("is-valid");
+    }
+    if (phoneError) {
+      phoneError.querySelector("span").textContent = phoneVal.message;
+      phoneError.classList.add("show");
+    }
+  } else {
+    if (phoneInput) {
+      phoneInput.classList.remove("is-invalid");
+      phoneInput.classList.add("is-valid");
+    }
+    if (phoneError) phoneError.classList.remove("show");
+  }
+
+  // 3. Check Address
+  if (!addressVal.valid) {
+    hasError = true;
+    if (addressInput) {
+      addressInput.classList.add("is-invalid");
+      addressInput.classList.remove("is-valid");
+    }
+    if (addressError) {
+      addressError.querySelector("span").textContent = addressVal.message;
+      addressError.classList.add("show");
+    }
+  } else {
+    if (addressInput) {
+      addressInput.classList.remove("is-invalid");
+      addressInput.classList.add("is-valid");
+    }
+    if (addressError) addressError.classList.remove("show");
+  }
+
+  // If any field fails, halt submission and focus on first invalid field
+  if (hasError) {
+    if (!nameVal.valid) {
+      nameInput?.focus();
+      showToast(nameVal.message);
+    } else if (!phoneVal.valid) {
+      phoneInput?.focus();
+      showToast(phoneVal.message);
+    } else if (!addressVal.valid) {
+      addressInput?.focus();
+      showToast(addressVal.message);
+    }
+    return;
+  }
 
   if (!window.KK_DB) return;
+
+  const customerData = {
+    name: nameVal.cleanName,
+    phone: phoneVal.cleanPhone,
+    city: "الشيخ زايد",
+    address: addressVal.cleanAddress,
+    notes: rawNotes
+  };
 
   const newOrder = window.KK_DB.createOrder(customerData, STATE.cart);
 
@@ -1047,6 +1289,7 @@ function setupAdminListeners() {
     checkoutForm.addEventListener("submit", handleCheckoutSubmit);
   }
 
+  setupCheckoutLiveValidation();
   setupImageDropZones();
 }
 

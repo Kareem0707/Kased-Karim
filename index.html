@@ -550,31 +550,62 @@
         <div id="checkoutSummaryList"></div>
       </div>
 
-      <form id="checkoutOrderForm">
+      <form id="checkoutOrderForm" novalidate onsubmit="handleCheckoutSubmit(event)">
         <div class="form-grid">
           <div class="form-group full-width">
-            <label class="form-label">الاسم الكريم / المهندس المشرف *</label>
-            <input type="text" name="custName" class="form-input" placeholder="مثال: م. أحمد الشناوي" required>
+            <label class="form-label">
+              <span>الاسم الكريم (الاسم الأول واسم العائلة)</span>
+              <span style="color: #EF4444; font-weight: 800;">*</span>
+            </label>
+            <input type="text" id="custNameInput" name="custName" class="form-input" placeholder="مثال: كريم محمود أو م. أحمد الشناوي" required autocomplete="name">
+            <div class="form-field-hint">
+              <span>يجب كتابة أول اسمين على الأقل للعميل أو المهندس المشرف</span>
+            </div>
+            <div class="form-field-error" id="custNameError">
+              <i class="fas fa-circle-exclamation"></i>
+              <span>يرجى كتابة الاسم ثنائياً على الأقل (مثال: كريم محمود)</span>
+            </div>
           </div>
 
           <div class="form-group full-width">
-            <label class="form-label">رقم الهاتف / واتساب لتأكيد الطلب *</label>
-            <input type="tel" name="custPhone" class="form-input" placeholder="010XXXXXXXX" required>
+            <label class="form-label">
+              <span>رقم الهاتف / واتساب لتأكيد الطلب</span>
+              <span style="color: #EF4444; font-weight: 800;">*</span>
+            </label>
+            <input type="tel" id="custPhoneInput" name="custPhone" class="form-input" placeholder="010XXXXXXXX (11 رقماً كاملاً)" required maxlength="15" autocomplete="tel" dir="ltr" style="text-align: right;">
+            <div class="form-field-hint">
+              <span>رقم هاتف محمول كامل (11 رقماً، يبدأ بـ 010 أو 011 أو 012 أو 015)</span>
+            </div>
+            <div class="form-field-error" id="custPhoneError">
+              <i class="fas fa-circle-exclamation"></i>
+              <span>يرجى إدخال رقم هاتف محمول كامل مكون من 11 رقماً بدون نقص (مثال: 01012345678)</span>
+            </div>
           </div>
 
           <div class="form-group full-width">
-            <label class="form-label">عنوان الفيلا أو الشقة / الكمبوند بالشيخ زايد *</label>
-            <input type="text" name="custAddress" class="form-input" placeholder="مثال: كمبوند بيفرلي هيلز - فيلا 42 - الشيخ زايد" required>
+            <label class="form-label">
+              <span>عنوان الفيلا / العقار بالتفصيل بالشيخ زايد</span>
+              <span style="color: #EF4444; font-weight: 800;">*</span>
+            </label>
+            <input type="text" id="custAddressInput" name="custAddress" class="form-input" placeholder="مثال: كمبوند بيفرلي هيلز - مجاورة 3 - فيلا 42 بالشيخ زايد" required minlength="15">
+            <div class="form-field-hint">
+              <span>العنوان بالتفصيل لضمان دقة المعاينة والتوصيل</span>
+              <span class="form-char-counter" id="custAddressCounter">0 / 15 حرفاً كحد أدنى</span>
+            </div>
+            <div class="form-field-error" id="custAddressError">
+              <i class="fas fa-circle-exclamation"></i>
+              <span>العنوان غير مكتمل! يجب ألا يقل العنوان عن 15 حرفاً لضمان دقة التوصيل</span>
+            </div>
           </div>
 
           <div class="form-group full-width">
-            <label class="form-label">ملاحظات خاصة (أوقات التوصيل، مواصفات الأسقف، الخ)</label>
+            <label class="form-label">ملاحظات خاصة (أوقات التوصيل، مواصفات الأسقف، الخ) - اختياري</label>
             <textarea name="custNotes" class="form-textarea" rows="2" placeholder="أي تفاصيل خاصة يفضل معرفتها قبل المعاينة أو التسليم..."></textarea>
           </div>
         </div>
 
         <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
-          <button type="submit" class="btn-primary" style="flex: 1; justify-content: center; padding: 0.85rem;">
+          <button type="submit" id="btnSubmitCheckout" class="btn-primary" style="flex: 1; justify-content: center; padding: 0.85rem; font-weight: 700;">
             <i class="fas fa-check-circle"></i>
             <span>تأكيد وإرسال الطلب فوراً</span>
           </button>
