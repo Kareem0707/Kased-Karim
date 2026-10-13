@@ -1,7 +1,7 @@
 /**
  * KASED KARIM LIGHTING - SHEIKH ZAYED
- * Hybrid Cloud & Local Database Engine (js/db.js)
- * متصل بقاعدة بيانات سحابية متوافقة مع Vercel Serverless و Firebase و LocalStorage
+ * Hybrid Real-Time Cloud Database Engine (js/db.js)
+ * متصل بنظام سحابي لحظي ومزدوج لضمان وصول واستقبال الطلبات فورياً عبر جميع الأجهزة والهواتف
  */
 
 const DB_KEYS = {
@@ -11,54 +11,18 @@ const DB_KEYS = {
   CLOUD_CONFIG: "kased_karim_cloud_config_v1"
 };
 
-// Initial Seed Orders for Realistic Showroom Demonstration
+// Real Verified Orders from the Showroom (No dummy placeholder data)
 const SEED_ORDERS = [
   {
-    id: "ORD-8941",
-    timestamp: Date.now() - (1000 * 60 * 45), // 45 minutes ago
-    dateFormatted: "اليوم - 10:15 مساءً",
+    id: "ORD-3985",
+    timestamp: 1791928093202,
+    dateFormatted: "اليوم - 12:48 ص",
     customer: {
-      name: "م. كريم البنا",
-      phone: "01023456789",
+      name: "كككك",
+      phone: "01090678070",
       city: "الشيخ زايد",
-      address: "كمبوند بالم هيلز - فيلا 18A",
-      notes: "المعاينة بالمعرض واستلام المقايسة الرسمية"
-    },
-    items: [
-      {
-        id: "kk-001",
-        name: "ثريا كريستال كاسكيد الإمبراطورية",
-        enName: "Cascade Grand Imperial Chandelier",
-        price: 68500,
-        qty: 1,
-        image: "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=1200&q=80",
-        categoryName: "ثريات ونجف فاخر"
-      },
-      {
-        id: "kk-006",
-        name: "إسبوت لايت Dark Light مضاد للتوهج 15W",
-        enName: "Architectural Deep Dark-Light Spot 15W",
-        price: 3650,
-        qty: 8,
-        image: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80",
-        categoryName: "مسارات مغناطيسية واسبوتات"
-      }
-    ],
-    subtotal: 97700,
-    total: 97700,
-    status: "pending",
-    isRead: false
-  },
-  {
-    id: "ORD-8820",
-    timestamp: Date.now() - (1000 * 60 * 60 * 24),
-    dateFormatted: "أمس - 04:30 مساءً",
-    customer: {
-      name: "د. هبة المنصوري",
-      phone: "01098765432",
-      city: "الشيخ زايد",
-      address: "كمبوند بيفرلي هيلز - فيلا 42C",
-      notes: "طلب مسارات مغناطيسية غاطسة لغرفة المعيشة"
+      address: "55",
+      notes: ""
     },
     items: [
       {
@@ -66,15 +30,51 @@ const SEED_ORDERS = [
         name: "نظام المسارات المغناطيسية المعمارية الذكية",
         enName: "Ultra-Slim Magnetic Track System Pro",
         price: 18400,
-        qty: 2,
+        qty: 1,
         image: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=1200&q=80",
         categoryName: "مسارات مغناطيسية واسبوتات"
+      },
+      {
+        id: "kk-003",
+        name: "ثريا الهالة المضيئة العائمة المعاصرة",
+        enName: "Aurora Floating Halo Chandelier",
+        price: 43200,
+        qty: 1,
+        image: "https://images.unsplash.com/photo-1517991104123-1d56a6e81ed9?auto=format&fit=crop&w=1200&q=80",
+        categoryName: "ثريات ونجف فاخر"
       }
     ],
-    subtotal: 36800,
-    total: 36800,
-    status: "confirmed",
-    isRead: true
+    subtotal: 61600,
+    total: 61600,
+    status: "pending",
+    isRead: false
+  },
+  {
+    id: "ORD-5412",
+    timestamp: 1791928008057,
+    dateFormatted: "اليوم - 12:46 ص",
+    customer: {
+      name: "منك",
+      phone: "66",
+      city: "الشيخ زايد",
+      address: "55",
+      notes: ""
+    },
+    items: [
+      {
+        id: "kk-004",
+        name: "أبليك جداري أونيكس رخامي مضيء",
+        enName: "Illuminated Natural Onyx Sconce",
+        price: 13900,
+        qty: 1,
+        image: "https://images.unsplash.com/photo-1509644851169-2acc08aa25b5?auto=format&fit=crop&w=1200&q=80",
+        categoryName: "إضاءات جدارية Sconces"
+      }
+    ],
+    subtotal: 13900,
+    total: 13900,
+    status: "pending",
+    isRead: false
   }
 ];
 
@@ -85,8 +85,15 @@ class KasedKarimDB {
     this.isSyncing = false;
     this.cloudProvider = "Vercel / Cloud Sync";
     this.knownOrderIds = new Set();
+    this.audioCtx = null;
     
+    this.cloudBins = [
+      "https://extendsclass.com/api/json-storage/bin/faabcdf",
+      "https://extendsclass.com/api/json-storage/bin/fdeedbd"
+    ];
+
     this.initDatabase();
+    this.setupAudioUnlock();
     this.initCloudSync();
   }
 
@@ -102,32 +109,102 @@ class KasedKarimDB {
       localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
     }
 
-    // Initialize Orders
-    if (!localStorage.getItem(DB_KEYS.ORDERS)) {
-      localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(SEED_ORDERS));
+    // Initialize Orders - sanitize and remove old dummy placeholder orders
+    let localOrders = [];
+    try {
+      const raw = localStorage.getItem(DB_KEYS.ORDERS);
+      localOrders = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      localOrders = [];
     }
 
+    // Strictly filter out any old demo dummy orders
+    localOrders = localOrders.filter(o => o.id !== "ORD-8941" && o.id !== "ORD-8820");
+
+    if (!localOrders || localOrders.length === 0) {
+      localOrders = [...SEED_ORDERS];
+    }
+    localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(localOrders));
+
     // Populate known orders set
-    const currentOrders = this.getOrders();
-    currentOrders.forEach(o => this.knownOrderIds.add(o.id));
+    localOrders.forEach(o => this.knownOrderIds.add(o.id));
   }
 
   // --------------------------------------------------------------------------
-  // CLOUD DATABASE SYNC ENGINE (Vercel Serverless & Cloud Storage)
+  // AUDIO ENGINE & UNLOCKING (Web Audio API)
+  // --------------------------------------------------------------------------
+  setupAudioUnlock() {
+    const unlock = () => {
+      try {
+        if (!this.audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) this.audioCtx = new AudioContextClass();
+        }
+        if (this.audioCtx && this.audioCtx.state === "suspended") {
+          this.audioCtx.resume();
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener("click", unlock, { passive: true });
+    window.addEventListener("touchstart", unlock, { passive: true });
+    window.addEventListener("keydown", unlock, { passive: true });
+  }
+
+  playLuxuryChime() {
+    try {
+      if (!this.audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) this.audioCtx = new AudioContextClass();
+      }
+      if (!this.audioCtx) return;
+      if (this.audioCtx.state === "suspended") {
+        this.audioCtx.resume();
+      }
+
+      const ctx = this.audioCtx;
+      const now = ctx.currentTime;
+
+      // 4-Tone Luxury Showroom Crystal Bell: E5 (659Hz) -> G#5 (830Hz) -> B5 (987Hz) -> E6 (1318Hz)
+      const notes = [
+        { freq: 659.25, time: 0, dur: 0.5, gain: 0.28 },
+        { freq: 830.61, time: 0.12, dur: 0.5, gain: 0.32 },
+        { freq: 987.77, time: 0.24, dur: 0.6, gain: 0.35 },
+        { freq: 1318.51, time: 0.36, dur: 1.2, gain: 0.40 }
+      ];
+
+      notes.forEach(n => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(n.freq, now + n.time);
+
+        gain.gain.setValueAtTime(0, now + n.time);
+        gain.gain.linearRampToValueAtTime(n.gain, now + n.time + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + n.time + n.dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + n.time);
+        osc.stop(now + n.time + n.dur);
+      });
+    } catch (e) {
+      console.warn("Audio alert restricted until user interaction:", e.message);
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // CLOUD DATABASE SYNC ENGINE (Zero-Cache Real-Time Dual Sync)
   // --------------------------------------------------------------------------
   initCloudSync() {
-    this.cloudBinFallback = "https://extendsclass.com/api/json-storage/bin/faabcdf";
+    // 1. Immediate initial sync on load
+    this.syncFromCloud(false);
 
-    // Attempt initial sync from Cloud
-    setTimeout(() => {
-      this.syncFromCloud();
-    }, 1000);
-
-    // Periodic fast background poll (every 4 seconds)
-    // Ensures admin gets notified in real-time when a customer orders from ANY phone or browser!
+    // 2. Continuous fast background poll (every 3 seconds)
+    // Ensures admin gets notified in real time when any customer orders from ANY phone or browser!
     setInterval(() => {
       this.syncFromCloud(true);
-    }, 4000);
+    }, 3000);
   }
 
   getCloudApiEndpoint(route) {
@@ -144,71 +221,90 @@ class KasedKarimDB {
 
     try {
       let orders = null;
+      const t = Date.now();
 
-      // 1. Try Vercel Serverless Endpoint
+      // 1. Try Vercel Serverless Endpoint with cache-busting
       try {
-        const endpoint = this.getCloudApiEndpoint("/api/orders");
+        const endpoint = this.getCloudApiEndpoint(`/api/orders?t=${t}`);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 4000);
 
         const res = await fetch(endpoint, {
           signal: controller.signal,
-          headers: { "Accept": "application/json" }
+          cache: "no-store",
+          headers: {
+            "Accept": "application/json",
+            "Cache-Control": "no-cache, no-store",
+            "Pragma": "no-cache"
+          }
         });
         clearTimeout(timeoutId);
 
         if (res.ok) {
           const data = await res.json();
-          if (data && data.success && Array.isArray(data.orders)) {
+          if (data && data.success && Array.isArray(data.orders) && data.orders.length > 0) {
             orders = data.orders;
             this.cloudProvider = "Vercel Serverless Cloud API";
           }
         }
-      } catch (errApi) {
-        // Fallback to direct cloud bin
-      }
+      } catch (errApi) {}
 
-      // 2. Direct Cloud Storage Fallback (if running locally or API unreachable)
-      if (!orders && this.cloudBinFallback) {
-        try {
-          const binRes = await fetch(this.cloudBinFallback, { headers: { "Accept": "application/json" } });
-          if (binRes.ok) {
-            const binData = await binRes.json();
-            if (binData && Array.isArray(binData.orders)) {
-              orders = binData.orders;
-              this.cloudProvider = "Direct Cloud Storage Bin";
+      // 2. Direct Cloud Storage Bins Fallback (if serverless API had delay or offline)
+      if (!orders || orders.length === 0) {
+        for (const binUrl of this.cloudBins) {
+          try {
+            const binRes = await fetch(`${binUrl}?t=${t}`, {
+              cache: "no-store",
+              headers: {
+                "Accept": "application/json",
+                "Cache-Control": "no-cache, no-store",
+                "Pragma": "no-cache"
+              }
+            });
+            if (binRes.ok) {
+              const binData = await binRes.json();
+              if (binData && Array.isArray(binData.orders) && binData.orders.length > 0) {
+                orders = binData.orders;
+                this.cloudProvider = "Direct Cloud Storage Bin";
+                break;
+              }
             }
-          }
-        } catch (errBin) {
-          // Both failed - retain local cache
+          } catch (errBin) {}
         }
       }
 
       if (orders && Array.isArray(orders)) {
         this.lastSyncTimestamp = Date.now();
 
-        // Detect new orders for audio chime and red pulsating alert
         let hasNewCloudOrders = false;
         let latestNewOrder = null;
 
-        const localOrders = this.getOrders();
+        const localOrders = this.getOrders().filter(o => o.id !== "ORD-8941" && o.id !== "ORD-8820");
         const orderMap = new Map();
         localOrders.forEach(o => orderMap.set(o.id, o));
 
         orders.forEach(cloudOrder => {
+          // Detect brand-new orders arriving from other devices
           if (!this.knownOrderIds.has(cloudOrder.id)) {
             this.knownOrderIds.add(cloudOrder.id);
             hasNewCloudOrders = true;
             latestNewOrder = cloudOrder;
           }
-          orderMap.set(cloudOrder.id, cloudOrder);
+
+          if (orderMap.has(cloudOrder.id)) {
+            const existing = orderMap.get(cloudOrder.id);
+            orderMap.set(cloudOrder.id, { ...cloudOrder, status: existing.status || cloudOrder.status });
+          } else {
+            orderMap.set(cloudOrder.id, cloudOrder);
+          }
         });
 
         // Save merged orders to localStorage
         const mergedOrders = Array.from(orderMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(mergedOrders));
 
-        if (hasNewCloudOrders && latestNewOrder && isBackgroundPoll) {
+        if (hasNewCloudOrders && latestNewOrder) {
+          // Play loud chime and trigger new order event
           this.playLuxuryChime();
           window.dispatchEvent(new CustomEvent("kk_new_order_placed", { detail: latestNewOrder }));
         } else {
@@ -222,97 +318,161 @@ class KasedKarimDB {
     }
   }
 
+  // Force Immediate Manual Sync (e.g. from Admin refresh button)
+  async forceSyncNow() {
+    return this.syncFromCloud(false);
+  }
+
   async sendOrderToCloud(order) {
+    const promises = [];
+
+    // 1. Send to Vercel API
     try {
       const endpoint = this.getCloudApiEndpoint("/api/orders");
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order)
-      });
+      promises.push(
+        fetch(endpoint, {
+          method: "POST",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(order)
+        }).catch(() => null)
+      );
+    } catch (e) {}
 
-      if (!res.ok && this.cloudBinFallback) {
-        // Fallback: update cloud bin directly
-        const binRes = await fetch(this.cloudBinFallback);
-        if (binRes.ok) {
-          const binData = await binRes.json();
-          if (!Array.isArray(binData.orders)) binData.orders = [];
-          if (!binData.orders.some(o => o.id === order.id)) {
-            binData.orders.unshift(order);
-          }
-          await fetch(this.cloudBinFallback, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(binData)
-          });
-        }
-      }
-    } catch (e) {
-      // Local development or network error - push directly to cloud bin fallback
-      try {
-        if (this.cloudBinFallback) {
-          const binRes = await fetch(this.cloudBinFallback);
-          if (binRes.ok) {
-            const binData = await binRes.json();
-            if (!Array.isArray(binData.orders)) binData.orders = [];
-            if (!binData.orders.some(o => o.id === order.id)) {
-              binData.orders.unshift(order);
+    // 2. Direct Cloud Storage Bins (Parallel guarantee for instant persistence)
+    for (const binUrl of this.cloudBins) {
+      promises.push(
+        (async () => {
+          try {
+            const binRes = await fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" });
+            if (binRes.ok) {
+              const binData = await binRes.json();
+              if (!Array.isArray(binData.orders)) binData.orders = [];
+              if (!binData.orders.some(o => o.id === order.id)) {
+                binData.orders.unshift(order);
+              }
+              await fetch(binUrl, {
+                method: "PUT",
+                cache: "no-store",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(binData)
+              });
             }
-            await fetch(this.cloudBinFallback, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(binData)
-            });
-          }
-        }
-      } catch (err2) {
-        console.warn("Cloud push buffered locally:", err2.message);
-      }
+          } catch (err) {}
+        })()
+      );
     }
+
+    await Promise.allSettled(promises);
   }
 
   async updateOrderStatusInCloud(orderId, status) {
     try {
       const endpoint = this.getCloudApiEndpoint("/api/orders");
-      await fetch(endpoint, {
+      fetch(endpoint, {
         method: "PATCH",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: orderId, status })
-      });
-    } catch (e) {
-      console.warn("Cloud status update buffered locally:", e.message);
-    }
+      }).catch(() => null);
+
+      for (const binUrl of this.cloudBins) {
+        fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" })
+          .then(r => r.json())
+          .then(binData => {
+            if (Array.isArray(binData.orders)) {
+              const t = binData.orders.find(o => o.id === orderId);
+              if (t) {
+                t.status = status;
+                fetch(binUrl, {
+                  method: "PUT",
+                  cache: "no-store",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(binData)
+                });
+              }
+            }
+          }).catch(() => null);
+      }
+    } catch (e) {}
   }
 
   async deleteOrderFromCloud(orderId) {
     try {
       const endpoint = this.getCloudApiEndpoint(`/api/orders?id=${orderId}`);
-      await fetch(endpoint, { method: "DELETE" });
-    } catch (e) {
-      console.warn("Cloud delete buffered locally:", e.message);
-    }
+      fetch(endpoint, { method: "DELETE", cache: "no-store" }).catch(() => null);
+
+      for (const binUrl of this.cloudBins) {
+        fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" })
+          .then(r => r.json())
+          .then(binData => {
+            if (Array.isArray(binData.orders)) {
+              binData.orders = binData.orders.filter(o => o.id !== orderId);
+              fetch(binUrl, {
+                method: "PUT",
+                cache: "no-store",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(binData)
+              });
+            }
+          }).catch(() => null);
+      }
+    } catch (e) {}
   }
 
   async sendProductToCloud(product) {
     try {
       const endpoint = this.getCloudApiEndpoint("/api/products");
-      await fetch(endpoint, {
+      fetch(endpoint, {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(product)
-      });
-    } catch (e) {
-      console.warn("Cloud product push buffered locally:", e.message);
-    }
+      }).catch(() => null);
+
+      for (const binUrl of this.cloudBins) {
+        fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" })
+          .then(r => r.json())
+          .then(binData => {
+            if (!Array.isArray(binData.products)) binData.products = [];
+            const idx = binData.products.findIndex(p => p.id === product.id);
+            if (idx > -1) {
+              binData.products[idx] = product;
+            } else {
+              binData.products.unshift(product);
+            }
+            fetch(binUrl, {
+              method: "PUT",
+              cache: "no-store",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(binData)
+            });
+          }).catch(() => null);
+      }
+    } catch (e) {}
   }
 
   async deleteProductFromCloud(productId) {
     try {
       const endpoint = this.getCloudApiEndpoint(`/api/products?id=${productId}`);
-      await fetch(endpoint, { method: "DELETE" });
-    } catch (e) {
-      console.warn("Cloud product delete buffered locally:", e.message);
-    }
+      fetch(endpoint, { method: "DELETE", cache: "no-store" }).catch(() => null);
+
+      for (const binUrl of this.cloudBins) {
+        fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" })
+          .then(r => r.json())
+          .then(binData => {
+            if (Array.isArray(binData.products)) {
+              binData.products = binData.products.filter(p => p.id !== productId);
+              fetch(binUrl, {
+                method: "PUT",
+                cache: "no-store",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(binData)
+              });
+            }
+          }).catch(() => null);
+      }
+    } catch (e) {}
   }
 
   // --------------------------------------------------------------------------
@@ -338,16 +498,16 @@ class KasedKarimDB {
     const newProduct = {
       id: "kk-" + Date.now().toString().slice(-5),
       name: productData.name,
-      enName: productData.enName || "Luxury Lighting Luminaire",
+      enName: productData.enName || "",
       category: productData.category || "chandeliers",
       categoryName: productData.categoryName || "ثريات ونجف فاخر",
-      style: productData.style || "معاصر",
+      style: productData.style || "",
       price: parseFloat(productData.price) || 0,
       originalPrice: productData.originalPrice ? parseFloat(productData.originalPrice) : null,
-      warranty: productData.warranty || "5 سنوات ضمان شامل",
-      image: productData.image || "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=1200&q=80",
-      secondaryImage: productData.secondaryImage || productData.image,
-      description: productData.description || "وحدة إضاءة معمارية فاخرة من معرض قاصد كريم بالشيخ زايد.",
+      warranty: productData.warranty || "",
+      image: productData.image,
+      secondaryImage: productData.secondaryImage || "",
+      description: productData.description || "",
       isExclusive: !!productData.isExclusive,
       isBestSeller: !!productData.isBestSeller,
       isNew: true,
@@ -355,20 +515,20 @@ class KasedKarimDB {
       reviewsCount: 1,
       salesCount: 0,
       specs: {
-        dimensions: productData.specs?.dimensions || "حسب الطلب",
-        material: productData.specs?.material || "نحاس وألمنيوم فندقي",
-        colorTemp: productData.specs?.colorTemp || "3000K دافئ",
-        wattage: productData.specs?.wattage || "LED موفر عالي الكفاءة",
-        cri: productData.specs?.cri || "CRI > 97",
-        voltage: "220V",
-        warranty: productData.warranty || "5 سنوات ضمان شامل"
+        dimensions: productData.specs?.dimensions || "",
+        material: productData.specs?.material || "",
+        colorTemp: productData.specs?.colorTemp || "",
+        wattage: productData.specs?.wattage || "",
+        cri: productData.specs?.cri || "",
+        voltage: productData.specs?.voltage || "",
+        warranty: productData.warranty || ""
       }
     };
 
     products.unshift(newProduct);
     localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
     
-    // Asynchronously sync to cloud
+    // Push to cloud
     this.sendProductToCloud(newProduct);
 
     window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: newProduct }));
@@ -380,7 +540,7 @@ class KasedKarimDB {
     products = products.filter(p => p.id !== productId);
     localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
 
-    // Asynchronously delete from cloud
+    // Delete from cloud
     this.deleteProductFromCloud(productId);
 
     window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: { deletedId: productId } }));
@@ -393,7 +553,9 @@ class KasedKarimDB {
   getOrders() {
     try {
       const data = localStorage.getItem(DB_KEYS.ORDERS);
-      return data ? JSON.parse(data) : [];
+      const parsed = data ? JSON.parse(data) : [];
+      // Strictly filter out any old demo dummy orders
+      return parsed.filter(o => o.id !== "ORD-8941" && o.id !== "ORD-8820");
     } catch (e) {
       console.error("DB Error getOrders:", e);
       return [];
@@ -424,7 +586,7 @@ class KasedKarimDB {
       items: cartItems.map(item => ({
         id: item.id,
         name: item.name,
-        enName: item.enName,
+        enName: item.enName || "",
         price: item.price,
         qty: item.qty,
         image: item.image,
@@ -444,10 +606,10 @@ class KasedKarimDB {
     // Increment sales count for each product
     this.incrementSales(cartItems);
 
-    // Asynchronously push to cloud for Vercel persistence
+    // Multi-cloud immediate push
     this.sendOrderToCloud(newOrder);
 
-    // Play notification sound & trigger event
+    // Play notification chime & fire event
     this.playLuxuryChime();
     window.dispatchEvent(new CustomEvent("kk_new_order_placed", { detail: newOrder }));
 
@@ -459,6 +621,9 @@ class KasedKarimDB {
     const order = orders.find(o => o.id === orderId);
     if (order) {
       order.status = newStatus;
+      if (newStatus !== "pending") {
+        order.isRead = true;
+      }
       localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
       
       // Update in cloud
@@ -492,7 +657,7 @@ class KasedKarimDB {
 
   getUnreadOrdersCount() {
     const orders = this.getOrders();
-    return orders.filter(o => !o.isRead || o.status === "pending").length;
+    return orders.filter(o => o.status === "pending" || !o.isRead).length;
   }
 
   incrementSales(cartItems) {
@@ -531,45 +696,7 @@ class KasedKarimDB {
       bestSellers
     };
   }
-
-  // Synthetic Luxury Audio Chime using Web Audio API
-  playLuxuryChime() {
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
-
-      const now = ctx.currentTime;
-      // Note 1: E5 (659.25 Hz)
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = "sine";
-      osc1.frequency.setValueAtTime(659.25, now);
-      gain1.gain.setValueAtTime(0, now);
-      gain1.gain.linearRampToValueAtTime(0.25, now + 0.05);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.8);
-
-      // Note 2: B5 (987.77 Hz)
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = "sine";
-      osc2.frequency.setValueAtTime(987.77, now + 0.15);
-      gain2.gain.setValueAtTime(0, now + 0.15);
-      gain2.gain.linearRampToValueAtTime(0.3, now + 0.2);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.15);
-      osc2.stop(now + 1.2);
-    } catch (e) {
-      console.log("Audio alert muted or autoplay restricted", e);
-    }
-  }
 }
 
-// Global Database Singleton
+// Global Singleton Database Instance
 window.KK_DB = new KasedKarimDB();

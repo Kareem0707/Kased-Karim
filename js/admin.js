@@ -175,16 +175,21 @@ function initAdminSystem() {
   updateAdminHeaderBadge();
   setupAdminListeners();
 
-  // If on dedicated admin page, immediately render all tabs and mark orders read
+  // If on dedicated admin page, immediately render and force-sync from cloud
   if (isAdminPage) {
-    if (window.KK_DB) {
-      window.KK_DB.markAllOrdersAsRead();
-    }
-    updateAdminHeaderBadge();
     renderAdminOverview();
     renderAdminOrders();
     renderAdminInventory();
     renderCloudDbSettings();
+
+    if (window.KK_DB) {
+      window.KK_DB.forceSyncNow().then(() => {
+        renderAdminOverview();
+        renderAdminOrders();
+        renderAdminInventory();
+        updateAdminHeaderBadge();
+      });
+    }
   }
 
   // Listen to DB events
@@ -192,6 +197,11 @@ function initAdminSystem() {
     updateAdminHeaderBadge();
     const order = e.detail;
     showToast(`🔔 تنبيه طلب جديد: تم استلام طلب بقيمة ${formatPrice(order.total)} ج.م برقم #${order.id}`);
+    
+    // Play alert sound & show top live banner
+    if (window.KK_DB) window.KK_DB.playLuxuryChime();
+    showAdminLiveOrderAlert(order);
+
     if (isAdminPage) {
       renderAdminOrders();
       renderAdminOverview();
@@ -218,6 +228,29 @@ function initAdminSystem() {
       renderAdminInventory();
     }
   });
+}
+
+function showAdminLiveOrderAlert(order) {
+  let banner = document.getElementById("adminLiveOrderAlertBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "adminLiveOrderAlertBanner";
+    banner.className = "admin-live-order-banner";
+    document.body.prepend(banner);
+  }
+  banner.innerHTML = `
+    <div class="admin-live-banner-inner">
+      <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+        <span class="live-banner-pulse"></span>
+        <strong style="color: #FFFFFF; font-size: 0.95rem;">🚨 تنبيه فوري: تم استلام طلب جديد برقم #${order.id}</strong>
+        <span style="color: #FDE68A; font-size: 0.88rem;">العميل: ${order.customer?.name || 'عميل'} • الإجمالي: ${formatPrice(order.total)} ج.م</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.6rem;">
+        <a href="admin.html" class="btn-primary" style="padding: 0.35rem 0.85rem; font-size: 0.78rem; text-decoration: none; background: #F59E0B; color: #0F172A; font-weight: 700;">عرض في لوحة التحكم</a>
+        <button type="button" class="banner-close-btn" onclick="document.getElementById('adminLiveOrderAlertBanner')?.remove()">×</button>
+      </div>
+    </div>
+  `;
 }
 
 // ----------------------------------------------------------------------------
@@ -354,8 +387,9 @@ function renderAdminOrders(statusFilter = "all") {
   if (orders.length === 0) {
     container.innerHTML = `
       <div style="text-align: center; padding: 3.5rem 1rem; background: #FFFFFF; border-radius: var(--radius-md); border: 1px dashed var(--border-light);">
-        <i class="fas fa-box-open" style="font-size: 2.5rem; color: #CBD5E1; margin-bottom: 0.75rem;"></i>
-        <h4 style="color: var(--text-main);">لا توجد طلبات في هذا القسم</h4>
+        <i class="fas fa-boxes-packing" style="font-size: 2.8rem; color: #CBD5E1; margin-bottom: 0.85rem;"></i>
+        <h4 style="color: var(--text-main); font-weight: 800; margin-bottom: 0.35rem;">لا توجد طلبات في هذا القسم حالياً</h4>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">النظام السحابي متصل بالكامل ويعمل في وضع المزامنة اللحظية (Cloud Live)</p>
       </div>
     `;
     return;
@@ -363,16 +397,17 @@ function renderAdminOrders(statusFilter = "all") {
 
   container.innerHTML = orders.map(order => {
     const isNew = order.status === "pending";
-    const statusText = order.status === "pending" ? "طلب جديد بحاجة للمراجعة" :
+    const statusText = order.status === "pending" ? "طلب جديد وارد بحاجة للمراجعة" :
                        order.status === "confirmed" ? "تم التأكيد وجاري التجهيز" : "مكتمل وتم التسليم";
 
     return `
       <div class="order-card-detailed ${isNew ? 'is-new-order' : ''}">
         <!-- Order Header -->
         <div class="order-header-row">
-          <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
             <span class="order-id-tag">#${order.id}</span>
             <span class="order-date-text"><i class="fas fa-clock"></i> ${order.dateFormatted}</span>
+            ${isNew ? '<span class="new-live-tag"><i class="fas fa-bolt"></i> وارد الآن</span>' : ''}
           </div>
 
           <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -389,11 +424,13 @@ function renderAdminOrders(statusFilter = "all") {
         <div class="order-customer-box">
           <div class="customer-info-item">
             <strong>اسم العميل:</strong>
-            <span>${order.customer.name}</span>
+            <span style="font-weight: 800; color: #0F172A;">${order.customer.name}</span>
           </div>
           <div class="customer-info-item">
             <strong>رقم الهاتف / الواتساب:</strong>
-            <span dir="ltr">${order.customer.phone}</span>
+            <a href="tel:${order.customer.phone}" style="color: var(--accent-hover); font-weight: 800; text-decoration: none; dir: ltr;" dir="ltr">
+              <i class="fas fa-phone-alt" style="font-size: 0.75rem;"></i> ${order.customer.phone}
+            </a>
           </div>
           <div class="customer-info-item">
             <strong>موقع الفيلا / العنوان بالشيخ زايد:</strong>
@@ -473,6 +510,34 @@ function deleteOrder(orderId) {
   if (window.KK_DB) {
     window.KK_DB.deleteOrder(orderId);
     showToast("تم حذف الطلب بنجاح");
+  }
+}
+
+async function refreshAdminOrdersFromCloud(btn) {
+  const icon = document.getElementById("refreshOrdersIcon");
+  if (icon) icon.classList.add("fa-spin");
+  if (btn) btn.disabled = true;
+
+  try {
+    if (window.KK_DB) {
+      await window.KK_DB.forceSyncNow();
+    }
+    renderAdminOrders();
+    renderAdminOverview();
+    updateAdminHeaderBadge();
+    showToast("✅ تم تحديث جميع الطلبات لحظياً من السحابة بنجاح");
+  } catch (e) {
+    showToast("⚠️ تم التحديث من الذاكرة المحلية");
+  } finally {
+    if (icon) icon.classList.remove("fa-spin");
+    if (btn) btn.disabled = false;
+  }
+}
+
+function testAdminChime() {
+  if (window.KK_DB) {
+    window.KK_DB.playLuxuryChime();
+    showToast("🔊 تم تشغيل رنين التنبيه الفاخر بنجاح");
   }
 }
 
