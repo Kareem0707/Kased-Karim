@@ -1,0 +1,832 @@
+/* ==========================================================================
+   KASED KARIM - ADMIN DASHBOARD & ADVANCED CHECKOUT STYLES (css/admin.css)
+   نظام الإدارة المتكامل، التنبيهات النابضة باللون الأحمر، ولوحة التحكم
+   ========================================================================== */
+
+/* ==========================================================================
+   ADMIN HEADER BUTTON & PULSATING RED ALERT
+   ========================================================================== */
+.btn-admin-header {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-admin-header:hover {
+  background: #0F172A;
+  color: #FFFFFF;
+  border-color: #0F172A;
+  transform: translateY(-2px);
+}
+
+/* THE RED PULSATING ALERT EFFECT (عند وصول طلب جديد من العميل) */
+.btn-admin-header.has-new-orders {
+  background: #EF4444 !important;
+  color: #FFFFFF !important;
+  border-color: #EF4444 !important;
+  animation: adminPulseRed 1.8s infinite;
+}
+
+@keyframes adminPulseRed {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8), 0 0 15px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0), 0 0 25px rgba(239, 68, 68, 0.8);
+  }
+  100% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 0 15px rgba(239, 68, 68, 0.5);
+  }
+}
+
+.btn-admin-header.has-new-orders .admin-badge-count {
+  background: #FFFFFF !important;
+  color: #EF4444 !important;
+  font-weight: 900;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.admin-badge-count {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  background: #0F172A;
+  color: #FFFFFF;
+  font-size: 0.7rem;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  transition: all var(--transition-fast);
+}
+
+/* ==========================================================================
+   ADMIN DASHBOARD MODAL WINDOW
+   ========================================================================== */
+.admin-modal-dialog {
+  max-width: 1140px;
+  width: 95%;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  background: #F8FAFC;
+}
+
+.admin-header-bar {
+  background: #0F172A;
+  color: #FFFFFF;
+  padding: 1.25rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1E293B;
+}
+.admin-header-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.admin-header-emblem {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #1E293B, #334155);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-size: 1.25rem;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.admin-main-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-bottom: 0.15rem;
+}
+.admin-sub-tag {
+  font-size: 0.78rem;
+  color: #94A3B8;
+}
+
+/* Admin Tabs Bar */
+.admin-tabs-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 2rem;
+  background: #FFFFFF;
+  border-bottom: 1px solid var(--border-light);
+  overflow-x: auto;
+}
+.admin-tab-btn {
+  background: transparent;
+  border: none;
+  padding: 0.65rem 1.2rem;
+  border-radius: var(--radius-full);
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-family: var(--font-ar);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.admin-tab-btn:hover {
+  background: #F1F5F9;
+  color: var(--text-main);
+}
+.admin-tab-btn.active {
+  background: #0F172A;
+  color: #FFFFFF;
+}
+.admin-tab-badge {
+  background: #EF4444;
+  color: #FFFFFF;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-full);
+  font-weight: 700;
+}
+
+/* Admin Body Content */
+.admin-tab-pane {
+  display: none;
+  padding: 2rem;
+  overflow-y: auto;
+  max-height: calc(92vh - 145px);
+}
+.admin-tab-pane.active {
+  display: block;
+}
+
+/* ==========================================================================
+   KPI OVERVIEW CARDS
+   ========================================================================== */
+.admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 2.25rem;
+}
+.admin-kpi-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-subtle);
+  position: relative;
+  overflow: hidden;
+}
+.admin-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 4px;
+  background: var(--border-light);
+}
+.admin-kpi-card.accent-gold::before { background: var(--accent); }
+.admin-kpi-card.accent-red::before { background: #EF4444; }
+.admin-kpi-card.accent-blue::before { background: #3B82F6; }
+.admin-kpi-card.accent-green::before { background: #10B981; }
+
+.kpi-title {
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+.kpi-value {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: var(--text-main);
+  line-height: 1.1;
+  font-family: var(--font-ar);
+}
+
+/* ==========================================================================
+   BEST SELLERS TABLE (أكثر المبيعات)
+   ========================================================================== */
+.admin-section-block {
+  background: #FFFFFF;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1.75rem;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-subtle);
+}
+.admin-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+.admin-block-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.best-sellers-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.best-sellers-table th {
+  background: #F8FAFC;
+  padding: 0.75rem 1rem;
+  text-align: right;
+  font-weight: 700;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-light);
+}
+.best-sellers-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+.seller-thumb {
+  width: 50px;
+  height: 50px;
+  border-radius: var(--radius-xs);
+  object-fit: cover;
+}
+.seller-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+.seller-name {
+  font-weight: 700;
+  color: var(--text-main);
+}
+.seller-cat {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.sales-badge {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-hover);
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
+  font-weight: 800;
+  font-size: 0.825rem;
+}
+
+/* ==========================================================================
+   ORDERS MANAGER CARDS (لائحة الطلبات الواردة بالتفاصيل والصور)
+   ========================================================================== */
+.orders-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.order-card-detailed {
+  background: #FFFFFF;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-subtle);
+  transition: all var(--transition-fast);
+}
+.order-card-detailed.is-new-order {
+  border-right: 5px solid #EF4444;
+  background: #FFFBFB;
+}
+
+.order-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.order-id-tag {
+  font-family: var(--font-brand);
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--text-main);
+  background: #F1F5F9;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-xs);
+}
+.order-date-text {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-right: 0.75rem;
+}
+
+.order-status-pill {
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.order-status-pill.pending { background: #FEE2E2; color: #DC2626; }
+.order-status-pill.confirmed { background: #FEF3C7; color: #D97706; }
+.order-status-pill.completed { background: #D1FAE5; color: #059669; }
+
+/* Customer Box */
+.order-customer-box {
+  background: #F8FAFC;
+  border-radius: var(--radius-sm);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+.customer-info-item strong {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.2rem;
+}
+.customer-info-item span {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* Order Items Table with Product Images */
+.order-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.25rem;
+  font-size: 0.85rem;
+}
+.order-items-table th {
+  background: #F8FAFC;
+  padding: 0.6rem 0.85rem;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+.order-items-table td {
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+.item-cell-with-img {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.item-table-img {
+  width: 54px;
+  height: 54px;
+  border-radius: var(--radius-xs);
+  object-fit: cover;
+  border: 1px solid var(--border-light);
+}
+
+/* Order Footer Actions */
+.order-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-light);
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.order-total-sum {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: var(--text-main);
+}
+
+.order-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.btn-whatsapp-customer {
+  background: #25D366;
+  color: #FFFFFF;
+  border: none;
+  border-radius: var(--radius-full);
+  padding: 0.55rem 1.1rem;
+  font-size: 0.825rem;
+  font-weight: 700;
+  font-family: var(--font-ar);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+.btn-whatsapp-customer:hover {
+  background: #20BD5A;
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   CHECKOUT DIRECT MODAL STYLES (إتمام الطلب المباشر)
+   ========================================================================== */
+.checkout-modal-dialog {
+  max-width: 600px;
+  padding: 2.25rem;
+}
+.checkout-summary-box {
+  background: #F8FAFC;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.checkout-item-mini {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  font-size: 0.85rem;
+  border-bottom: 1px dashed var(--border-light);
+}
+.checkout-item-mini:last-child {
+  border-bottom: none;
+}
+
+/* Mobile Responsiveness for Admin & Header */
+@media (max-width: 768px) {
+  .admin-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .order-customer-box {
+    grid-template-columns: 1fr;
+  }
+  .admin-tabs-nav {
+    padding: 0.5rem 1rem;
+  }
+  .admin-tab-pane {
+    padding: 1.25rem;
+  }
+}
+
+/* ==========================================================================
+   STANDALONE ADMIN PAGE LAYOUT (صفحة لوحة التحكم الكاملة المستقلة)
+   ========================================================================== */
+.admin-page-body {
+  background-color: #F8FAFC;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-main);
+  font-family: var(--font-ar);
+}
+
+.admin-page-header {
+  background: #0F172A;
+  color: #FFFFFF;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid #1E293B;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+.admin-page-header-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cloud-status-badge {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.admin-page-nav-wrap {
+  background: #FFFFFF;
+  border-bottom: 1px solid var(--border-light);
+  position: sticky;
+  top: 65px;
+  z-index: 90;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+.admin-page-nav-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0.5rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+}
+
+.admin-page-content {
+  flex: 1;
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+.admin-page-content .admin-tab-pane {
+  padding: 0;
+  max-height: none;
+  overflow-y: visible;
+}
+
+/* ==========================================================================
+   DRAG & DROP IMAGE UPLOAD & TAGS STYLING
+   ========================================================================== */
+.required-tag {
+  color: #EF4444;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-right: 0.35rem;
+}
+
+.optional-tag {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  margin-right: 0.35rem;
+}
+
+.btn-text-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: underline;
+  font-family: inherit;
+  transition: color var(--transition-fast);
+}
+.btn-text-link:hover {
+  color: var(--accent-hover);
+}
+
+.drop-zone-container {
+  border: 2px dashed #CBD5E1;
+  border-radius: var(--radius-md);
+  padding: 2.25rem 1.5rem;
+  background: #F8FAFC;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+}
+.drop-zone-container:hover {
+  border-color: var(--accent);
+  background: #FFFDF7;
+}
+.drop-zone-container.dragover {
+  border-color: var(--accent);
+  background: rgba(245, 158, 11, 0.08);
+  transform: scale(1.005);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
+}
+
+.drop-zone-icon {
+  font-size: 2.75rem;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+  transition: transform 0.2s ease;
+}
+.drop-zone-container:hover .drop-zone-icon {
+  transform: translateY(-3px);
+}
+
+.drop-zone-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.4rem;
+}
+.drop-zone-title .browse-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.drop-zone-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.drop-zone-preview {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  background: #FFFFFF;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1.25rem;
+  text-align: right;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+}
+.drop-zone-preview img {
+  width: 85px;
+  height: 85px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--border-light);
+}
+
+.preview-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.preview-filename {
+  font-weight: 700;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+.preview-filesize {
+  font-size: 0.78rem;
+  color: #10B981;
+  font-weight: 600;
+}
+
+.btn-remove-preview {
+  background: none;
+  border: none;
+  color: #EF4444;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  font-family: inherit;
+  padding: 0;
+  width: fit-content;
+}
+.btn-remove-preview:hover {
+  text-decoration: underline;
+}
+
+/* Secondary image drop */
+.sec-drop-prompt {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem;
+  border: 1px dashed var(--border-light);
+  border-radius: var(--radius-sm);
+  background: #F8FAFC;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.sec-drop-prompt:hover {
+  border-color: var(--accent);
+  background: #FFFDF7;
+}
+.sec-preview-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  padding: 0.65rem 1rem;
+  background: #F8FAFC;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+}
+.sec-preview-wrap img {
+  width: 50px;
+  height: 50px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+/* ==========================================================================
+   ENHANCED MOBILE RESPONSIVENESS (الهاتف والشاشات الصغيرة)
+   ========================================================================== */
+@media (max-width: 768px) {
+  .admin-page-header-inner {
+    padding: 0.85rem 1rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .admin-page-header-inner > div {
+    justify-content: space-between;
+  }
+  .admin-main-title {
+    font-size: 1.1rem;
+  }
+  .admin-sub-tag {
+    font-size: 0.72rem;
+  }
+  .admin-page-nav-wrap {
+    top: 0;
+  }
+  .admin-page-nav-inner {
+    padding: 0.5rem 1rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .admin-page-nav-inner::-webkit-scrollbar {
+    display: none;
+  }
+  .admin-tab-btn {
+    padding: 0.55rem 0.95rem;
+    font-size: 0.8rem;
+  }
+  .admin-page-content {
+    padding: 1.25rem 1rem 3.5rem;
+  }
+  .admin-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  .admin-kpi-card {
+    padding: 1rem;
+  }
+  .admin-kpi-card .kpi-value {
+    font-size: 1.25rem;
+  }
+  .order-card-detailed {
+    padding: 1.25rem 1rem;
+  }
+  .order-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+  .order-header-row > div {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .order-footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .order-footer-actions .btn-whatsapp-customer {
+    width: 100%;
+    justify-content: center;
+  }
+  .drop-zone-container {
+    padding: 1.5rem 1rem;
+  }
+  .drop-zone-preview {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .btn-remove-preview {
+    margin: 0.5rem auto 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-tab-btn {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.78rem;
+  }
+}
+

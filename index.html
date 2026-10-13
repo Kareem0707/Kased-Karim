@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>قاصد كريم للإضاءة الفاخرة | KASED KARIM Lighting - الشيخ زايد</title>
+  <meta name="description" content="معرض قاصد كريم Kased Karim - أيقونة الإضاءة الديكورية والمعمارية في الشيخ زايد. ثريات ملكية، أنظمة مسارات مغناطيسية، إضاءة جدارية ولاندسكيب لأرقى الفلل والقصور.">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23F59E0B'><polygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/></svg>">
+
+  <!-- Google Fonts: Cairo (Arabic) & Archivo Black (Modern Luxury Impact) & Marcellus -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Cairo:wght@300;400;500;600;700;800;900&family=Marcellus&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome 6 Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+  <!-- ========================================================================
+       TOP NOTIFICATION BAR (الشريط الفرعي)
+       ======================================================================== -->
+  <div class="top-bar">
+    <div class="top-bar-inner">
+      <div style="display: flex; align-items: center; gap: 0.6rem;">
+        <span class="top-bar-badge"><i class="fas fa-gem"></i> أرقى معارض الشيخ زايد</span>
+        <span class="top-bar-main-text">وجهة نُخبة المصممين وأصحاب الذوق الرفيع في مصر</span>
+      </div>
+      <div class="top-bar-links">
+        <a href="#showroom" class="top-bar-link">
+          <i class="fas fa-map-marker-alt"></i>
+          <span>الشيخ زايد - محور وصلة دهشور</span>
+        </a>
+        <a href="tel:01099887766" class="top-bar-link">
+          <i class="fas fa-phone-alt"></i>
+          <span dir="ltr">010 9988 7766</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       NAVIGATION BAR (HEADER) - أقل طولاً وأكثر اتساعاً وملاءم للهاتف
+       ======================================================================== -->
+  <header class="site-header">
+    <div class="header-container header-inner">
+      <!-- Brand Logo / Emblem -->
+      <a href="#" class="brand-link">
+        <div class="brand-emblem">
+          <i class="fas fa-lightbulb" style="font-size: 1.15rem;"></i>
+        </div>
+        <div class="brand-text-col">
+          <span class="brand-title-en">KASED KARIM</span>
+          <span class="brand-title-ar">قاصد كريم للإضاءة الفاخرة • زايد</span>
+        </div>
+      </a>
+
+      <!-- Navigation Menu -->
+      <nav>
+        <ul class="nav-menu">
+          <li><a href="#" class="nav-item-link active">الرئيسية</a></li>
+          <li class="nav-item-dropdown">
+            <button class="nav-item-link" id="navCollectionsBtn" onclick="toggleCollectionsSubBar(event)" style="background: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; font-size: inherit; font-family: inherit; font-weight: inherit;">
+              <span>مجموعات الإضاءة</span>
+              <i class="fas fa-chevron-down nav-sub-arrow" id="navSubArrow"></i>
+            </button>
+          </li>
+          <li><a href="#showroom" class="nav-item-link">معرض الشيخ زايد</a></li>
+          <li><a href="#contact" class="nav-item-link">تواصل معنا</a></li>
+        </ul>
+      </nav>
+
+      <!-- Header Actions -->
+      <div class="header-actions">
+        <!-- Admin Dashboard Action Icon (يتلون بالاحمر وينبض عند وصول طلبات جديدة) -->
+        <a href="admin.html" class="btn-admin-header" id="adminHeaderBtn" title="لوحة تحكم إدارة المعرض">
+          <i class="fas fa-shield-halved"></i>
+          <span class="admin-badge-count" id="adminHeaderBadge">0</span>
+        </a>
+
+        <!-- Cart Button (أيقونة عربة التسوق العادية) -->
+        <button class="action-icon-btn" onclick="toggleCartDrawer(true)" title="سلة الطلبات والمشتريات">
+          <i class="fas fa-shopping-cart"></i>
+          <span class="badge-count cart-count-badge">0</span>
+        </button>
+
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="القائمة">
+          <i class="fas fa-bars"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================
+       SECONDARY SUB-BAR (الشريط الفرعي لأصناف وحدات الإضاءة تحت الشريط الرئيسي)
+       ======================================================================== -->
+  <div class="site-sub-bar" id="siteSubBar">
+    <div class="header-container sub-bar-container">
+      <div class="sub-bar-lead">
+        <span class="sub-bar-label">
+          <i class="fas fa-layer-group" style="color: var(--accent);"></i>
+          <span>أصناف وحدات الإضاءة:</span>
+        </span>
+      </div>
+
+      <div class="sub-bar-items" id="subBarItems">
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('all')">
+          <i class="fas fa-sparkles"></i>
+          <span>الكل المعروض</span>
+        </button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('chandeliers')">
+          <i class="fas fa-crown"></i>
+          <span>ثريات ونجف فاخر</span>
+        </button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('magnetic-track')">
+          <i class="fas fa-bolt"></i>
+          <span>مسارات مغناطيسية واسبوتات</span>
+        </button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('wall-sconces')">
+          <i class="fas fa-lightbulb"></i>
+          <span>إضاءات جدارية Sconces</span>
+        </button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('floor-table')">
+          <i class="fas fa-couch"></i>
+          <span>أباجورات ومصابيح طاولة</span>
+        </button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('outdoor')">
+          <i class="fas fa-tree"></i>
+          <span>إضاءة خارجية ولاندسكيب</span>
+        </button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('smart-profiles')">
+          <i class="fas fa-microchip"></i>
+          <span>بروفايل ليد ذكي</span>
+        </button>
+      </div>
+
+      <button class="sub-bar-close-btn" onclick="toggleCollectionsSubBar(false)" title="إغلاق الشريط">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile Navigation Drawer -->
+  <div class="mobile-nav-drawer" id="mobileNavDrawer">
+    <div class="mobile-nav-header">
+      <div class="brand-link">
+        <div class="brand-emblem" style="width: 32px; height: 32px;">
+          <i class="fas fa-lightbulb" style="font-size: 0.95rem;"></i>
+        </div>
+        <span class="brand-title-en" style="font-size: 0.95rem; letter-spacing: 0.8px;">KASED KARIM</span>
+      </div>
+      <button class="modal-close-btn" style="position: static;" onclick="document.getElementById('mobileNavDrawer').classList.remove('active')">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <ul class="mobile-nav-list">
+      <li><a href="#" class="mobile-nav-link" onclick="document.getElementById('mobileNavDrawer').classList.remove('active')"><i class="fas fa-home"></i> الرئيسية</a></li>
+      <li class="mobile-accordion-item">
+        <button class="mobile-accordion-header" id="mobileAccordionToggle" onclick="toggleMobileCollectionsAccordion(event)">
+          <span style="display: flex; align-items: center; gap: 0.6rem;">
+            <i class="fas fa-layer-group" style="color: var(--accent);"></i>
+            <span>مجموعات وأصناف الإضاءة</span>
+          </span>
+          <i class="fas fa-chevron-down mobile-accordion-arrow" id="mobileAccordionArrow"></i>
+        </button>
+        <div class="mobile-accordion-content" id="mobileAccordionContent">
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('all')">
+            <i class="fas fa-sparkles"></i> <span>الكل المعروض</span>
+          </button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('chandeliers')">
+            <i class="fas fa-crown"></i> <span>ثريات ونجف فاخر</span>
+          </button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('magnetic-track')">
+            <i class="fas fa-bolt"></i> <span>مسارات مغناطيسية واسبوتات</span>
+          </button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('wall-sconces')">
+            <i class="fas fa-lightbulb"></i> <span>إضاءات جدارية Sconces</span>
+          </button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('floor-table')">
+            <i class="fas fa-couch"></i> <span>أباجورات ومصابيح طاولة</span>
+          </button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('outdoor')">
+            <i class="fas fa-tree"></i> <span>إضاءة خارجية ولاندسكيب</span>
+          </button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('smart-profiles')">
+            <i class="fas fa-microchip"></i> <span>بروفايل ليد ذكي</span>
+          </button>
+        </div>
+      </li>
+      <li><a href="#showroom" class="mobile-nav-link" onclick="document.getElementById('mobileNavDrawer').classList.remove('active')"><i class="fas fa-store"></i> معرض الشيخ زايد</a></li>
+      <li><a href="#contact" class="mobile-nav-link" onclick="document.getElementById('mobileNavDrawer').classList.remove('active')"><i class="fas fa-phone-alt"></i> تواصل معنا</a></li>
+      <li style="margin-top: 0.5rem; border-top: 1px solid var(--border-light); padding-top: 0.5rem;">
+        <a href="admin.html" class="mobile-nav-link" style="color: var(--accent-hover); font-weight: 700;">
+          <i class="fas fa-shield-halved"></i> لوحة تحكم الإدارة (Admin)
+        </a>
+      </li>
+    </ul>
+    <div class="mobile-nav-footer">
+      <a href="https://wa.me/201099887766" target="_blank" class="btn-whatsapp-quote" style="text-decoration: none;">
+        <i class="fab fa-whatsapp"></i>
+        <span>واتساب المعرض المباشر</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       HERO SECTION (مركز الفخامة مع اسم المكان واللمعة الفضية المتحركة)
+       ======================================================================== -->
+  <section class="hero-section">
+    <div class="hero-spotlight"></div>
+    <div class="hero-spotlight-beam"></div>
+
+    <div class="container hero-content">
+      <!-- THE GRAND BRAND CENTERPIECE: KASED KARIM WITH MOVING SILVER SHIMMER -->
+      <div class="hero-brand-wrap">
+        <h1 class="silver-shimmer-brand">KASED KARIM</h1>
+      </div>
+
+      <h2 class="hero-arabic-title">
+        قاصد كريم <span>للإضاءة الفاخرة</span>
+      </h2>
+
+      <p class="hero-description">
+        نصيغ الضوء ليتحول إلى تحفة فنية تليق بقصوركم وفيلاتكم الراقية. تشكيلات إيطالية حصرية من الثريات الملكية، أنظمة المسارات المغناطيسية المعمارية، وتوزيع هندسي متكامل بإشراف نخبة من مهندسي الإضاءة.
+      </p>
+
+      <!-- Action Buttons -->
+      <div class="hero-buttons">
+        <a href="#catalog" class="btn-primary" style="padding: 0.95rem 2.5rem; font-size: 1.05rem;">
+          <i class="fas fa-sparkles"></i>
+          <span>استكشف الكتالوج الفاخر</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       PRODUCT CATALOG & STORE SECTION
+       ======================================================================== -->
+  <section class="catalog-section" id="catalog">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">EXCLUSIVE COLLECTIONS</span>
+        <h2 class="section-title">المجموعات الحصرية ووحدات الإضاءة</h2>
+        <p class="section-subtitle">
+          تصفّح تشكيلة منتقاة بعناية تلبي أرقى معايير العمارة الحديثة والنيوكلاسيك.
+        </p>
+      </div>
+
+      <!-- Category Filter Tabs -->
+      <div class="catalog-toolbar">
+        <div class="category-tabs" id="categoryTabs">
+          <!-- Rendered dynamically by app.js -->
+        </div>
+      </div>
+
+      <!-- Search, Sort & Manage Controls -->
+      <div class="catalog-controls">
+        <div class="search-input-wrap">
+          <i class="fas fa-search search-icon"></i>
+          <input type="text" class="search-input" id="searchInput" placeholder="ابحث باسم الثريا، الطراز، أو كود الوحدة...">
+        </div>
+
+        <div class="controls-right">
+          <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted);" id="catalogResultsCount">12 وحدة إضاءة فاخرة</span>
+          
+          <select class="custom-select" id="sortSelect">
+            <option value="featured">المعروضات المميزة</option>
+            <option value="price-desc">السعر: من الأعلى للأقل</option>
+            <option value="price-asc">السعر: من الأقل للأعلى</option>
+            <option value="newest">أحدث الوصولات 2025</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Products Grid -->
+      <div class="products-grid" id="productsGrid">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       SHEIKH ZAYED SHOWROOM EXPERIENCE
+       ======================================================================== -->
+  <section class="showroom-experience" id="showroom">
+    <div class="container">
+      <div class="showroom-banner">
+        <div class="showroom-content">
+          <span class="showroom-tag">SHEIKH ZAYED FLAGSHIP</span>
+          <h2 class="showroom-title">معرض قاصد كريم في قلب الشيخ زايد</h2>
+          <p class="showroom-desc">
+            تفضل بزيارة صالة العرض الخاصة بنا واستمتع بتجربة حسية غامرة تجمع أرقى نماذج الإضاءة المعمارية والديكورية، مع استشارة مجانية مع نخبة من كبار مهندسي الإضاءة.
+          </p>
+
+          <div class="showroom-info-items">
+            <div class="showroom-info-row">
+              <i class="fas fa-map-marker-alt"></i>
+              <span>الشيخ زايد - محور وصلة دهشور، أمام كمبوند بيفرلي هيلز، الجيزة</span>
+            </div>
+            <div class="showroom-info-row">
+              <i class="fas fa-clock"></i>
+              <span>يومياً من 11:00 صباحاً حتى 11:00 مساءً</span>
+            </div>
+            <div class="showroom-info-row">
+              <i class="fas fa-parking"></i>
+              <span>موقف سيارات VIP خاص لعملاء المعرض</span>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <a href="https://wa.me/201099887766" target="_blank" class="btn-primary">
+              <i class="fab fa-whatsapp"></i>
+              <span>تواصل مع المعرض مباشرة</span>
+            </a>
+            <a href="https://maps.google.com/?q=Sheikh+Zayed+City" target="_blank" class="btn-secondary" style="background: rgba(255,255,255,0.1); color: #FFFFFF; border-color: rgba(255,255,255,0.2);">
+              <i class="fas fa-location-arrow"></i>
+              <span>الاتجاهات على الخريطة</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="showroom-image-side">
+          <img src="https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=1400&q=80" alt="معرض قاصد كريم للإضاءة الشيخ زايد">
+          <div class="showroom-overlay-badge">
+            <div class="badge-quote-title">استقبال خاص للمشاريع والفلل</div>
+            <div class="badge-quote-sub">فريقنا الهندسي جاهز لمعاينة المخططات المعمارية ومطابقتها فوراً.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       FOOTER
+       ======================================================================== -->
+  <footer class="site-footer" id="contact">
+    <div class="container">
+      <div class="footer-top">
+        <!-- Brand Col -->
+        <div class="footer-brand-col">
+          <div class="brand-title-en" style="font-size: 1.6rem; letter-spacing: 2px; color: #FFFFFF; margin-bottom: 0.75rem;">KASED KARIM</div>
+          <p class="footer-desc">
+            المعرض الأول للإضاءة الفاخرة والمعمارية في الشيخ زايد. شركاء الإبداع لأصحاب القصور والفيلات ومهندسي الديكور الباحثين عن التميز والفرادة.
+          </p>
+          <div class="footer-socials">
+            <a href="#" class="social-btn" title="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" class="social-btn" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+            <a href="#" class="social-btn" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
+            <a href="https://wa.me/201099887766" target="_blank" class="social-btn" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+          </div>
+        </div>
+
+        <!-- Collections -->
+        <div>
+          <h4 class="footer-title">مجموعات الإضاءة</h4>
+          <ul class="footer-links">
+            <li><a href="#catalog" class="footer-link">الثريات والنجف الفاخر</a></li>
+            <li><a href="#catalog" class="footer-link">المسارات المغناطيسية Magnetic</a></li>
+            <li><a href="#catalog" class="footer-link">الأبليكات الجدارية Sconces</a></li>
+            <li><a href="#catalog" class="footer-link">إضاءات اللاندسكيب والحدائق</a></li>
+            <li><a href="#catalog" class="footer-link">البروفايل ليد المعماري Trimless</a></li>
+          </ul>
+        </div>
+
+        <!-- Showroom & Direct Contact -->
+        <div>
+          <h4 class="footer-title">معرض الشيخ زايد والتواصل</h4>
+          <ul class="footer-links">
+            <li><span style="color: #CBD5E1; font-size: 0.88rem; display: flex; align-items: flex-start; gap: 0.5rem;"><i class="fas fa-map-marker-alt" style="color: var(--accent); margin-top: 3px;"></i> وصلة دهشور، أمام كمبوند بيفرلي هيلز، الشيخ زايد</span></li>
+            <li><span style="color: #CBD5E1; font-size: 0.88rem; display: flex; align-items: center; gap: 0.5rem;"><i class="fas fa-clock" style="color: var(--accent);"></i> يومياً من 11:00 صباحاً حتى 11:00 مساءً</span></li>
+            <li><a href="tel:01099887766" class="footer-link" style="display: flex; align-items: center; gap: 0.5rem;"><i class="fas fa-phone-alt" style="color: var(--accent);"></i> <span dir="ltr">010 9988 7766</span></a></li>
+            <li><a href="https://wa.me/201099887766" target="_blank" class="footer-link" style="color: #25D366; display: flex; align-items: center; gap: 0.5rem; font-weight: 700;"><i class="fab fa-whatsapp"></i> واتساب المعرض المباشر</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div class="footer-zayed-tag">
+          <i class="fas fa-map-pin" style="color: var(--accent);"></i>
+          <span>صُمم بفخر ليعكس فخامة الشيخ زايد • </span>
+          <a href="https://karimodesign.vercel.app/" target="_blank" rel="noopener noreferrer" style="color: var(--accent); font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; transition: all var(--transition-fast);" onmouseover="this.style.color='#FFFFFF'" onmouseout="this.style.color='var(--accent)'">
+            Designed by KarimoDesign
+            <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.72rem;"></i>
+          </a>
+        </div>
+        <div>
+          <span>جميع الحقوق محفوظة © 2025 لمعرض <strong>Kased Karim Lighting</strong></span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ========================================================================
+       FLOATING WHATSAPP BUTTON
+       ======================================================================== -->
+  <a href="https://wa.me/201099887766?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%20%D9%85%D8%B9%D8%B1%D8%B6%20%D9%82%D8%A7%D8%B5%D8%AF%20%D9%83%D8%A1%D9%8A%D9%85%20%D9%84%D9%84%D8%A5%D8%B6%D8%A7%D8%A1%D8%A9%20%D8%A8%D8%A7%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B2%D8%A7%D9%8A%D8%AF%D8%8C%20%D8%A3%D9%88%D8%AF%20%D8%A7%D9%84%D8%A7%D8%B3%D8%AA%D9%81%D8%B3%D8%A7%D8%B1%20%D8%B9%D9%86%20%D9%88%D8%AD%D8%AF%D8%A7%D8%AA%20%D8%A7%D9%84%D8%A5%D8%B6%D8%A7%D8%A1%D8%A9." target="_blank" class="floating-vip-whatsapp" title="تواصل مباشر مع مهندس المعرض">
+    <i class="fab fa-whatsapp"></i>
+    <span>تواصل عبر واتساب</span>
+  </a>
+
+  <!-- ========================================================================
+       QUICK VIEW / PRODUCT SPECIFICATIONS MODAL
+       ======================================================================== -->
+  <div class="modal-backdrop" id="quickViewModal">
+    <div class="modal-dialog">
+      <button class="modal-close-btn" onclick="closeQuickView()" title="إغلاق">
+        <i class="fas fa-times"></i>
+      </button>
+
+      <div class="modal-quickview-content">
+        <!-- Gallery Side -->
+        <div class="modal-gallery-side">
+          <div class="modal-main-img-wrap">
+            <img class="modal-main-img" id="modalMainImg" src="" alt="Lighting Unit">
+          </div>
+          <div class="modal-thumbs-row" id="modalThumbs"></div>
+        </div>
+
+        <!-- Details Side -->
+        <div class="modal-details-side">
+          <span class="modal-product-cat" id="modalCat">ثريات ونجف فاخر</span>
+          <h2 class="modal-product-title" id="modalTitle">اسم وحدة الإضاءة</h2>
+          <div class="modal-product-en-title" id="modalEnTitle">Product English Name</div>
+
+          <div class="modal-price-row">
+            <span class="modal-price" id="modalPrice">0</span>
+            <span class="modal-currency">جنيه مصري</span>
+            <span class="modal-old-price" id="modalOldPrice"></span>
+          </div>
+
+          <p class="modal-desc" id="modalDesc"></p>
+
+          <!-- Specifications Table -->
+          <table class="modal-specs-table">
+            <tbody id="modalSpecsTable"></tbody>
+          </table>
+
+          <!-- Action Row -->
+          <div class="modal-actions-row">
+            <div class="quantity-stepper">
+              <button class="stepper-btn" id="modalQtyMinus">-</button>
+              <span class="stepper-val" id="modalQtyVal">1</span>
+              <button class="stepper-btn" id="modalQtyPlus">+</button>
+            </div>
+
+            <button class="btn-primary btn-add-quote-modal" id="modalAddQuoteBtn">
+              <i class="fas fa-shopping-cart"></i>
+              <span>إضافة إلى السلة</span>
+            </button>
+
+            <button class="btn-secondary" id="modalWhatsappBtn" title="استفسار فوري للقطعة">
+              <i class="fab fa-whatsapp" style="color: #25D366;"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       CART / SHOPPING BASKET DRAWER (عربة التسوق العادية)
+       ======================================================================== -->
+  <div class="cart-drawer-backdrop" id="cartDrawerBackdrop">
+    <div class="cart-drawer">
+      <div class="drawer-header">
+        <div class="drawer-title-wrap">
+          <i class="fas fa-shopping-cart" style="color: var(--accent); font-size: 1.25rem;"></i>
+          <h3 class="drawer-title">سلة الطلبات</h3>
+          <span class="drawer-count-pill cart-count-badge">0</span>
+        </div>
+        <button class="drawer-close-btn" onclick="toggleCartDrawer(false)">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="drawer-body">
+        <div id="cartEmptyState" class="cart-empty-state">
+          <div class="cart-empty-icon"><i class="fas fa-shopping-cart"></i></div>
+          <h4>سلة الطلبات فارغة</h4>
+          <p style="font-size: 0.85rem; margin-top: 0.5rem;">اختر وحدات الإضاءة من المعرض لإضافتها إلى السلة وتأكيد طلبك مباشرة.</p>
+        </div>
+
+        <div class="cart-items-list" id="cartItemsList"></div>
+      </div>
+
+      <div class="drawer-footer" id="cartFooter" style="display: none;">
+        <div class="drawer-subtotal-row">
+          <span>المجموع المبدئي للوحدات:</span>
+          <span id="cartSubtotalVal">0 ج.م</span>
+        </div>
+        <div class="drawer-total-row">
+          <span class="drawer-total-label">إجمالي الطلب:</span>
+          <span class="drawer-total-val" id="cartTotalVal">0 ج.م</span>
+        </div>
+
+        <div class="drawer-actions">
+          <button class="btn-primary" style="width: 100%; margin-bottom: 0.6rem; justify-content: center; padding: 0.85rem;" onclick="openCheckoutModal()">
+            <i class="fas fa-shopping-cart"></i>
+            <span>إتمام وتأكيد الطلب المباشر للموقع</span>
+          </button>
+          <button class="btn-whatsapp-quote" onclick="sendWhatsAppQuotation()">
+            <i class="fab fa-whatsapp"></i>
+            <span>إرسال المقايسة لمهندس المبيعات عبر واتساب</span>
+          </button>
+          <button class="btn-secondary" onclick="window.print()">
+            <i class="fas fa-print"></i>
+            <span>طباعة مسودة المقايسة</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       CUSTOMER CHECKOUT MODAL (إتمام وتأكيد الطلب المباشر)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="checkoutModal">
+    <div class="modal-dialog checkout-modal-dialog">
+      <button class="modal-close-btn" onclick="closeCheckoutModal()" title="إغلاق">
+        <i class="fas fa-times"></i>
+      </button>
+
+      <div style="margin-bottom: 1.25rem;">
+        <span class="section-tag">DIRECT LUXURY CHECKOUT</span>
+        <h2 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem;">إتمام طلب وحدات الإضاءة</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+          أدخل بيانات التواصل وموقع العقار بالشيخ زايد لتأكيد الطلب والتسليم مع الضمان المعتمد.
+        </p>
+      </div>
+
+      <!-- Checkout Summary Mini -->
+      <div class="checkout-summary-box">
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-main); margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
+          <span>ملخص الوحدات المختارة:</span>
+          <span id="checkoutTotalSum" style="color: var(--accent); font-weight: 800;">0 ج.م</span>
+        </div>
+        <div id="checkoutSummaryList"></div>
+      </div>
+
+      <form id="checkoutOrderForm">
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label class="form-label">الاسم الكريم / المهندس المشرف *</label>
+            <input type="text" name="custName" class="form-input" placeholder="مثال: م. أحمد الشناوي" required>
+          </div>
+
+          <div class="form-group full-width">
+            <label class="form-label">رقم الهاتف / واتساب لتأكيد الطلب *</label>
+            <input type="tel" name="custPhone" class="form-input" placeholder="010XXXXXXXX" required>
+          </div>
+
+          <div class="form-group full-width">
+            <label class="form-label">عنوان الفيلا أو الشقة / الكمبوند بالشيخ زايد *</label>
+            <input type="text" name="custAddress" class="form-input" placeholder="مثال: كمبوند بيفرلي هيلز - فيلا 42 - الشيخ زايد" required>
+          </div>
+
+          <div class="form-group full-width">
+            <label class="form-label">ملاحظات خاصة (أوقات التوصيل، مواصفات الأسقف، الخ)</label>
+            <textarea name="custNotes" class="form-textarea" rows="2" placeholder="أي تفاصيل خاصة يفضل معرفتها قبل المعاينة أو التسليم..."></textarea>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+          <button type="submit" class="btn-primary" style="flex: 1; justify-content: center; padding: 0.85rem;">
+            <i class="fas fa-check-circle"></i>
+            <span>تأكيد وإرسال الطلب فوراً</span>
+          </button>
+          <button type="button" class="btn-secondary" onclick="closeCheckoutModal()">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       ORDER SUCCESS MODAL (إيصال استلام الطلب وتأكيده للعميل)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="orderSuccessModal">
+    <div class="modal-dialog" style="max-width: 480px; text-align: center; padding: 2.5rem 2rem;">
+      <div style="width: 70px; height: 70px; border-radius: var(--radius-full); background: rgba(16, 185, 129, 0.1); color: #10B981; font-size: 2.2rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem;">
+        <i class="fas fa-check"></i>
+      </div>
+      <h3 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">تم استلام طلبكم بنجاح!</h3>
+      <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 1.5rem;">
+        شكراً لاختياركم معرض قاصد كريم للإضاءة الفاخرة بالشيخ زايد. تم إرسال تفاصيل طلبكم لمهندسي المعرض والمستودع لتجهيزه فوراً.
+      </p>
+
+      <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1.5rem; text-align: right;">
+        <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 0.4rem;">
+          <span style="color: var(--text-muted);">رقم الطلب المرجعي:</span>
+          <strong id="successOrderId" style="font-family: var(--font-brand); color: var(--text-main);">#00000</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.88rem;">
+          <span style="color: var(--text-muted);">إجمالي الطلب:</span>
+          <strong id="successOrderTotal" style="color: var(--accent-hover); font-weight: 800;">0 ج.م</strong>
+        </div>
+      </div>
+
+      <button class="btn-primary" style="width: 100%; justify-content: center; padding: 0.8rem;" onclick="closeOrderSuccessModal()">
+        <span>متابعة تصفح المعرض</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Note: Admin Dashboard is hosted on dedicated standalone admin.html -->
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- JavaScript Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

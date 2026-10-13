@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة التحكم وإدارة المعرض | Kased Karim Lighting - الشيخ زايد</title>
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23F59E0B'><polygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/></svg>">
+
+  <!-- Google Fonts: Cairo & Archivo Black -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome 6 Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="admin-page-body">
+
+  <div id="adminPageRoot">
+    <!-- Executive Top Header -->
+    <header class="admin-page-header">
+      <div class="admin-page-header-inner">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <a href="index.html" class="brand-link" style="text-decoration: none;">
+            <div class="brand-emblem" style="width: 42px; height: 42px;">
+              <i class="fas fa-gem" style="font-size: 1.15rem;"></i>
+            </div>
+          </a>
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <h1 style="font-size: 1.25rem; font-weight: 800; color: #FFFFFF; margin: 0;">لوحة تحكم وسيستم معرض قاصد كريم</h1>
+              <span class="cloud-status-badge">
+                <i class="fas fa-circle" style="font-size: 0.55rem;"></i>
+                <span>Vercel Ready</span>
+              </span>
+            </div>
+            <div style="font-size: 0.78rem; color: #94A3B8; margin-top: 0.2rem;">
+              الفرع الرئيسي • الشيخ زايد • نظام إدارة المبيعات، المخزون، والطلبات الواردة
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <a href="index.html" class="btn-secondary" style="font-size: 0.85rem; padding: 0.55rem 1.15rem; color: #FFFFFF; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2);">
+            <i class="fas fa-store"></i>
+            <span>العودة للمعرض والمتجر</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Admin Navigation Tabs Bar -->
+    <nav class="admin-page-nav-wrap">
+      <div class="admin-page-nav-inner">
+        <button class="admin-tab-btn active" onclick="switchAdminTab('overview', this)">
+          <i class="fas fa-chart-line"></i>
+          <span>نظرة عامة وأكثر المبيعات</span>
+        </button>
+        <button class="admin-tab-btn" onclick="switchAdminTab('orders', this)">
+          <i class="fas fa-receipt"></i>
+          <span>سجل الطلبات الواردة</span>
+          <span class="admin-badge-count" id="adminHeaderBadge" style="position: static; margin-right: 0.35rem; display: inline-flex;">0</span>
+        </button>
+        <button class="admin-tab-btn" onclick="switchAdminTab('addProduct', this)">
+          <i class="fas fa-plus-circle"></i>
+          <span>إضافة وحدة إضاءة جديدة</span>
+        </button>
+        <button class="admin-tab-btn" onclick="switchAdminTab('inventory', this)">
+          <i class="fas fa-boxes-stacked"></i>
+          <span>إدارة المخزون والكتالوج</span>
+        </button>
+        <button class="admin-tab-btn" onclick="switchAdminTab('cloudDb', this)">
+          <i class="fas fa-cloud"></i>
+          <span>الربط السحابي (Vercel DB)</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="admin-page-content">
+
+      <!-- ====================================================================
+           TAB 1: OVERVIEW & BEST SELLERS (أكثر المبيعات)
+           ==================================================================== -->
+      <section class="admin-tab-pane active" id="adminPane_overview">
+        <!-- KPI Cards Grid -->
+        <div class="admin-kpi-grid">
+          <div class="admin-kpi-card accent-gold">
+            <div class="kpi-title">إجمالي المبيعات المحققة</div>
+            <div class="kpi-value" id="kpiRevenue">0 ج.م</div>
+          </div>
+          <div class="admin-kpi-card accent-blue">
+            <div class="kpi-title">إجمالي عدد الطلبات</div>
+            <div class="kpi-value" id="kpiOrdersCount">0</div>
+          </div>
+          <div class="admin-kpi-card accent-green">
+            <div class="kpi-title">عدد وحدات المعرض النشطة</div>
+            <div class="kpi-value" id="kpiProductsCount">0</div>
+          </div>
+          <div class="admin-kpi-card accent-red">
+            <div class="kpi-title">طلبات جديدة قيد المراجعة</div>
+            <div class="kpi-value" id="kpiPendingCount">0</div>
+          </div>
+        </div>
+
+        <!-- Best Sellers Section -->
+        <div class="admin-section-block">
+          <div class="admin-block-header">
+            <div class="admin-block-title">
+              <i class="fas fa-fire" style="color: var(--accent);"></i>
+              <span>الوحدات الأكثر مبيعاً وإقبالاً (Best Sellers)</span>
+            </div>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">مرتبة تلقائياً حسب حجم المبيعات الفعلي</span>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="best-sellers-table">
+              <thead>
+                <tr>
+                  <th>الترتيب</th>
+                  <th>وحدة الإضاءة</th>
+                  <th>السعر للوحدة</th>
+                  <th>حجم المبيعات</th>
+                  <th>إجمالي العائد</th>
+                </tr>
+              </thead>
+              <tbody id="adminBestSellersTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           TAB 2: ORDERS MANAGER (سجل الطلبات الواردة بالتفاصيل والصور)
+           ==================================================================== -->
+      <section class="admin-tab-pane" id="adminPane_orders">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
+          <div>
+            <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.25rem;">
+              <i class="fas fa-list-check" style="color: var(--accent); margin-left: 0.5rem;"></i>
+              سجل طلبات العملاء بالشيخ زايد
+            </h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">تفاصيل كل طلب كاملة مع صور الوحدات وعناوين الفلل وإمكانية مراسلة العميل واتساب مباشرة</p>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" onclick="renderAdminOrders('all')">كل الطلبات</button>
+            <button class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" onclick="renderAdminOrders('pending')">جديد قيد الانتظار</button>
+            <button class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" onclick="renderAdminOrders('confirmed')">تم التأكيد</button>
+            <button class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" onclick="renderAdminOrders('completed')">مكتمل</button>
+          </div>
+        </div>
+
+        <div class="orders-list-grid" id="adminOrdersListContainer"></div>
+      </section>
+
+      <!-- ====================================================================
+           TAB 3: ADD PRODUCT FORM (إضافة وحدة إضاءة جديدة)
+           ==================================================================== -->
+      <section class="admin-tab-pane" id="adminPane_addProduct">
+        <div style="max-width: 860px; margin: 0 auto; background: #FFFFFF; padding: 2.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle);">
+          <div style="margin-bottom: 1.75rem;">
+            <span class="section-tag">ADD LIGHTING UNIT</span>
+            <h2 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem;">إضافة وحدة إضاءة جديدة للكتالوج والمعرض</h2>
+            <p style="font-size: 0.88rem; color: var(--text-muted); margin-top: 0.35rem;">
+              أدخل الصور، الاسم، الوصف، السعر القديم والجديد، فترة الضمان، والمواصفات لتظهر فوراً لجميع العملاء بالمتجر.
+            </p>
+          </div>
+
+          <form id="adminAddProductForm">
+            <div class="form-grid">
+              <!-- Name (إجباري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>اسم وحدة الإضاءة (عربي)</span>
+                  <span class="required-tag">* (إجباري)</span>
+                </label>
+                <input type="text" name="adminUnitName" class="form-input" placeholder="مثال: ثريا موندريان الكريستالية" required>
+              </div>
+
+              <!-- Price (إجباري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>السعر الحالي (جنيه مصري)</span>
+                  <span class="required-tag">* (إجباري)</span>
+                </label>
+                <input type="number" name="adminUnitPrice" class="form-input" placeholder="مثال: 32500" required>
+              </div>
+
+              <!-- Primary Image Drag & Drop (إجباري) -->
+              <div class="form-group full-width">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.5rem;">
+                  <label class="form-label" style="margin: 0;">
+                    <i class="fas fa-image" style="color: var(--accent);"></i>
+                    <span>صورة وحدة الإضاءة الأساسية</span>
+                    <span class="required-tag">* (إجباري)</span>
+                  </label>
+                  <button type="button" class="btn-text-link" id="btnToggleImageMode" onclick="toggleImageInputMode()">
+                    <i class="fas fa-link"></i> <span>استخدام رابط مباشر (URL) بدلاً من الرفع</span>
+                  </button>
+                </div>
+
+                <!-- Drag & Drop Area -->
+                <div class="drop-zone-container" id="adminImageDropZone" onclick="triggerFileInput('adminUnitFileInput')">
+                  <input type="file" id="adminUnitFileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(this, 'primary')">
+                  
+                  <div class="drop-zone-prompt" id="dropZonePrompt">
+                    <div class="drop-zone-icon">
+                      <i class="fas fa-cloud-arrow-up"></i>
+                    </div>
+                    <div class="drop-zone-title">اسحب وأفلت صورة الوحدة هنا، أو <span class="browse-link">تصفح من جهازك</span></div>
+                    <div class="drop-zone-hint">يدعم JPG, PNG, WEBP • يتم ضغط وتحسين الصورة تلقائياً لتناسب المتجر</div>
+                  </div>
+
+                  <!-- Live Preview Box -->
+                  <div class="drop-zone-preview" id="dropZonePreview" style="display: none;" onclick="event.stopPropagation()">
+                    <img id="previewImgElement" src="" alt="معاينة الصورة">
+                    <div class="preview-details">
+                      <span class="preview-filename" id="previewFileName">image.jpg</span>
+                      <span class="preview-filesize" id="previewFileSize">تم تحميل الصورة بنجاح</span>
+                      <button type="button" class="btn-remove-preview" onclick="resetPrimaryImage(event)">
+                        <i class="fas fa-trash-alt"></i> إزالة الصورة واختيار أخرى
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Alternative URL Input (Hidden by default) -->
+                <div id="imageUrlInputWrap" style="display: none; margin-top: 0.5rem;">
+                  <input type="url" id="adminUnitImageUrlInput" class="form-input" placeholder="https://images.unsplash.com/... أدخل رابط الصورة المباشر" oninput="handleUrlImageInput(this.value)">
+                </div>
+
+                <!-- Hidden Input to Store Final Image Data -->
+                <input type="hidden" name="adminUnitImage" id="adminUnitImageFinal" value="">
+              </div>
+
+              <!-- Secondary Image (اختياري) -->
+              <div class="form-group full-width">
+                <label class="form-label">
+                  <i class="fas fa-images" style="color: var(--text-muted);"></i>
+                  <span>صورة ثانوية إضافية</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <div class="secondary-drop-zone" id="adminSecDropZone" onclick="triggerFileInput('adminSecFileInput')">
+                  <input type="file" id="adminSecFileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(this, 'secondary')">
+                  <div id="secDropPrompt" class="sec-drop-prompt">
+                    <i class="fas fa-plus-circle" style="color: var(--accent); font-size: 1.2rem;"></i>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">اسحب صورة إضافية هنا أو انقر للاختيار (اختياري)</span>
+                  </div>
+                  <div id="secPreviewWrap" class="sec-preview-wrap" style="display: none;" onclick="event.stopPropagation()">
+                    <img id="secPreviewImg" src="" alt="صورة ثانوية">
+                    <span id="secFileName" style="font-size: 0.82rem; color: var(--text-muted); flex: 1;"></span>
+                    <button type="button" class="btn-remove-preview" onclick="resetSecondaryImage(event)">
+                      <i class="fas fa-trash-alt"></i> حذف
+                    </button>
+                  </div>
+                  <input type="hidden" name="adminUnitImage2" id="adminUnitImage2Final" value="">
+                </div>
+              </div>
+
+              <!-- English Name (اختياري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>الاسم بالإنجليزية (English Name)</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <input type="text" name="adminUnitEnName" class="form-input" placeholder="e.g. Mondrian Crystal Pendant">
+              </div>
+
+              <!-- Category (اختياري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>التصنيف الرئيسي</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <select name="adminUnitCategory" class="form-select">
+                  <option value="chandeliers">ثريات ونجف فاخر</option>
+                  <option value="magnetic-track">مسارات مغناطيسية واسبوتات</option>
+                  <option value="wall-sconces">إضاءات جدارية Sconces</option>
+                  <option value="floor-table">أباجورات ومصابيح طاولة</option>
+                  <option value="outdoor">إضاءة خارجية ولاندسكيب</option>
+                  <option value="smart-profiles">بروفايل ليد ذكي</option>
+                </select>
+              </div>
+
+              <!-- Style (اختياري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>الطراز / النمط المعماري</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <input type="text" name="adminUnitStyle" class="form-input" placeholder="مودرن، نيوكلاسيك، مينيماليست...">
+              </div>
+
+              <!-- Old Price (اختياري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>السعر القديم قبل الخصم</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <input type="number" name="adminUnitOldPrice" class="form-input" placeholder="مثال: 39000">
+              </div>
+
+              <!-- Warranty (اختياري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>فترة الضمان المعتمد</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <input type="text" name="adminUnitWarranty" class="form-input" placeholder="مثال: 5 سنوات ضمان شامل" value="5 سنوات ضمان شامل">
+              </div>
+
+              <!-- Kelvin (اختياري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>درجة حرارة الضوء (Kelvin)</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <input type="text" name="adminUnitKelvin" class="form-input" placeholder="3000K دافئ / متغير">
+              </div>
+
+              <!-- Detailed Description (اختياري) -->
+              <div class="form-group full-width">
+                <label class="form-label">
+                  <span>الوصف التفصيلي للوحدة</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <textarea name="adminUnitDesc" class="form-textarea" placeholder="شرح جماليات الوحدة واستخداماتها الديكورية للفلل والقصور..."></textarea>
+              </div>
+
+              <!-- Dimensions (اختياري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>الأبعاد والمقاسات</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <input type="text" name="adminUnitDimensions" class="form-input" placeholder="قطر 80 سم × ارتفاع 120 سم">
+              </div>
+
+              <!-- Material (اختياري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>الخامات وجودة التشطيب</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <input type="text" name="adminUnitMaterial" class="form-input" placeholder="نحاس مفرش يدوي + كريستال عصفور">
+              </div>
+
+              <!-- Wattage (اختياري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>القدرة الكهربائية (Wattage)</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <input type="text" name="adminUnitWattage" class="form-input" placeholder="60W LED">
+              </div>
+
+              <!-- CRI (اختياري) -->
+              <div class="form-group">
+                <label class="form-label">
+                  <span>مؤشر نقاء اللون (CRI)</span>
+                  <span class="optional-tag">(اختياري)</span>
+                </label>
+                <input type="text" name="adminUnitCri" class="form-input" placeholder="CRI > 98" value="CRI > 98">
+              </div>
+
+              <!-- Badges (اختياري) -->
+              <div class="form-group full-width" style="display: flex; gap: 2rem; align-items: center; padding-top: 0.5rem; flex-wrap: wrap;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; font-weight: 700; cursor: pointer;">
+                  <input type="checkbox" name="adminIsExclusive" style="width: 18px; height: 18px; accent-color: var(--accent);" checked>
+                  <span>تمييز كـ "حصري في الشيخ زايد"</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; font-weight: 700; cursor: pointer;">
+                  <input type="checkbox" name="adminIsBestSeller" style="width: 18px; height: 18px; accent-color: var(--accent);">
+                  <span>إضافة لشارة "الأكثر طلباً"</span>
+                </label>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+              <button type="submit" class="btn-primary" style="flex: 1; justify-content: center; padding: 0.95rem; font-size: 1rem;">
+                <i class="fas fa-plus-circle"></i>
+                <span>حفظ وإضافة الوحدة للمتجر الآن فوراً</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           TAB 4: INVENTORY & CATALOG MANAGER (إدارة المخزون)
+           ==================================================================== -->
+      <section class="admin-tab-pane" id="adminPane_inventory">
+        <div class="admin-section-block">
+          <div class="admin-block-header">
+            <div class="admin-block-title">
+              <i class="fas fa-warehouse" style="color: var(--accent);"></i>
+              <span>مخزون وكتالوج وحدات الإضاءة المتاحة بالمعرض</span>
+            </div>
+            <button class="btn-primary" style="font-size: 0.85rem; padding: 0.5rem 1.1rem;" onclick="switchAdminTab('addProduct', document.querySelectorAll('.admin-tab-btn')[2])">
+              <i class="fas fa-plus"></i> إضافة قطعة جديدة
+            </button>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="best-sellers-table">
+              <thead>
+                <tr>
+                  <th>صورة القطعة</th>
+                  <th>اسم الوحدة والمواصفات</th>
+                  <th>السعر</th>
+                  <th>إجمالي المبيعات</th>
+                  <th>إجراءات التحكم</th>
+                </tr>
+              </thead>
+              <tbody id="adminInventoryTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           TAB 5: CLOUD DATABASE & VERCEL INTEGRATION (الربط السحابي)
+           ==================================================================== -->
+      <section class="admin-tab-pane" id="adminPane_cloudDb">
+        <div style="max-width: 860px; margin: 0 auto;">
+          <div class="admin-section-block">
+            <div class="admin-block-header">
+              <div class="admin-block-title">
+                <i class="fas fa-cloud" style="color: var(--accent);"></i>
+                <span>قاعدة البيانات السحابية والتوافق مع استضافة Vercel</span>
+              </div>
+              <span id="cloudDbStatusPill" style="font-size: 0.8rem; font-weight: 700; color: #10B981; background: rgba(16,185,129,0.1); padding: 0.35rem 0.85rem; border-radius: var(--radius-full);">
+                <i class="fas fa-check-circle"></i> متصل وجاهز للاستضافة على Vercel Serverless
+              </span>
+            </div>
+
+            <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 1.5rem;">
+              الموقع مزود بنظام قاعدة بيانات هجين (Hybrid Cloud Engine) يدعم التشغيل الفوري على <strong>Vercel</strong> عبر مسارات السيرفر السحابية <code>/api/orders</code> و <code>/api/products</code>، بالإضافة إلى إمكانية الربط مع Firebase أو Vercel KV لتزامن الطلبات والمنتجات بين جميع الأجهزة والمتصفحات فورياً.
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+              <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 1.1rem;">
+                <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 700; margin-bottom: 0.35rem;">سيرفر الطلبات السحابي</div>
+                <div style="font-family: monospace; font-size: 0.9rem; color: var(--accent); font-weight: 700;">/api/orders</div>
+                <div style="font-size: 0.75rem; color: #10B981; margin-top: 0.35rem;"><i class="fas fa-bolt"></i> GET, POST, PATCH, DELETE</div>
+              </div>
+
+              <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 1.1rem;">
+                <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 700; margin-bottom: 0.35rem;">سيرفر المنتجات السحابي</div>
+                <div style="font-family: monospace; font-size: 0.9rem; color: var(--accent); font-weight: 700;">/api/products</div>
+                <div style="font-size: 0.75rem; color: #10B981; margin-top: 0.35rem;"><i class="fas fa-bolt"></i> GET, POST, DELETE</div>
+              </div>
+
+              <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 1.1rem;">
+                <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 700; margin-bottom: 0.35rem;">فحص حالة الخادم</div>
+                <div style="font-family: monospace; font-size: 0.9rem; color: var(--accent); font-weight: 700;">/api/db-health</div>
+                <div style="font-size: 0.75rem; color: #10B981; margin-top: 0.35rem;"><i class="fas fa-shield-alt"></i> جاهز للنشر (Vercel Ready)</div>
+              </div>
+            </div>
+
+            <!-- Custom Cloud DB URL Config -->
+            <div style="background: #F1F5F9; border-radius: var(--radius-sm); padding: 1.25rem; margin-bottom: 1.5rem;">
+              <label class="form-label" style="font-weight: 700;">رابط قاعدة البيانات السحابية المخصص (اختياري - Custom Cloud / Firebase URL):</label>
+              <div style="display: flex; gap: 0.6rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                <input type="url" id="cloudDbUrlInput" class="form-input" style="flex: 1; min-width: 260px;" placeholder="https://your-project.firebaseio.com أو اترك فارغاً للربط التلقائي عبر Vercel">
+                <button type="button" class="btn-primary" style="padding: 0.7rem 1.25rem;" onclick="saveCustomCloudUrl()">حفظ الإعدادات</button>
+              </div>
+              <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem;">
+                * عند تركه فارغاً، يعتمد الموقع تلقائياً على خوادم Vercel Serverless المنشأة في ملفات <code>/api</code>.
+              </p>
+            </div>
+
+            <div style="display: flex; gap: 1rem; align-items: center; justify-content: flex-end;">
+              <button type="button" class="btn-secondary" onclick="testCloudDbConnection()">
+                <i class="fas fa-sync-alt"></i> اختبار الاتصال السحابي الآن
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- JavaScript Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
