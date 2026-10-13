@@ -181,7 +181,6 @@ function initAdminSystem() {
     renderAdminOverview();
     renderAdminOrders();
     renderAdminInventory();
-    renderCloudDbSettings();
 
     if (window.KK_DB) {
       window.KK_DB.forceSyncNow().then(() => {
@@ -337,7 +336,6 @@ function switchAdminTab(tabKey, element) {
   if (tabKey === "overview") renderAdminOverview();
   if (tabKey === "orders") renderAdminOrders();
   if (tabKey === "inventory") renderAdminInventory();
-  if (tabKey === "cloudDb") renderCloudDbSettings();
 }
 
 // ----------------------------------------------------------------------------
@@ -407,7 +405,7 @@ function renderAdminOrders(statusFilter = "all") {
       <div style="text-align: center; padding: 3.5rem 1rem; background: #FFFFFF; border-radius: var(--radius-md); border: 1px dashed var(--border-light);">
         <i class="fas fa-boxes-packing" style="font-size: 2.8rem; color: #CBD5E1; margin-bottom: 0.85rem;"></i>
         <h4 style="color: var(--text-main); font-weight: 800; margin-bottom: 0.35rem;">لا توجد طلبات في هذا القسم حالياً</h4>
-        <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">النظام السحابي متصل بالكامل ويعمل في وضع المزامنة اللحظية (Cloud Live)</p>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">النظام متصل بالكامل ويعمل في وضع المزامنة اللحظية المباشرة</p>
       </div>
     `;
     return;

@@ -84,10 +84,6 @@
           <div>
             <div style="display: flex; align-items: center; gap: 0.6rem;">
               <h1 style="font-size: 1.25rem; font-weight: 800; color: #FFFFFF; margin: 0;">لوحة تحكم وسيستم معرض قاصد كريم</h1>
-              <span class="cloud-status-badge">
-                <i class="fas fa-circle" style="font-size: 0.55rem;"></i>
-                <span>Cloud Live</span>
-              </span>
             </div>
             <div style="font-size: 0.78rem; color: #94A3B8; margin-top: 0.2rem;">
               الفرع الرئيسي • الشيخ زايد • نظام إدارة المبيعات، المخزون، والطلبات الواردة
@@ -130,10 +126,6 @@
         <button class="admin-tab-btn" onclick="switchAdminTab('inventory', this)">
           <i class="fas fa-boxes-stacked"></i>
           <span>إدارة المخزون والكتالوج</span>
-        </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('cloudDb', this)">
-          <i class="fas fa-cloud"></i>
-          <span>الربط السحابي (Vercel DB)</span>
         </button>
       </div>
     </nav>
@@ -485,67 +477,6 @@
               </thead>
               <tbody id="adminInventoryTableBody"></tbody>
             </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ====================================================================
-           TAB 5: CLOUD DATABASE & VERCEL INTEGRATION (الربط السحابي)
-           ==================================================================== -->
-      <section class="admin-tab-pane" id="adminPane_cloudDb">
-        <div style="max-width: 860px; margin: 0 auto;">
-          <div class="admin-section-block">
-            <div class="admin-block-header">
-              <div class="admin-block-title">
-                <i class="fas fa-cloud" style="color: var(--accent);"></i>
-                <span>قاعدة البيانات السحابية والتوافق مع استضافة Vercel</span>
-              </div>
-              <span id="cloudDbStatusPill" style="font-size: 0.8rem; font-weight: 700; color: #10B981; background: rgba(16,185,129,0.1); padding: 0.35rem 0.85rem; border-radius: var(--radius-full);">
-                <i class="fas fa-check-circle"></i> متصل وجاهز للاستضافة على Vercel Serverless
-              </span>
-            </div>
-
-            <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 1.5rem;">
-              الموقع مزود بنظام قاعدة بيانات هجين (Hybrid Cloud Engine) يدعم التشغيل الفوري على <strong>Vercel</strong> عبر مسارات السيرفر السحابية <code>/api/orders</code> و <code>/api/products</code>، بالإضافة إلى إمكانية الربط مع Firebase أو Vercel KV لتزامن الطلبات والمنتجات بين جميع الأجهزة والمتصفحات فورياً.
-            </p>
-
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-              <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 1.1rem;">
-                <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 700; margin-bottom: 0.35rem;">سيرفر الطلبات السحابي</div>
-                <div style="font-family: monospace; font-size: 0.9rem; color: var(--accent); font-weight: 700;">/api/orders</div>
-                <div style="font-size: 0.75rem; color: #10B981; margin-top: 0.35rem;"><i class="fas fa-bolt"></i> GET, POST, PATCH, DELETE</div>
-              </div>
-
-              <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 1.1rem;">
-                <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 700; margin-bottom: 0.35rem;">سيرفر المنتجات السحابي</div>
-                <div style="font-family: monospace; font-size: 0.9rem; color: var(--accent); font-weight: 700;">/api/products</div>
-                <div style="font-size: 0.75rem; color: #10B981; margin-top: 0.35rem;"><i class="fas fa-bolt"></i> GET, POST, DELETE</div>
-              </div>
-
-              <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 1.1rem;">
-                <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 700; margin-bottom: 0.35rem;">فحص حالة الخادم</div>
-                <div style="font-family: monospace; font-size: 0.9rem; color: var(--accent); font-weight: 700;">/api/db-health</div>
-                <div style="font-size: 0.75rem; color: #10B981; margin-top: 0.35rem;"><i class="fas fa-shield-alt"></i> جاهز للنشر (Vercel Ready)</div>
-              </div>
-            </div>
-
-            <!-- Custom Cloud DB URL Config -->
-            <div style="background: #F1F5F9; border-radius: var(--radius-sm); padding: 1.25rem; margin-bottom: 1.5rem;">
-              <label class="form-label" style="font-weight: 700;">رابط قاعدة البيانات السحابية المخصص (اختياري - Custom Cloud / Firebase URL):</label>
-              <div style="display: flex; gap: 0.6rem; margin-top: 0.5rem; flex-wrap: wrap;">
-                <input type="url" id="cloudDbUrlInput" class="form-input" style="flex: 1; min-width: 260px;" placeholder="https://your-project.firebaseio.com أو اترك فارغاً للربط التلقائي عبر Vercel">
-                <button type="button" class="btn-primary" style="padding: 0.7rem 1.25rem;" onclick="saveCustomCloudUrl()">حفظ الإعدادات</button>
-              </div>
-              <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem;">
-                * عند تركه فارغاً، يعتمد الموقع تلقائياً على خوادم Vercel Serverless المنشأة في ملفات <code>/api</code>.
-              </p>
-            </div>
-
-            <div style="display: flex; gap: 1rem; align-items: center; justify-content: flex-end;">
-              <button type="button" class="btn-secondary" onclick="testCloudDbConnection()">
-                <i class="fas fa-sync-alt"></i> اختبار الاتصال السحابي الآن
-              </button>
-            </div>
           </div>
         </div>
       </section>
