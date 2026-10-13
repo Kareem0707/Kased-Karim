@@ -730,3 +730,254 @@
   }
 }
 
+/* ==========================================================================
+   CUSTOMER ORDER TRACKING STYLES (تتبع حالة الطلب للعميل)
+   ========================================================================== */
+.btn-track-header {
+  position: relative;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-main);
+  transition: all var(--transition-fast);
+}
+.btn-track-header:hover {
+  background: #0F172A;
+  color: var(--accent);
+  border-color: #0F172A;
+  transform: translateY(-2px);
+}
+.track-count-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--accent);
+  color: #0F172A;
+  font-size: 0.7rem;
+  font-weight: 800;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Tracking Modal Dialog */
+.track-modal-dialog {
+  max-width: 680px;
+  padding: 2.25rem 2rem;
+  overflow-y: auto;
+  max-height: 90vh;
+}
+
+/* Tracking Search Bar */
+.track-search-box {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1.25rem 0 0.85rem;
+}
+.track-search-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: #F8FAFC;
+  font-family: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+.track-search-input:focus {
+  border-color: var(--accent);
+  background: #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+/* Recent Orders Chips */
+.track-recent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  align-items: center;
+}
+.track-chip, .track-chip-btn {
+  background: #F1F5F9;
+  border: 1px solid var(--border-light);
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: inherit;
+}
+.track-chip:hover, .track-chip.active, .track-chip-btn:hover, .track-chip-btn.active {
+  background: #0F172A;
+  color: #FFFFFF;
+  border-color: #0F172A;
+}
+.track-chip.active, .track-chip-btn.active {
+  background: var(--accent);
+  color: #0F172A;
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+}
+
+/* Order Details Card */
+.track-order-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin-top: 1rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+}
+.track-order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+/* Progress Stepper */
+.track-stepper-wrap {
+  position: relative;
+  margin: 2.25rem 0 1.75rem;
+}
+.track-stepper {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  z-index: 2;
+}
+.track-stepper-track-bg {
+  position: absolute;
+  top: 20px;
+  left: 28px;
+  right: 28px;
+  height: 4px;
+  background: #E2E8F0;
+  border-radius: 4px;
+  z-index: 1;
+}
+.track-stepper-track-fill {
+  position: absolute;
+  top: 20px;
+  right: 28px;
+  height: 4px;
+  background: linear-gradient(90deg, #10B981, #F59E0B);
+  border-radius: 4px;
+  z-index: 1;
+  transition: width 0.4s ease;
+}
+.stepper-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  flex: 1;
+  position: relative;
+}
+.stepper-circle {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 3px solid #CBD5E1;
+  color: #94A3B8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+.stepper-step.completed .stepper-circle {
+  border-color: #10B981;
+  background: #10B981;
+  color: #FFFFFF;
+}
+.stepper-step.active .stepper-circle {
+  border-color: #F59E0B;
+  background: #0F172A;
+  color: #F59E0B;
+  transform: scale(1.15);
+  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.25);
+  animation: pulseActiveStep 2s infinite;
+}
+@keyframes pulseActiveStep {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2); }
+  50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0.4); }
+}
+.stepper-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #64748B;
+  margin-top: 0.6rem;
+  line-height: 1.3;
+}
+.stepper-step.completed .stepper-title {
+  color: #0F172A;
+}
+.stepper-step.active .stepper-title {
+  color: #F59E0B;
+  font-weight: 800;
+}
+.stepper-desc {
+  font-size: 0.68rem;
+  color: #94A3B8;
+  margin-top: 0.2rem;
+  max-width: 90px;
+}
+
+/* Status Badges */
+.status-badge-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.status-badge-live.status-pending { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+.status-badge-live.status-confirmed { background: #DBEAFE; color: #1E40AF; border: 1px solid #BFDBFE; }
+.status-badge-live.status-processing { background: #EDE9FE; color: #5B21B6; border: 1px solid #DDD6FE; }
+.status-badge-live.status-shipped { background: #CFFAFE; color: #155E75; border: 1px solid #A5F3FC; }
+.status-badge-live.status-completed { background: #D1FAE5; color: #065F46; border: 1px solid #A7F3D0; }
+.status-badge-live.status-cancelled { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
+
+/* Responsive adjustments for stepper on mobile */
+@media (max-width: 600px) {
+  .track-stepper-wrap {
+    margin: 1.5rem 0 1rem;
+  }
+  .stepper-circle {
+    width: 34px;
+    height: 34px;
+    font-size: 0.85rem;
+  }
+  .track-stepper-track-bg, .track-stepper-track-fill {
+    top: 17px;
+    left: 20px;
+    right: 20px;
+  }
+  .stepper-title {
+    font-size: 0.7rem;
+  }
+  .stepper-desc {
+    display: none;
+  }
+  .track-modal-dialog {
+    padding: 1.75rem 1.25rem;
+  }
+}
+

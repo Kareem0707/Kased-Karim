@@ -173,6 +173,7 @@ function initAdminSystem() {
   }
 
   updateAdminHeaderBadge();
+  updateCustomerTrackingBadge();
   setupAdminListeners();
 
   // If on dedicated admin page, immediately render and force-sync from cloud
@@ -196,11 +197,14 @@ function initAdminSystem() {
   window.addEventListener("kk_new_order_placed", (e) => {
     updateAdminHeaderBadge();
     const order = e.detail;
-    showToast(`🔔 تنبيه طلب جديد: تم استلام طلب بقيمة ${formatPrice(order.total)} ج.م برقم #${order.id}`);
-    
-    // Play alert sound & show top live banner
-    if (window.KK_DB) window.KK_DB.playLuxuryChime();
-    showAdminLiveOrderAlert(order);
+    const isAdmin = document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot");
+
+    // Live alert & sound ONLY for admin users
+    if (isAdmin) {
+      showToast(`🔔 تنبيه إداري: تم استلام طلب جديد برقم #${order.id} بقيمة ${formatPrice(order.total)} ج.م`);
+      if (window.KK_DB) window.KK_DB.playLuxuryChime();
+      showAdminLiveOrderAlert(order);
+    }
 
     if (isAdminPage) {
       renderAdminOrders();
@@ -210,6 +214,16 @@ function initAdminSystem() {
 
   window.addEventListener("kk_orders_updated", () => {
     updateAdminHeaderBadge();
+    updateCustomerTrackingBadge();
+
+    // Live sync for customer tracking screen if open
+    if (window.currentTrackedOrderId) {
+      const order = window.KK_DB ? window.KK_DB.getOrders().find(o => o.id === window.currentTrackedOrderId) : null;
+      if (order && document.getElementById("trackOrderModal")?.classList.contains("active")) {
+        renderTrackedOrderUI(order);
+      }
+    }
+
     if (isAdminPage || document.getElementById("adminDashboardModal")?.classList.contains("active")) {
       renderAdminOrders();
       renderAdminOverview();
@@ -231,6 +245,9 @@ function initAdminSystem() {
 }
 
 function showAdminLiveOrderAlert(order) {
+  const isAdmin = document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot");
+  if (!isAdmin) return;
+
   let banner = document.getElementById("adminLiveOrderAlertBanner");
   if (!banner) {
     banner = document.createElement("div");
@@ -257,6 +274,7 @@ function showAdminLiveOrderAlert(order) {
 // 1. ADMIN HEADER BADGE & RED PULSE ALERT EFFECT
 // ----------------------------------------------------------------------------
 function updateAdminHeaderBadge() {
+  const isAdmin = document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot");
   const badge = document.getElementById("adminHeaderBadge");
   const adminBtn = document.getElementById("adminHeaderBtn");
   const unreadCount = window.KK_DB ? window.KK_DB.getUnreadOrdersCount() : 0;
@@ -266,8 +284,8 @@ function updateAdminHeaderBadge() {
   }
 
   if (adminBtn) {
-    if (unreadCount > 0) {
-      // Trigger the requested Red Pulsating Glow Alert Effect!
+    if (isAdmin && unreadCount > 0) {
+      // Trigger the requested Red Pulsating Glow Alert Effect for Admin Only!
       adminBtn.classList.add("has-new-orders");
     } else {
       adminBtn.classList.remove("has-new-orders");
@@ -397,8 +415,15 @@ function renderAdminOrders(statusFilter = "all") {
 
   container.innerHTML = orders.map(order => {
     const isNew = order.status === "pending";
-    const statusText = order.status === "pending" ? "طلب جديد وارد بحاجة للمراجعة" :
-                       order.status === "confirmed" ? "تم التأكيد وجاري التجهيز" : "مكتمل وتم التسليم";
+    const statusLabels = {
+      pending: "قيد المراجعة والاستلام",
+      confirmed: "تم التأكيد والمعاينة الفنية",
+      processing: "جاري التجهيز والتجميع بالمستودع",
+      shipped: "خرج للشحن والتوصيل",
+      completed: "مكتمل وتم التسليم بنجاح",
+      cancelled: "طلب ملغي"
+    };
+    const statusText = statusLabels[order.status] || "قيد المعالجة";
 
     return `
       <div class="order-card-detailed ${isNew ? 'is-new-order' : ''}">
@@ -412,10 +437,13 @@ function renderAdminOrders(statusFilter = "all") {
 
           <div style="display: flex; align-items: center; gap: 0.75rem;">
             <span class="order-status-pill ${order.status}">${statusText}</span>
-            <select class="custom-select" style="padding: 0.35rem 0.75rem; font-size: 0.78rem;" onchange="changeOrderStatus('${order.id}', this.value)">
-              <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>قيد الانتظار</option>
-              <option value="confirmed" ${order.status === 'confirmed' ? 'selected' : ''}>تم التأكيد</option>
-              <option value="completed" ${order.status === 'completed' ? 'selected' : ''}>مكتمل</option>
+            <select class="custom-select" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; font-weight: 700;" onchange="changeOrderStatus('${order.id}', this.value)">
+              <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>⏳ قيد الانتظار والمراجعة</option>
+              <option value="confirmed" ${order.status === 'confirmed' ? 'selected' : ''}>📋 تم التأكيد والمعاينة</option>
+              <option value="processing" ${order.status === 'processing' ? 'selected' : ''}>⚙️ جاري التجهيز والتجميع</option>
+              <option value="shipped" ${order.status === 'shipped' ? 'selected' : ''}>🚚 خرج للشحن والتوصيل</option>
+              <option value="completed" ${order.status === 'completed' ? 'selected' : ''}>✅ مكتمل وتم التسليم</option>
+              <option value="cancelled" ${order.status === 'cancelled' ? 'selected' : ''}>❌ ملغي</option>
             </select>
           </div>
         </div>
@@ -501,7 +529,15 @@ function renderAdminOrders(statusFilter = "all") {
 function changeOrderStatus(orderId, newStatus) {
   if (window.KK_DB) {
     window.KK_DB.updateOrderStatus(orderId, newStatus);
-    showToast("تم تحديث حالة الطلب بنجاح");
+    const statusLabels = {
+      pending: "قيد الانتظار والمراجعة",
+      confirmed: "تم التأكيد والمعاينة الفنية",
+      processing: "جاري التجهيز والتجميع بالمستودع",
+      shipped: "خرج للشحن والتوصيل للفيلا",
+      completed: "مكتمل وتم التسليم بنجاح",
+      cancelled: "تم إلغاء الطلب"
+    };
+    showToast(`✅ تم تحديث حالة الطلب #${orderId} إلى: ${statusLabels[newStatus] || newStatus}`);
   }
 }
 
@@ -1250,6 +1286,18 @@ function handleCheckoutSubmit(e) {
     STATE.cart = [];
     saveCart();
 
+    // Store in customer recent orders on this device for instant 1-click tracking
+    try {
+      const recent = JSON.parse(localStorage.getItem("kk_customer_recent_orders") || "[]");
+      if (!recent.includes(newOrder.id)) {
+        recent.unshift(newOrder.id);
+        localStorage.setItem("kk_customer_recent_orders", JSON.stringify(recent.slice(0, 10)));
+      }
+      localStorage.setItem("kk_last_placed_order_id", newOrder.id);
+    } catch (e) {}
+
+    updateCustomerTrackingBadge();
+
     // Show order success modal
     openOrderSuccessModal(newOrder);
   }
@@ -1262,6 +1310,8 @@ function openOrderSuccessModal(order) {
 
   if (idEl) idEl.textContent = `#${order.id}`;
   if (totalEl) totalEl.textContent = `${formatPrice(order.total)} ج.م`;
+
+  window.lastPlacedOrderId = order.id;
 
   if (modal) {
     modal.classList.add("active");
@@ -1332,5 +1382,334 @@ function saveCustomCloudUrl() {
     localStorage.removeItem("kk_custom_cloud_url");
     showToast("تمت استعادة الربط التلقائي عبر Vercel Serverless API");
   }
+}
+
+// ----------------------------------------------------------------------------
+// 9. CUSTOMER ORDER TRACKING CONTROLLERS & LIVE STATUS STEPPER
+// ----------------------------------------------------------------------------
+function updateCustomerTrackingBadge() {
+  try {
+    const recent = JSON.parse(localStorage.getItem("kk_customer_recent_orders") || "[]");
+    const badge = document.getElementById("customerOrdersBadge");
+    if (badge) {
+      if (recent.length > 0) {
+        badge.textContent = recent.length;
+        badge.style.display = "inline-flex";
+      } else {
+        badge.style.display = "none";
+      }
+    }
+  } catch (e) {}
+}
+
+function openTrackOrderModal(targetOrderId = null) {
+  const modal = document.getElementById("trackOrderModal");
+  if (!modal) return;
+
+  renderCustomerRecentOrderChips();
+
+  const searchInput = document.getElementById("trackSearchInput");
+
+  // Determine which order to display
+  let orderToLoad = targetOrderId;
+  if (!orderToLoad) {
+    orderToLoad = window.lastPlacedOrderId || localStorage.getItem("kk_last_placed_order_id");
+  }
+
+  if (orderToLoad) {
+    if (searchInput) searchInput.value = orderToLoad;
+    loadAndRenderTrackOrder(orderToLoad);
+  } else {
+    // Show empty state prompt
+    const emptyState = document.getElementById("trackEmptyState");
+    const resultBox = document.getElementById("trackResultContainer");
+    if (emptyState) emptyState.style.display = "block";
+    if (resultBox) resultBox.style.display = "none";
+  }
+
+  modal.classList.add("active");
+  document.body.style.overflow = "hidden";
+}
+
+function closeTrackOrderModal() {
+  const modal = document.getElementById("trackOrderModal");
+  if (modal) {
+    modal.classList.remove("active");
+    document.body.style.overflow = "";
+  }
+}
+
+function renderCustomerRecentOrderChips() {
+  const wrap = document.getElementById("trackRecentOrdersWrap");
+  const container = document.getElementById("trackRecentOrdersChips");
+  if (!wrap || !container) return;
+
+  try {
+    const recent = JSON.parse(localStorage.getItem("kk_customer_recent_orders") || "[]");
+    if (recent.length > 0) {
+      wrap.style.display = "block";
+      container.innerHTML = recent.map(id => `
+        <button type="button" class="track-chip-btn ${id === window.currentTrackedOrderId ? 'active' : ''}" onclick="loadAndRenderTrackOrder('${id}')">
+          <i class="fas fa-tag"></i> #${id}
+        </button>
+      `).join("");
+    } else {
+      wrap.style.display = "none";
+    }
+  } catch (e) {
+    wrap.style.display = "none";
+  }
+}
+
+function searchAndTrackOrder() {
+  const input = document.getElementById("trackSearchInput");
+  const query = input ? input.value.trim() : "";
+  if (!query) {
+    showToast("⚠️ يرجى إدخال رقم الطلب (مثال: ORD-3894) أو رقم الهاتف للبحث");
+    input?.focus();
+    return;
+  }
+  loadAndRenderTrackOrder(query);
+}
+
+async function loadAndRenderTrackOrder(query) {
+  if (!query) return;
+  const cleanQuery = query.replace(/[#]/g, "").trim().toUpperCase();
+
+  let orders = window.KK_DB ? window.KK_DB.getOrders() : [];
+  let found = orders.find(o => 
+    o.id.toUpperCase() === cleanQuery || 
+    o.id.replace("ORD-", "") === cleanQuery ||
+    (o.customer && o.customer.phone && o.customer.phone.replace(/[^0-9]/g, "").includes(cleanQuery.replace(/[^0-9]/g, "")))
+  );
+
+  // If not found in local cache, attempt to sync from cloud API immediately
+  if (!found && window.KK_DB) {
+    showToast("جاري البحث في قاعدة بيانات المعرض السحابية...");
+    try {
+      await window.KK_DB.forceSyncNow();
+      orders = window.KK_DB.getOrders();
+      found = orders.find(o => 
+        o.id.toUpperCase() === cleanQuery || 
+        o.id.replace("ORD-", "") === cleanQuery ||
+        (o.customer && o.customer.phone && o.customer.phone.replace(/[^0-9]/g, "").includes(cleanQuery.replace(/[^0-9]/g, "")))
+      );
+    } catch (e) {}
+  }
+
+  if (found) {
+    // Save to customer recent orders
+    try {
+      const recent = JSON.parse(localStorage.getItem("kk_customer_recent_orders") || "[]");
+      if (!recent.includes(found.id)) {
+        recent.unshift(found.id);
+        localStorage.setItem("kk_customer_recent_orders", JSON.stringify(recent.slice(0, 10)));
+      }
+      localStorage.setItem("kk_last_placed_order_id", found.id);
+      renderCustomerRecentOrderChips();
+      updateCustomerTrackingBadge();
+    } catch (e) {}
+
+    renderTrackedOrderUI(found);
+  } else {
+    showToast(`⚠️ تعذر العثور على طلب برقم "${query}"، يرجى التأكد من الرقم`);
+    const emptyState = document.getElementById("trackEmptyState");
+    const resultBox = document.getElementById("trackResultContainer");
+    if (emptyState) {
+      emptyState.style.display = "block";
+      emptyState.innerHTML = `
+        <i class="fas fa-triangle-exclamation" style="font-size: 2.2rem; color: #F59E0B; margin-bottom: 0.75rem;"></i>
+        <h4 style="color: var(--text-main); margin-bottom: 0.35rem; font-weight: 700;">لم يتم العثور على طلب برقم "${query}"</h4>
+        <p style="color: var(--text-muted); font-size: 0.82rem; margin: 0 0 1rem 0;">يرجى التأكد من كتابة الكود كاملاً كما ظهر لك، أو التواصل معنا مباشرة</p>
+        <button type="button" class="btn-whatsapp-customer" style="margin: 0 auto; padding: 0.5rem 1rem; font-size: 0.8rem;" onclick="contactSupportAboutTrackedOrder('${query}')">
+          <i class="fab fa-whatsapp"></i> استفسار عبر واتساب
+        </button>
+      `;
+    }
+    if (resultBox) resultBox.style.display = "none";
+  }
+}
+
+function renderTrackedOrderUI(order) {
+  window.currentTrackedOrderId = order.id;
+
+  const emptyState = document.getElementById("trackEmptyState");
+  const resultBox = document.getElementById("trackResultContainer");
+  if (emptyState) emptyState.style.display = "none";
+  if (resultBox) resultBox.style.display = "block";
+
+  // Header Details
+  const idDisplay = document.getElementById("trackOrderIdDisplay");
+  const dateDisplay = document.getElementById("trackOrderDateDisplay");
+  const custName = document.getElementById("trackCustomerName");
+  const custAddress = document.getElementById("trackCustomerAddress");
+  const totalSum = document.getElementById("trackOrderTotalSum");
+
+  if (idDisplay) idDisplay.textContent = `#${order.id}`;
+  if (dateDisplay) dateDisplay.innerHTML = `<i class="fas fa-clock"></i> تم التسجيل: ${order.dateFormatted}`;
+  if (custName) custName.textContent = order.customer ? order.customer.name : "عميل كريم";
+  if (custAddress) custAddress.textContent = order.customer ? order.customer.address : "الشيخ زايد";
+  if (totalSum) totalSum.textContent = `${formatPrice(order.total)} ج.م`;
+
+  // Render Items List
+  const itemsContainer = document.getElementById("trackItemsList");
+  if (itemsContainer) {
+    itemsContainer.innerHTML = (order.items || []).map(item => `
+      <div style="display: flex; align-items: center; justify-content: space-between; background: #FFFFFF; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.6rem 0.85rem;">
+        <div style="display: flex; align-items: center; gap: 0.65rem;">
+          <img src="${item.image}" alt="${item.name}" style="width: 42px; height: 42px; border-radius: 6px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
+          <div>
+            <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">${item.name}</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-brand);">${item.categoryName || 'إضاءة معمارية'} • الكمية: ${item.qty}</div>
+          </div>
+        </div>
+        <div style="font-weight: 800; font-size: 0.85rem; color: var(--accent-hover);">${formatPrice(item.price * item.qty)} ج.م</div>
+      </div>
+    `).join("");
+  }
+
+  // Visual Stepper (5 Stages)
+  const steps = [
+    document.getElementById("step1"),
+    document.getElementById("step2"),
+    document.getElementById("step3"),
+    document.getElementById("step4"),
+    document.getElementById("step5")
+  ];
+  const stepperFill = document.getElementById("trackStepperFill");
+  const badgeDisplay = document.getElementById("trackStatusBadgeDisplay");
+  const msgBox = document.getElementById("trackStatusMessageBox");
+  const msgText = document.getElementById("trackStatusMessageText");
+
+  // Reset steps
+  steps.forEach(s => {
+    if (s) {
+      s.classList.remove("active", "completed");
+    }
+  });
+
+  const status = order.status || "pending";
+
+  if (status === "pending") {
+    if (stepperFill) stepperFill.style.width = "10%";
+    if (steps[0]) steps[0].classList.add("active");
+    if (badgeDisplay) {
+      badgeDisplay.className = "status-badge-live status-pending";
+      badgeDisplay.innerHTML = `<i class="fas fa-clock"></i> قيد المراجعة والاستلام`;
+    }
+    if (msgBox) {
+      msgBox.style.background = "#FFFBEB";
+      msgBox.style.borderColor = "#FDE68A";
+      msgBox.style.color = "#92400E";
+    }
+    if (msgText) msgText.textContent = "تم استلام وتسجيل طلبك بنجاح، وقيد المراجعة الفنية وجدولة المعاينة بمعرض قاصد كريم بالشيخ زايد.";
+  } else if (status === "confirmed") {
+    if (stepperFill) stepperFill.style.width = "35%";
+    if (steps[0]) steps[0].classList.add("completed");
+    if (steps[1]) steps[1].classList.add("active");
+    if (badgeDisplay) {
+      badgeDisplay.className = "status-badge-live status-confirmed";
+      badgeDisplay.innerHTML = `<i class="fas fa-check-double"></i> تم التأكيد والمعاينة`;
+    }
+    if (msgBox) {
+      msgBox.style.background = "#EFF6FF";
+      msgBox.style.borderColor = "#BFDBFE";
+      msgBox.style.color = "#1E40AF";
+    }
+    if (msgText) msgText.textContent = "تم اعتماد وتأكيد المقايسة الفنية لوحدات الإضاءة من المهندس المختص، والطلب معتمد للتجهيز.";
+  } else if (status === "processing") {
+    if (stepperFill) stepperFill.style.width = "62%";
+    if (steps[0]) steps[0].classList.add("completed");
+    if (steps[1]) steps[1].classList.add("completed");
+    if (steps[2]) steps[2].classList.add("active");
+    if (badgeDisplay) {
+      badgeDisplay.className = "status-badge-live status-processing";
+      badgeDisplay.innerHTML = `<i class="fas fa-boxes-packing"></i> جاري التجهيز والتجميع`;
+    }
+    if (msgBox) {
+      msgBox.style.background = "#FAF5FF";
+      msgBox.style.borderColor = "#E9D5FF";
+      msgBox.style.color = "#6B21A8";
+    }
+    if (msgText) msgText.textContent = "جاري تجميع وفحص واختبار وحدات الإضاءة وقطع الكريستال بمستودع المعرض بالشيخ زايد للتأكد من مطابقتها لأعلى معايير الجودة.";
+  } else if (status === "shipped") {
+    if (stepperFill) stepperFill.style.width = "85%";
+    if (steps[0]) steps[0].classList.add("completed");
+    if (steps[1]) steps[1].classList.add("completed");
+    if (steps[2]) steps[2].classList.add("completed");
+    if (steps[3]) steps[3].classList.add("active");
+    if (badgeDisplay) {
+      badgeDisplay.className = "status-badge-live status-shipped";
+      badgeDisplay.innerHTML = `<i class="fas fa-truck-fast"></i> خرج للشحن والتوصيل`;
+    }
+    if (msgBox) {
+      msgBox.style.background = "#ECFDF5";
+      msgBox.style.borderColor = "#A7F3D0";
+      msgBox.style.color = "#065F46";
+    }
+    if (msgText) msgText.textContent = "خرجت الشحنة مع مندوب التوصيل والتركيبات المتخصص بالشيخ زايد، وجاري التوجه لموقع الفيلا / المشروع.";
+  } else if (status === "completed") {
+    if (stepperFill) stepperFill.style.width = "100%";
+    steps.forEach(s => s && s.classList.add("completed"));
+    if (badgeDisplay) {
+      badgeDisplay.className = "status-badge-live status-completed";
+      badgeDisplay.innerHTML = `<i class="fas fa-shield-halved"></i> تم التسليم بنجاح`;
+    }
+    if (msgBox) {
+      msgBox.style.background = "#F0FDF4";
+      msgBox.style.borderColor = "#BBF7D0";
+      msgBox.style.color = "#166534";
+    }
+    if (msgText) msgText.textContent = "تم تسليم وحدات الإضاءة بنجاح مع تفعيل شهادة الضمان الشامل المعتمدة. شكراً لثقتكم بمعرض قاصد كريم بالشيخ زايد.";
+  } else if (status === "cancelled") {
+    if (stepperFill) stepperFill.style.width = "0%";
+    if (badgeDisplay) {
+      badgeDisplay.className = "status-badge-live status-cancelled";
+      badgeDisplay.innerHTML = `<i class="fas fa-ban"></i> تم إلغاء الطلب`;
+    }
+    if (msgBox) {
+      msgBox.style.background = "#FEF2F2";
+      msgBox.style.borderColor = "#FECACA";
+      msgBox.style.color = "#991B1B";
+    }
+    if (msgText) msgText.textContent = "تم إلغاء هذا الطلب. للاستفسار أو لإعادة طلب مقايسة جديدة يمكنك التواصل مباشرة مع إدارة المعرض.";
+  }
+}
+
+async function refreshCurrentTrackOrder(btn) {
+  const icon = document.getElementById("trackRefreshIcon");
+  if (icon) icon.classList.add("fa-spin");
+  if (btn) btn.disabled = true;
+
+  try {
+    if (window.KK_DB) {
+      await window.KK_DB.forceSyncNow();
+    }
+    if (window.currentTrackedOrderId) {
+      const order = window.KK_DB ? window.KK_DB.getOrders().find(o => o.id === window.currentTrackedOrderId) : null;
+      if (order) {
+        renderTrackedOrderUI(order);
+        showToast("✅ تم تحديث حالة الطلب لحظياً من السحابة بنجاح");
+      }
+    }
+  } catch (e) {
+    showToast("⚠️ تم التحديث من الذاكرة المحلية");
+  } finally {
+    if (icon) icon.classList.remove("fa-spin");
+    if (btn) btn.disabled = false;
+  }
+}
+
+function trackOrderFromSuccessModal() {
+  closeOrderSuccessModal();
+  openTrackOrderModal(window.lastPlacedOrderId);
+}
+
+function contactSupportAboutTrackedOrder(customQuery = null) {
+  const targetId = customQuery || window.currentTrackedOrderId || "طلب إضاءة";
+  const msg = `مرحباً معرض قاصد كريم بالشيخ زايد، أود الاستفسار عن تفاصيل وحالة طلبي رقم #${targetId}. هل يمكنكم إفادتي بآخر المستجدات وموعد المعاينة / التوصيل؟`;
+  const phone = "201099887766";
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  window.open(url, "_blank");
 }
 

@@ -79,11 +79,17 @@
 
       <!-- Header Actions -->
       <div class="header-actions">
-        <!-- Admin Dashboard Action Icon (يتلون بالاحمر وينبض عند وصول طلبات جديدة) -->
+        <!-- Admin Dashboard Action Icon (يتلون بالاحمر وينبض عند وصول طلبات جديدة للمديرين فقط) -->
         <a href="admin.html" class="btn-admin-header" id="adminHeaderBtn" title="لوحة تحكم إدارة المعرض">
           <i class="fas fa-shield-halved"></i>
           <span class="admin-badge-count" id="adminHeaderBadge">0</span>
         </a>
+
+        <!-- Customer Order Tracking Icon (تتبع حالة الطلب للعميل) -->
+        <button class="action-icon-btn btn-track-header" id="trackOrderHeaderBtn" onclick="openTrackOrderModal()" title="تتبع حالة ومسار طلبك بالشيخ زايد">
+          <i class="fas fa-truck-fast"></i>
+          <span class="track-count-badge" id="customerOrdersBadge" style="display: none;">0</span>
+        </button>
 
         <!-- Cart Button (أيقونة عربة التسوق العادية) -->
         <button class="action-icon-btn" onclick="toggleCartDrawer(true)" title="سلة الطلبات والمشتريات">
@@ -197,6 +203,11 @@
       </li>
       <li><a href="#showroom" class="mobile-nav-link" onclick="document.getElementById('mobileNavDrawer').classList.remove('active')"><i class="fas fa-store"></i> معرض الشيخ زايد</a></li>
       <li><a href="#contact" class="mobile-nav-link" onclick="document.getElementById('mobileNavDrawer').classList.remove('active')"><i class="fas fa-phone-alt"></i> تواصل معنا</a></li>
+      <li>
+        <a href="javascript:void(0)" class="mobile-nav-link" onclick="openTrackOrderModal(); document.getElementById('mobileNavDrawer').classList.remove('active');">
+          <i class="fas fa-truck-fast"></i> <span>تتبع حالة الطلب</span>
+        </a>
+      </li>
       <li class="mobile-admin-item" style="margin-top: 0.5rem; border-top: 1px solid var(--border-light); padding-top: 0.5rem;">
         <a href="admin.html" class="mobile-nav-link" style="color: var(--accent-hover); font-weight: 700;">
           <i class="fas fa-shield-halved"></i> لوحة تحكم الإدارة (Admin)
@@ -639,9 +650,159 @@
         </div>
       </div>
 
-      <button class="btn-primary" style="width: 100%; justify-content: center; padding: 0.8rem;" onclick="closeOrderSuccessModal()">
+      <button type="button" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; margin-bottom: 0.65rem; background: var(--accent); color: #0F172A; font-weight: 800; border: none; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);" onclick="trackOrderFromSuccessModal()">
+        <i class="fas fa-truck-fast"></i>
+        <span>تتبع حالة ومسار هذا الطلب الآن</span>
+      </button>
+      <button type="button" class="btn-secondary" style="width: 100%; justify-content: center; padding: 0.75rem;" onclick="closeOrderSuccessModal()">
         <span>متابعة تصفح المعرض</span>
       </button>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       CUSTOMER ORDER TRACKING MODAL (نافذة تتبع حالة الطلب للعميل)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="trackOrderModal">
+    <div class="modal-dialog track-modal-dialog">
+      <button class="modal-close-btn" onclick="closeTrackOrderModal()" title="إغلاق">
+        <i class="fas fa-times"></i>
+      </button>
+
+      <div style="margin-bottom: 1.25rem;">
+        <span class="section-tag">LIVE SHOWROOM TRACKING</span>
+        <h2 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.5rem;">
+          <i class="fas fa-truck-fast" style="color: var(--accent);"></i>
+          <span>تتبع حالة ومسار طلبك بالشيخ زايد</span>
+        </h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+          تابع مراحل تجهيز ومعاينة وشحن وحدات الإضاءة الخاصة بك لحظة بلحظة.
+        </p>
+      </div>
+
+      <!-- Quick Search Bar -->
+      <div class="track-search-box">
+        <input type="text" id="trackSearchInput" class="track-search-input" placeholder="أدخل رقم الطلب (مثال: ORD-3894) أو رقم هاتفك...">
+        <button type="button" class="btn-primary" style="padding: 0.75rem 1.25rem; font-weight: 700; white-space: nowrap;" onclick="searchAndTrackOrder()">
+          <i class="fas fa-search"></i>
+          <span>تتبع</span>
+        </button>
+      </div>
+
+      <!-- Recent Customer Orders Chips -->
+      <div id="trackRecentOrdersWrap" style="display: none; margin-bottom: 1rem;">
+        <div style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.4rem;">طلباتك المسجلة على هذا المتصفح:</div>
+        <div class="track-recent-chips" id="trackRecentOrdersChips"></div>
+      </div>
+
+      <!-- Empty / Initial State Prompt -->
+      <div id="trackEmptyState" style="text-align: center; padding: 2.5rem 1rem; background: #F8FAFC; border: 1px dashed var(--border-light); border-radius: var(--radius-sm); margin-top: 0.5rem;">
+        <i class="fas fa-box-open" style="font-size: 2.5rem; color: #CBD5E1; margin-bottom: 0.75rem;"></i>
+        <h4 style="color: var(--text-main); margin-bottom: 0.35rem; font-weight: 700;">أدخل رقم الطلب للبدء بالتتبع اللحظي</h4>
+        <p style="color: var(--text-muted); font-size: 0.82rem; margin: 0;">يتم تحديث ومزامنة حالة الطلب فورياً مع مستودع المعرض بالشيخ زايد</p>
+      </div>
+
+      <!-- Order Details & Stepper Container -->
+      <div id="trackResultContainer" style="display: none;">
+        <div class="track-order-card">
+          <!-- Order Summary Header -->
+          <div class="track-order-header">
+            <div>
+              <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem; flex-wrap: wrap;">
+                <span class="order-id-tag" id="trackOrderIdDisplay">#ORD-0000</span>
+                <span id="trackStatusBadgeDisplay" class="status-badge-live status-pending">
+                  <i class="fas fa-circle-dot"></i> قيد المراجعة
+                </span>
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);" id="trackOrderDateDisplay">
+                <i class="fas fa-clock"></i> تم التسجيل: اليوم
+              </div>
+            </div>
+
+            <button type="button" class="btn-secondary" style="font-size: 0.78rem; padding: 0.4rem 0.8rem;" onclick="refreshCurrentTrackOrder(this)">
+              <i class="fas fa-rotate" id="trackRefreshIcon"></i>
+              <span>تحديث الحالة</span>
+            </button>
+          </div>
+
+          <!-- Customer Info -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 1rem 0; padding: 0.85rem; background: #F8FAFC; border-radius: var(--radius-sm); font-size: 0.82rem;">
+            <div>
+              <span style="color: var(--text-muted); display: block;">العميل الكريم:</span>
+              <strong id="trackCustomerName" style="color: var(--text-main);">--</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted); display: block;">العنوان بالشيخ زايد:</span>
+              <span id="trackCustomerAddress" style="color: var(--text-main); font-weight: 600;">--</span>
+            </div>
+          </div>
+
+          <!-- Visual Stepper Progress (5 Steps) -->
+          <div class="track-stepper-wrap">
+            <div class="track-stepper-track-bg"></div>
+            <div class="track-stepper-track-fill" id="trackStepperFill" style="width: 0%;"></div>
+            
+            <div class="track-stepper" id="trackStepperSteps">
+              <!-- Step 1: Received -->
+              <div class="stepper-step" id="step1">
+                <div class="stepper-circle"><i class="fas fa-receipt"></i></div>
+                <div class="stepper-title">تم الاستلام</div>
+                <div class="stepper-desc">تسجيل ومراجعة</div>
+              </div>
+              <!-- Step 2: Confirmed -->
+              <div class="stepper-step" id="step2">
+                <div class="stepper-circle"><i class="fas fa-check-double"></i></div>
+                <div class="stepper-title">تم التأكيد</div>
+                <div class="stepper-desc">اعتماد المقايسة</div>
+              </div>
+              <!-- Step 3: Processing -->
+              <div class="stepper-step" id="step3">
+                <div class="stepper-circle"><i class="fas fa-boxes-packing"></i></div>
+                <div class="stepper-title">جاري التجهيز</div>
+                <div class="stepper-desc">تجميع وفحص</div>
+              </div>
+              <!-- Step 4: Shipped -->
+              <div class="stepper-step" id="step4">
+                <div class="stepper-circle"><i class="fas fa-truck-fast"></i></div>
+                <div class="stepper-title">خرج للشحن</div>
+                <div class="stepper-desc">توصيل للفيلا</div>
+              </div>
+              <!-- Step 5: Completed -->
+              <div class="stepper-step" id="step5">
+                <div class="stepper-circle"><i class="fas fa-shield-halved"></i></div>
+                <div class="stepper-title">تم التسليم</div>
+                <div class="stepper-desc">بالضمان المعتمد</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status Alert Message Box -->
+          <div id="trackStatusMessageBox" style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: var(--radius-sm); padding: 0.85rem 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: #92400E;">
+            <i class="fas fa-info-circle" style="font-size: 1.1rem; color: #D97706;"></i>
+            <span id="trackStatusMessageText">طلبك قيد المراجعة الفنية بمعرض قاصد كريم بالشيخ زايد.</span>
+          </div>
+
+          <!-- Ordered Items Table -->
+          <div style="margin-top: 1rem;">
+            <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-main); margin-bottom: 0.6rem;">تفاصيل وحدات الإضاءة في الطلب:</div>
+            <div id="trackItemsList" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
+          </div>
+
+          <!-- Total Footer -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 1rem; margin-top: 1rem; border-top: 1px solid var(--border-light);">
+            <span style="font-weight: 600; font-size: 0.9rem; color: var(--text-muted);">إجمالي قيمة الطلب:</span>
+            <strong id="trackOrderTotalSum" style="font-size: 1.15rem; color: var(--accent-hover);">0 ج.م</strong>
+          </div>
+
+          <!-- Direct WhatsApp Support -->
+          <div style="margin-top: 1.25rem;">
+            <button type="button" class="btn-whatsapp-customer" style="width: 100%; justify-content: center; padding: 0.75rem;" onclick="contactSupportAboutTrackedOrder()">
+              <i class="fab fa-whatsapp"></i>
+              <span>مراسلة المعرض عبر واتساب بخصوص هذا الطلب</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

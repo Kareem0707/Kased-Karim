@@ -304,8 +304,11 @@ class KasedKarimDB {
         localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(mergedOrders));
 
         if (hasNewCloudOrders && latestNewOrder) {
-          // Play loud chime and trigger new order event
-          this.playLuxuryChime();
+          // Play loud chime and trigger new order event ONLY for admin users
+          const isAdmin = typeof document !== 'undefined' && (document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot"));
+          if (isAdmin) {
+            this.playLuxuryChime();
+          }
           window.dispatchEvent(new CustomEvent("kk_new_order_placed", { detail: latestNewOrder }));
         } else {
           window.dispatchEvent(new CustomEvent("kk_orders_updated"));
@@ -609,8 +612,11 @@ class KasedKarimDB {
     // Multi-cloud immediate push
     this.sendOrderToCloud(newOrder);
 
-    // Play notification chime & fire event
-    this.playLuxuryChime();
+    // Play notification chime ONLY if current user is admin
+    const isAdmin = typeof document !== 'undefined' && (document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot"));
+    if (isAdmin) {
+      this.playLuxuryChime();
+    }
     window.dispatchEvent(new CustomEvent("kk_new_order_placed", { detail: newOrder }));
 
     return newOrder;

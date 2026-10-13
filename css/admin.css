@@ -350,9 +350,12 @@
   font-size: 0.78rem;
   font-weight: 700;
 }
-.order-status-pill.pending { background: #FEE2E2; color: #DC2626; }
-.order-status-pill.confirmed { background: #FEF3C7; color: #D97706; }
-.order-status-pill.completed { background: #D1FAE5; color: #059669; }
+.order-status-pill.pending { background: #FEF3C7; color: #92400E; }
+.order-status-pill.confirmed { background: #DBEAFE; color: #1E40AF; }
+.order-status-pill.processing { background: #EDE9FE; color: #5B21B6; }
+.order-status-pill.shipped { background: #CFFAFE; color: #155E75; }
+.order-status-pill.completed { background: #D1FAE5; color: #065F46; }
+.order-status-pill.cancelled { background: #FEE2E2; color: #991B1B; }
 
 /* Customer Box */
 .order-customer-box {
