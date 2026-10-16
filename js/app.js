@@ -516,8 +516,50 @@ function setupEventListeners() {
     });
   }
 
-  // Sort Select
+  // Custom Luxury Sort Dropdown
+  const luxurySortDropdown = document.getElementById("luxurySortDropdown");
+  const luxurySortTrigger = document.getElementById("luxurySortTrigger");
+  const sortTriggerLabel = document.getElementById("sortTriggerLabel");
+  const luxurySortOptions = document.querySelectorAll(".luxury-sort-option");
   const sortSelect = document.getElementById("sortSelect");
+
+  if (luxurySortDropdown && luxurySortTrigger) {
+    luxurySortTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      luxurySortDropdown.classList.toggle("open");
+      const isOpen = luxurySortDropdown.classList.contains("open");
+      luxurySortTrigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+
+    luxurySortOptions.forEach((option) => {
+      option.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const value = option.getAttribute("data-value");
+        const labelText = option.querySelector("span")?.textContent || "";
+
+        luxurySortOptions.forEach((opt) => opt.classList.remove("active"));
+        option.classList.add("active");
+
+        if (sortTriggerLabel) sortTriggerLabel.textContent = labelText;
+        luxurySortDropdown.classList.remove("open");
+        luxurySortTrigger.setAttribute("aria-expanded", "false");
+
+        if (sortSelect) {
+          sortSelect.value = value;
+          sortSelect.dispatchEvent(new Event("change"));
+        }
+      });
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!luxurySortDropdown.contains(e.target)) {
+        luxurySortDropdown.classList.remove("open");
+        luxurySortTrigger.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  // Sort Select Native Change Handler
   if (sortSelect) {
     sortSelect.addEventListener("change", (e) => {
       STATE.sortBy = e.target.value;

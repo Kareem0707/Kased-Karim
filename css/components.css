@@ -162,10 +162,13 @@
   font-size: 1.8rem;
   font-weight: 800;
   color: var(--text-main);
+  font-family: var(--font-ar);
+  letter-spacing: -0.2px;
 }
 .modal-currency {
   font-size: 0.95rem;
   color: var(--text-muted);
+  font-family: var(--font-ar);
   margin-right: 0.35rem;
 }
 .modal-old-price {
@@ -385,6 +388,7 @@
   font-weight: 800;
   color: var(--text-main);
   font-size: 0.95rem;
+  font-family: var(--font-ar);
 }
 .cart-item-remove-btn {
   background: transparent;
