@@ -64,6 +64,9 @@ html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
 }
 
 body {
@@ -74,6 +77,8 @@ body {
   color: var(--text-main);
   line-height: 1.6;
   overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
   position: relative;
 }
 
@@ -2275,45 +2280,58 @@ body::before {
 
   /* Main Header Mobile */
   .header-container {
-    padding-left: 0.75rem !important;
-    padding-right: 0.75rem !important;
+    padding-left: 0.6rem !important;
+    padding-right: 0.6rem !important;
+    max-width: 100vw !important;
+    width: 100% !important;
   }
   .header-inner {
     height: 52px !important;
+    gap: 0.35rem !important;
   }
   .brand-link {
     gap: 0 !important;
+    min-width: 0 !important;
+    flex-shrink: 1 !important;
+    overflow: hidden !important;
+  }
+  .brand-text-col {
+    min-width: 0 !important;
+    overflow: hidden !important;
   }
   .brand-title-en {
-    font-size: 1.05rem !important;
-    letter-spacing: 1.5px !important;
+    font-size: clamp(0.85rem, 3.8vw, 1.05rem) !important;
+    letter-spacing: 0.8px !important;
+    white-space: nowrap !important;
   }
   .brand-title-ar {
-    font-size: 0.62rem !important;
+    font-size: 0.58rem !important;
     display: block !important;
+    white-space: nowrap !important;
   }
 
   /* Compact Action Buttons for Phone */
   .header-actions {
-    gap: 0.35rem !important;
+    gap: 0.25rem !important;
+    flex-shrink: 0 !important;
   }
   .action-circle-btn, .action-icon-btn, .btn-admin-header {
-    width: 34px !important;
-    height: 34px !important;
-    font-size: 0.8rem !important;
+    width: 31px !important;
+    height: 31px !important;
+    font-size: 0.78rem !important;
   }
   .mobile-menu-toggle {
     display: flex;
-    width: 34px !important;
-    height: 34px !important;
-    font-size: 0.85rem !important;
+    width: 31px !important;
+    height: 31px !important;
+    font-size: 0.82rem !important;
   }
   .badge-count, .admin-badge-count {
     top: -3px;
     left: -3px;
-    font-size: 0.65rem;
-    min-width: 16px;
-    height: 16px;
+    font-size: 0.6rem;
+    min-width: 15px;
+    height: 15px;
   }
 
   .nav-menu {
@@ -2328,14 +2346,16 @@ body::before {
 
   /* Hero Section Mobile (Showcase Palace & Chandelier) */
   .architectural-hero {
-    min-height: 88vh;
-    min-height: 88dvh;
+    min-height: 100vh;
+    min-height: 100dvh;
     padding: 0;
     position: relative;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
     overflow: hidden;
+    width: 100%;
+    max-width: 100vw;
   }
   .hero-architectural-bg {
     object-position: center 6%;
@@ -2353,6 +2373,7 @@ body::before {
   }
   .hero-editorial-container {
     width: 100%;
+    max-width: 100vw;
     padding: 5.5rem 1rem 0;
     min-height: auto;
     display: block;
@@ -2395,28 +2416,23 @@ body::before {
     font-size: 0.88rem;
   }
   .hero-bento-strip {
-    display: flex !important;
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
     position: relative !important;
     bottom: auto !important;
     left: auto !important;
-    margin: 0.85rem 1rem 1.25rem !important;
-    gap: 0.65rem;
-    overflow-x: auto;
-    padding-bottom: 0.35rem;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    margin: 0.75rem 1rem 1.25rem !important;
+    gap: 0.5rem !important;
+    max-width: 100% !important;
     z-index: 10;
-  }
-  .hero-bento-strip::-webkit-scrollbar {
-    display: none;
   }
   .bento-card-left,
   .bento-card-center,
   .bento-card-right {
-    width: 105px !important;
-    height: 125px !important;
+    width: 100% !important;
+    height: 110px !important;
     border-radius: 8px !important;
-    flex-shrink: 0;
+    flex-shrink: 1;
   }
   .catalog-editorial-header {
     margin-top: 2rem;
