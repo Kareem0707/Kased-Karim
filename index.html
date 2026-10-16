@@ -18,9 +18,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=3.8">
-  <link rel="stylesheet" href="css/components.css?v=3.8">
-  <link rel="stylesheet" href="css/admin.css">
+  <link rel="stylesheet" href="css/style.css?v=3.9">
+  <link rel="stylesheet" href="css/components.css?v=3.9">
+  <link rel="stylesheet" href="css/admin.css?v=3.9">
 </head>
 <body>
 
@@ -65,8 +65,14 @@
 
       <!-- Minimalist Outline Action Buttons (As shown in Reference) -->
       <div class="header-actions">
+        <!-- Admin Dashboard Icon (Only for linked admin device, right next to WhatsApp) -->
+        <a href="admin.html" class="action-circle-btn btn-admin-header" id="adminHeaderBtn" title="لوحة تحكم المعرض (جهاز إدارة معتمد)" style="display: none;">
+          <i class="fas fa-shield-halved"></i>
+          <span class="badge-count admin-badge-count" id="adminHeaderBadge" style="display: none;">0</span>
+        </a>
+
         <!-- WhatsApp Header Button (Minimalist Circle Outline) -->
-        <a href="https://wa.me/201099887766" target="_blank" class="action-circle-btn" title="تواصل مباشر عبر واتساب">
+        <a href="https://wa.me/201099887766" target="_blank" class="action-circle-btn" id="headerWhatsappBtn" title="تواصل مباشر عبر واتساب">
           <i class="fab fa-whatsapp"></i>
         </a>
 
@@ -414,10 +420,6 @@
         </div>
         <div class="footer-bottom-line-2">
           <span>جميع الحقوق محفوظة © 2025 لمعرض <strong>Kased Karim Lighting</strong></span>
-          <span class="footer-dot">•</span>
-          <a href="admin.html" class="footer-admin-link" title="بوابة إدارة المعرض">
-            <i class="fas fa-shield-halved" style="font-size: 0.75rem;"></i> الإدارة
-          </a>
         </div>
       </div>
     </div>
@@ -820,9 +822,9 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/data.js?v=3.8"></script>
-  <script src="js/db.js?v=3.8"></script>
-  <script src="js/app.js?v=3.8"></script>
-  <script src="js/admin.js?v=3.8"></script>
+  <script src="js/data.js?v=3.9"></script>
+  <script src="js/db.js?v=3.9"></script>
+  <script src="js/app.js?v=3.9"></script>
+  <script src="js/admin.js?v=3.9"></script>
 </body>
 </html>

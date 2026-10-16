@@ -46,15 +46,31 @@ function checkAdminAccessVisibility() {
   const adminParam = urlParams.get("admin");
 
   const hasParamAuth = (key && ADMIN_SECURITY.SECRET_KEYS.includes(key)) ||
-                       adminParam === "kased" || adminParam === "true";
+                       adminParam === "kased" || adminParam === "true" || adminParam === "1";
 
   const isLocallyAuth = localStorage.getItem(ADMIN_SECURITY.STORAGE_KEY) === "true";
+  const adminBtn = document.getElementById("adminHeaderBtn");
 
   if (hasParamAuth || isLocallyAuth) {
     document.body.classList.add("is-admin-user");
     localStorage.setItem(ADMIN_SECURITY.STORAGE_KEY, "true");
+    if (adminBtn) {
+      adminBtn.style.display = "inline-flex";
+    }
+    if (hasParamAuth && !isLocallyAuth && typeof showToast === "function") {
+      setTimeout(() => {
+        showToast("🛡️ تم حفظ وربط هذا الجهاز كجهاز إدارة معتمد للمعرض بنجاح ✓");
+      }, 500);
+      try {
+        const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState({ path: cleanUrl }, "", cleanUrl);
+      } catch (err) {}
+    }
   } else {
     document.body.classList.remove("is-admin-user");
+    if (adminBtn) {
+      adminBtn.style.display = "none";
+    }
   }
 }
 
@@ -241,6 +257,59 @@ function initAdminSystem() {
       renderAdminInventory();
     }
   });
+
+  // Secret Admin Device Link shortcut:
+  // 5 clicks on logo, or long pressing WhatsApp header button for 2.5s
+  let logoClickCount = 0;
+  let logoClickTimer = null;
+  const brandLogos = document.querySelectorAll(".brand-link, .top-bar-brand, .brand-title-en");
+  brandLogos.forEach(logo => {
+    logo.addEventListener("click", () => {
+      logoClickCount++;
+      clearTimeout(logoClickTimer);
+      logoClickTimer = setTimeout(() => { logoClickCount = 0; }, 2500);
+
+      if (logoClickCount >= 5) {
+        logoClickCount = 0;
+        promptAdminDeviceLink();
+      }
+    });
+  });
+
+  const whatsappBtn = document.getElementById("headerWhatsappBtn");
+  if (whatsappBtn) {
+    let pressTimer = null;
+    whatsappBtn.addEventListener("mousedown", () => {
+      pressTimer = setTimeout(() => {
+        promptAdminDeviceLink();
+      }, 2500);
+    });
+    whatsappBtn.addEventListener("mouseup", () => clearTimeout(pressTimer));
+    whatsappBtn.addEventListener("mouseleave", () => clearTimeout(pressTimer));
+    whatsappBtn.addEventListener("touchstart", () => {
+      pressTimer = setTimeout(() => {
+        promptAdminDeviceLink();
+      }, 2500);
+    }, { passive: true });
+    whatsappBtn.addEventListener("touchend", () => clearTimeout(pressTimer));
+  }
+}
+
+function promptAdminDeviceLink() {
+  const pin = prompt("🔐 إعدادات الإدارة: أدخل رمز المرور السري لربط هذا الجهاز وحفظه كجهاز إدارة معتمد:");
+  if (!pin) return;
+  const trimmed = pin.trim();
+  if (ADMIN_SECURITY.SECRET_KEYS.includes(trimmed) || trimmed === "2025" || trimmed === "kased77") {
+    localStorage.setItem(ADMIN_SECURITY.STORAGE_KEY, "true");
+    document.body.classList.add("is-admin-user");
+    const adminBtn = document.getElementById("adminHeaderBtn");
+    if (adminBtn) adminBtn.style.display = "inline-flex";
+    if (typeof showToast === "function") {
+      showToast("🛡️ تم تفعيل وربط هذا الجهاز كجهاز إدارة معتمد بنجاح ✓");
+    }
+  } else {
+    alert("❌ رمز المرور غير صحيح");
+  }
 }
 
 function showAdminLiveOrderAlert(order) {
