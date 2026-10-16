@@ -21,6 +21,7 @@ const STORAGE_KEYS = {
 
 // Initialize Application
 function initApp() {
+  initLightingCeremony();
   loadProducts();
   loadCart();
   renderCategoryTabs();
@@ -695,6 +696,81 @@ function selectCategoryFromMobile(catId) {
   if (catalog) {
     catalog.scrollIntoView({ behavior: "smooth" });
   }
+}
+
+// ============================================================================
+// 13. LUXURY LIGHTING CEREMONY CONTROLLER (إشعال النور والظهور السينمائي الفاخر)
+// ============================================================================
+let lightingCeremonyTimer = null;
+
+function initLightingCeremony() {
+  const overlay = document.getElementById("lightingCeremonyOverlay");
+  const flash = document.getElementById("lightingFlashBurst");
+  if (!overlay) return;
+
+  // Ensure body is in initial ceremony state
+  document.body.classList.add("ceremony-in-progress");
+  document.body.classList.remove("ceremony-illuminated");
+  overlay.classList.remove("ignited");
+  if (flash) flash.classList.remove("flash-active");
+
+  // Allow immediate skip by clicking anywhere on the overlay
+  overlay.onclick = () => {
+    igniteLightingCeremony();
+  };
+
+  // Schedule ignition after brief dramatic darkness (650ms)
+  if (lightingCeremonyTimer) clearTimeout(lightingCeremonyTimer);
+  lightingCeremonyTimer = setTimeout(() => {
+    igniteLightingCeremony();
+  }, 650);
+
+  function igniteLightingCeremony() {
+    if (lightingCeremonyTimer) clearTimeout(lightingCeremonyTimer);
+    if (overlay.classList.contains("ignited")) return;
+
+    // 1. Fire luminous flash blast
+    if (flash) {
+      flash.classList.remove("flash-active");
+      void flash.offsetWidth; // Force CSS reflow
+      flash.classList.add("flash-active");
+    }
+
+    // 2. Dissolve the dark overlay
+    overlay.classList.add("ignited");
+
+    // 3. Illuminate palace, chandelier, and trigger staggered text reveals
+    document.body.classList.remove("ceremony-in-progress");
+    document.body.classList.add("ceremony-illuminated");
+
+    // 4. Clean up overlay from view once animation finishes
+    setTimeout(() => {
+      overlay.style.display = "none";
+    }, 950);
+  }
+}
+
+// Function to replay the lighting ceremony at any time
+function replayLightingCeremony() {
+  const overlay = document.getElementById("lightingCeremonyOverlay");
+  const flash = document.getElementById("lightingFlashBurst");
+  if (!overlay) return;
+
+  // Scroll smoothly to top
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  // Reset overlay
+  overlay.style.display = "flex";
+  overlay.classList.remove("ignited");
+  if (flash) flash.classList.remove("flash-active");
+
+  document.body.classList.add("ceremony-in-progress");
+  document.body.classList.remove("ceremony-illuminated");
+
+  // Re-run ignition
+  setTimeout(() => {
+    initLightingCeremony();
+  }, 100);
 }
 
 // Click outside listener to close sub-bar cleanly

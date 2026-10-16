@@ -18,11 +18,40 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=4.1">
-  <link rel="stylesheet" href="css/components.css?v=4.1">
-  <link rel="stylesheet" href="css/admin.css?v=4.1">
+  <link rel="stylesheet" href="css/style.css?v=4.2">
+  <link rel="stylesheet" href="css/components.css?v=4.2">
+  <link rel="stylesheet" href="css/admin.css?v=4.2">
 </head>
-<body>
+<body class="ceremony-in-progress">
+
+  <!-- ========================================================================
+       LUXURY LIGHTING CEREMONY (مراسم إشعال النور والظهور السينمائي الفاخر)
+       ======================================================================== -->
+  <div id="lightingCeremonyOverlay" class="lighting-ceremony-overlay">
+    <div class="lighting-ceremony-stage">
+      <!-- Ambient Filament & Luxury Bulb -->
+      <div class="lighting-bulb-glow-wrap">
+        <div class="lighting-ambient-halo"></div>
+        <div class="lighting-bulb-icon">
+          <i class="fas fa-lightbulb"></i>
+        </div>
+        <div class="lighting-filament-pulse"></div>
+      </div>
+
+      <!-- Ceremony Brand Typography -->
+      <div class="lighting-ceremony-brand">
+        <span class="lighting-ceremony-title">KASED KARIM</span>
+        <span class="lighting-ceremony-subtitle">قاصد كريم للإضاءة الفاخرة • الشيخ زايد</span>
+        <div class="lighting-ceremony-status">
+          <span class="lighting-status-dot"></span>
+          <span>جاري إشعال أنظمة الإنارة المعمارية...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- The Master Light Flash Bloom -->
+    <div class="lighting-flash-burst" id="lightingFlashBurst"></div>
+  </div>
 
   <!-- ========================================================================
        TOP UTILITY BAR (الشريط العلوي المينيمالي)
@@ -31,6 +60,12 @@
     <div class="header-container top-bar-inner">
       <div class="top-bar-right-info">
         <span>معرض الشيخ زايد • 01099687766</span>
+      </div>
+      <div class="top-bar-left-actions">
+        <button type="button" class="btn-replay-lighting" onclick="replayLightingCeremony()" title="إعادة تشغيل مراسم الإضاءة الفاخرة">
+          <i class="fas fa-lightbulb"></i>
+          <span>إعادة تجربة الإنارة</span>
+        </button>
       </div>
     </div>
   </div>
@@ -207,14 +242,14 @@
     <!-- حاوية النصوص في الجهة اليمنى -->
     <div class="container hero-editorial-container">
       <div class="hero-editorial-block">
-        <h2 class="hero-editorial-brand">KASED KARIM</h2>
-        <h1 class="hero-editorial-heading">
+        <h2 class="hero-editorial-brand lighting-reveal-item lighting-reveal-brand">KASED KARIM</h2>
+        <h1 class="hero-editorial-heading lighting-reveal-item lighting-reveal-heading">
           قاصد كريم <span class="highlight-champagne">للإضاءة</span> الفاخرة
         </h1>
-        <p class="hero-editorial-desc">
+        <p class="hero-editorial-desc lighting-reveal-item lighting-reveal-desc">
           نصيغ الضوء ليتحول إلى تحفة فنية تليق بقصوركم وفيلاتكم الراقية. تشكيلات إيطالية حصرية من الثريات الملكية، أنظمة المسارات المغناطيسية، وتوزيع هندسي متكامل بإشراف نخبة من مهندسي الإضاءة.
         </p>
-        <a href="#catalog" class="btn-architectural-cta">
+        <a href="#catalog" class="btn-architectural-cta lighting-reveal-item lighting-reveal-cta">
           <span>استكشف الكتالوج الفاخر</span>
           <span class="cta-arrow-icon">&larr;</span>
         </a>
@@ -223,13 +258,13 @@
 
     <!-- Overlapping Bento Cards (Bottom Left) -->
     <div class="hero-bento-strip" dir="ltr">
-      <div class="bento-card bento-card-left" onclick="selectCategoryFromSubBar('wall-sconces')" title="إضاءات وفراغات معمارية فاخرة">
+      <div class="bento-card bento-card-left lighting-reveal-item lighting-reveal-bento-1" onclick="selectCategoryFromSubBar('wall-sconces')" title="إضاءات وفراغات معمارية فاخرة">
         <img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=800&q=80" alt="إضاءة معمارية فاخرة">
       </div>
-      <div class="bento-card bento-card-center" onclick="selectCategoryFromSubBar('chandeliers')" title="ثريات ونجف إمبراطوري">
+      <div class="bento-card bento-card-center lighting-reveal-item lighting-reveal-bento-2" onclick="selectCategoryFromSubBar('chandeliers')" title="ثريات ونجف إمبراطوري">
         <img src="https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=800&q=80" alt="ثريات ملكية">
       </div>
-      <div class="bento-card bento-card-right" onclick="selectCategoryFromSubBar('magnetic-track')" title="مسارات وأسطوانات إضاءة ذهبية">
+      <div class="bento-card bento-card-right lighting-reveal-item lighting-reveal-bento-3" onclick="selectCategoryFromSubBar('magnetic-track')" title="مسارات وأسطوانات إضاءة ذهبية">
         <img src="https://images.unsplash.com/photo-1517991104123-1d56a6e81ed9?auto=format&fit=crop&w=800&q=80" alt="مسارات معمارية">
       </div>
     </div>
@@ -803,9 +838,9 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/data.js?v=4.0"></script>
-  <script src="js/db.js?v=4.0"></script>
-  <script src="js/app.js?v=4.0"></script>
-  <script src="js/admin.js?v=4.0"></script>
+  <script src="js/data.js?v=4.2"></script>
+  <script src="js/db.js?v=4.2"></script>
+  <script src="js/app.js?v=4.2"></script>
+  <script src="js/admin.js?v=4.2"></script>
 </body>
 </html>

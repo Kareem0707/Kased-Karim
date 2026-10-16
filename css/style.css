@@ -174,6 +174,335 @@ body::before {
 }
 
 /* ==========================================================================
+   LUXURY LIGHTING CEREMONY (مراسم إشعال النور والظهور السينمائي الفاخر)
+   Theme: Dramatic Neoclassical Illumination Awakening
+   ========================================================================== */
+
+.lighting-ceremony-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  background: #060709;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  overflow: hidden;
+  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.75s ease;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.lighting-ceremony-overlay.ignited {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.lighting-ceremony-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  z-index: 10;
+  text-align: center;
+  transform: translateY(0);
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lighting-ceremony-overlay.ignited .lighting-ceremony-stage {
+  transform: scale(1.12) translateY(-15px);
+  opacity: 0;
+  filter: blur(8px);
+}
+
+/* Filament & Bulb Glow */
+.lighting-bulb-glow-wrap {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lighting-ambient-halo {
+  position: absolute;
+  inset: -18px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(197, 160, 89, 0.45) 0%, rgba(245, 158, 11, 0.15) 45%, transparent 70%);
+  animation: filamentHaloPulse 2.4s ease-in-out infinite alternate;
+}
+
+.lighting-bulb-icon {
+  font-size: 2.5rem;
+  color: #C5A059;
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 0 25px rgba(245, 158, 11, 0.95), 0 0 50px rgba(197, 160, 89, 0.55);
+  animation: filamentBulbFlicker 1.8s ease-in-out infinite alternate;
+}
+
+.lighting-filament-pulse {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 1px solid rgba(197, 160, 89, 0.35);
+  animation: filamentRingExpand 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+@keyframes filamentHaloPulse {
+  0% { transform: scale(0.85); opacity: 0.35; }
+  100% { transform: scale(1.25); opacity: 0.75; }
+}
+
+@keyframes filamentBulbFlicker {
+  0% { opacity: 0.75; transform: scale(0.97); }
+  50% { opacity: 1; transform: scale(1.03); }
+  100% { opacity: 0.85; transform: scale(1); }
+}
+
+@keyframes filamentRingExpand {
+  0% { transform: scale(0.6); opacity: 0.8; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.lighting-ceremony-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.lighting-ceremony-title {
+  font-family: var(--font-brand);
+  font-size: 1.85rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  color: #FFFFFF;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.35);
+}
+
+.lighting-ceremony-subtitle {
+  font-family: var(--font-ar);
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #CBD5E1;
+  letter-spacing: 0.5px;
+}
+
+.lighting-ceremony-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--accent);
+  margin-top: 0.4rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--radius-full);
+  background: rgba(197, 160, 89, 0.1);
+  border: 1px solid rgba(197, 160, 89, 0.25);
+}
+
+.lighting-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #C5A059;
+  box-shadow: 0 0 8px #C5A059;
+  animation: dotBlink 1.2s infinite;
+}
+
+@keyframes dotBlink {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+/* Master Flash Burst (When light suddenly turns on!) */
+.lighting-flash-burst {
+  position: absolute;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 248, 230, 0.96) 25%,
+    rgba(245, 215, 145, 0.75) 45%,
+    rgba(197, 160, 89, 0.4) 65%,
+    rgba(7, 8, 10, 0) 80%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.1);
+  z-index: 20;
+}
+
+.lighting-flash-burst.flash-active {
+  animation: lightingFlashBlast 1.05s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes lightingFlashBlast {
+  0% {
+    opacity: 0;
+    transform: scale(0.1);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.4);
+  }
+  60% {
+    opacity: 0.85;
+    transform: scale(2.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.5);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   HERO ELEMENTS INITIAL DARK/HIDDEN STATE & REVEAL CHOREOGRAPHY
+   -------------------------------------------------------------------------- */
+
+/* Body during initial darkness */
+body.ceremony-in-progress {
+  overflow: hidden;
+}
+
+/* Hero Background starts dimmed/unlit like a dark room */
+.hero-architectural-bg {
+  transition: filter 1.35s cubic-bezier(0.16, 1, 0.3, 1), transform 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.ceremony-in-progress .hero-architectural-bg {
+  filter: brightness(0.08) contrast(1.4) saturate(0.5);
+  transform: scale(1.05);
+}
+
+body.ceremony-illuminated .hero-architectural-bg {
+  filter: brightness(1) contrast(1) saturate(1);
+  transform: scale(1);
+}
+
+/* Header & Top Bar start hidden */
+.site-header {
+  transition: transform 0.85s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.75s ease;
+}
+.top-bar {
+  transition: transform 0.85s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.75s ease;
+}
+
+body.ceremony-in-progress .site-header,
+body.ceremony-in-progress .top-bar {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+
+body.ceremony-illuminated .site-header,
+body.ceremony-illuminated .top-bar {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* Hero Text Items Initial State */
+.lighting-reveal-item {
+  opacity: 0;
+  transform: translateY(32px);
+  filter: blur(8px);
+  transition: 
+    opacity 0.95s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.95s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.95s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform, filter;
+}
+
+/* Staggered Light Illuminations */
+body.ceremony-illuminated .lighting-reveal-brand {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+  transition-delay: 0.15s;
+}
+
+body.ceremony-illuminated .lighting-reveal-heading {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+  transition-delay: 0.32s;
+  text-shadow: 0 0 20px rgba(197, 160, 89, 0.28);
+}
+
+body.ceremony-illuminated .lighting-reveal-desc {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+  transition-delay: 0.48s;
+}
+
+body.ceremony-illuminated .lighting-reveal-cta {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+  transition-delay: 0.64s;
+  animation: ctaGoldenGlow 2.5s ease-in-out 1.5s infinite alternate;
+}
+
+@keyframes ctaGoldenGlow {
+  0% { box-shadow: 0 0 0 rgba(197, 160, 89, 0); }
+  100% { box-shadow: 0 4px 24px rgba(197, 160, 89, 0.25); border-color: var(--accent); }
+}
+
+body.ceremony-illuminated .lighting-reveal-bento-1 {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+  transition-delay: 0.72s;
+}
+
+body.ceremony-illuminated .lighting-reveal-bento-2 {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+  transition-delay: 0.86s;
+}
+
+body.ceremony-illuminated .lighting-reveal-bento-3 {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+  transition-delay: 1.0s;
+}
+
+/* Replay Lighting Ceremony Button in Top Bar */
+.btn-replay-lighting {
+  background: transparent;
+  border: 1px solid rgba(197, 160, 89, 0.35);
+  color: var(--accent-hover);
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--radius-full);
+  font-family: var(--font-ar);
+  font-size: 0.72rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-replay-lighting:hover {
+  background: #C5A059;
+  color: #FFFFFF;
+  border-color: #C5A059;
+  box-shadow: 0 0 12px rgba(197, 160, 89, 0.45);
+}
+
+/* ==========================================================================
    TOP UTILITY BAR (الشريط العلوي المينيمالي)
    ========================================================================== */
 .top-bar {
