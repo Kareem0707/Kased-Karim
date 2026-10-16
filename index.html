@@ -18,9 +18,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=3.9">
-  <link rel="stylesheet" href="css/components.css?v=3.9">
-  <link rel="stylesheet" href="css/admin.css?v=3.9">
+  <link rel="stylesheet" href="css/style.css?v=4.0">
+  <link rel="stylesheet" href="css/components.css?v=4.0">
+  <link rel="stylesheet" href="css/admin.css?v=4.0">
 </head>
 <body>
 
@@ -109,27 +109,19 @@
       </div>
 
       <div class="sub-bar-items" id="subBarItems">
-        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('all')">
-          <span>الكل المعروض</span>
-        </button>
-        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('chandeliers')">
-          <span>ثريات ونجف فاخر</span>
-        </button>
-        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('magnetic-track')">
-          <span>مسارات مغناطيسية واسبوتات</span>
-        </button>
-        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('wall-sconces')">
-          <span>إضاءات جدارية Sconces</span>
-        </button>
-        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('floor-table')">
-          <span>أباجورات ومصابيح طاولة</span>
-        </button>
-        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('outdoor')">
-          <span>إضاءة خارجية ولاندسكيب</span>
-        </button>
-        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('smart-profiles')">
-          <span>بروفايل ليد ذكي</span>
-        </button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('all')"><span>الكل المعروض</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('table-lamps')"><span>أباجورات</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('pendants')"><span>دلايات</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('wall-sconces')"><span>أباليك</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('spotlights')"><span>سبوت لايت</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('floor-lamps')"><span>لمباديرات</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('track-lights')"><span>تراك لايت</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('bollards-lanterns')"><span>فوانيس سور، بولارد</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('spike-lights')"><span>حربة</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('led-panels')"><span>بانلات</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('floodlights')"><span>كشافات</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('led-profiles')"><span>أعواد البروفايل</span></button>
+        <button class="sub-bar-cat-btn" onclick="selectCategoryFromSubBar('stair-lights')"><span>درج سلم</span></button>
       </div>
 
       <button class="sub-bar-close-btn" onclick="toggleCollectionsSubBar(false)" title="إغلاق الشريط">
@@ -162,27 +154,19 @@
           <i class="fas fa-chevron-down mobile-accordion-arrow" id="mobileAccordionArrow"></i>
         </button>
         <div class="mobile-accordion-content" id="mobileAccordionContent">
-          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('all')">
-            <span>الكل المعروض</span>
-          </button>
-          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('chandeliers')">
-            <span>ثريات ونجف فاخر</span>
-          </button>
-          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('magnetic-track')">
-            <span>مسارات مغناطيسية واسبوتات</span>
-          </button>
-          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('wall-sconces')">
-            <span>إضاءات جدارية Sconces</span>
-          </button>
-          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('floor-table')">
-            <span>أباجورات ومصابيح طاولة</span>
-          </button>
-          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('outdoor')">
-            <span>إضاءة خارجية ولاندسكيب</span>
-          </button>
-          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('smart-profiles')">
-            <span>بروفايل ليد ذكي</span>
-          </button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('all')"><span>الكل المعروض</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('table-lamps')"><span>أباجورات</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('pendants')"><span>دلايات</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('wall-sconces')"><span>أباليك</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('spotlights')"><span>سبوت لايت</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('floor-lamps')"><span>لمباديرات</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('track-lights')"><span>تراك لايت</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('bollards-lanterns')"><span>فوانيس سور، بولارد</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('spike-lights')"><span>حربة</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('led-panels')"><span>بانلات</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('floodlights')"><span>كشافات</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('led-profiles')"><span>أعواد البروفايل</span></button>
+          <button class="mobile-sub-cat-item" onclick="selectCategoryFromMobile('stair-lights')"><span>درج سلم</span></button>
         </div>
       </li>
       <li><a href="#showroom" class="mobile-nav-link" onclick="document.getElementById('mobileNavDrawer').classList.remove('active')"><i class="fas fa-store"></i> معرض الشيخ زايد</a></li>
@@ -410,16 +394,13 @@
       </div>
 
       <div class="footer-bottom">
-        <div class="footer-bottom-line-1">
-          <i class="fas fa-map-pin" style="color: var(--accent);"></i>
-          <span>صُمم بفخر ليعكس فخامة الشيخ زايد • </span>
+        <div class="footer-bottom-single-line">
+          <span>جميع الحقوق محفوظة © 2025 لمعرض <strong>Kased Karim Lighting</strong></span>
+          <span class="footer-dot">•</span>
           <a href="https://karimodesign.vercel.app/" target="_blank" rel="noopener noreferrer" class="footer-designer-link">
             Designed by KarimoDesign
             <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.72rem;"></i>
           </a>
-        </div>
-        <div class="footer-bottom-line-2">
-          <span>جميع الحقوق محفوظة © 2025 لمعرض <strong>Kased Karim Lighting</strong></span>
         </div>
       </div>
     </div>
@@ -822,9 +803,9 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/data.js?v=3.9"></script>
-  <script src="js/db.js?v=3.9"></script>
-  <script src="js/app.js?v=3.9"></script>
-  <script src="js/admin.js?v=3.9"></script>
+  <script src="js/data.js?v=4.0"></script>
+  <script src="js/db.js?v=4.0"></script>
+  <script src="js/app.js?v=4.0"></script>
+  <script src="js/admin.js?v=4.0"></script>
 </body>
 </html>

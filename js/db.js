@@ -5,7 +5,7 @@
  */
 
 const DB_KEYS = {
-  PRODUCTS: "kased_karim_db_products_v2",
+  PRODUCTS: "kased_karim_db_products_v3",
   ORDERS: "kased_karim_db_orders_v2",
   SETTINGS: "kased_karim_db_settings_v2",
   CLOUD_CONFIG: "kased_karim_cloud_config_v1"
