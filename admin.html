@@ -58,7 +58,7 @@
 
         <div class="admin-pin-hint">
           <span>الرمز الافتراضي المعتمد: </span>
-          <strong style="color: var(--accent); letter-spacing: 2px;">2025</strong>
+          <strong style="color: var(--accent); letter-spacing: 2px;">2026</strong>
         </div>
       </form>
 
@@ -330,25 +330,27 @@
                 <input type="text" name="adminUnitEnName" class="form-input" placeholder="e.g. Mondrian Crystal Pendant">
               </div>
 
-              <!-- Category (اختياري) -->
+              <!-- Category (إجباري) -->
               <div class="form-group">
                 <label class="form-label">
-                  <span>التصنيف الرئيسي</span>
-                  <span class="optional-tag">(اختياري)</span>
+                  <i class="fas fa-layer-group" style="color: var(--accent);"></i>
+                  <span>قسم وحدة الإضاءة (إلى أي قسم تنتمي القطعة؟)</span>
+                  <span class="required-tag">* (إجباري)</span>
                 </label>
-                <select name="adminUnitCategory" class="form-select">
-                  <option value="table-lamps">أباجورات</option>
-                  <option value="pendants">دلايات</option>
-                  <option value="wall-sconces">أباليك</option>
-                  <option value="spotlights">سبوت لايت</option>
-                  <option value="floor-lamps">لمباديرات</option>
-                  <option value="track-lights">تراك لايت</option>
-                  <option value="bollards-lanterns">فوانيس سور، بولارد</option>
-                  <option value="spike-lights">حربة</option>
-                  <option value="led-panels">بانلات</option>
-                  <option value="floodlights">كشافات</option>
-                  <option value="led-profiles">أعواد البروفايل</option>
-                  <option value="stair-lights">درج سلم</option>
+                <select name="adminUnitCategory" id="adminUnitCategory" class="form-select" required style="font-weight: 700; color: #0F172A;">
+                  <option value="" disabled selected>-- اختر قسم الإضاءة من القائمة --</option>
+                  <option value="table-lamps">أباجورات (Table Lamps)</option>
+                  <option value="pendants">دلايات (Pendant Lights)</option>
+                  <option value="wall-sconces">أباليك (Wall Sconces)</option>
+                  <option value="spotlights">سبوت لايت (Spotlights)</option>
+                  <option value="floor-lamps">لمباديرات (Floor Lamps)</option>
+                  <option value="track-lights">تراك لايت (Track Lights)</option>
+                  <option value="bollards-lanterns">فوانيس سور، بولارد (Bollards & Lanterns)</option>
+                  <option value="spike-lights">حربة (Spike Lights)</option>
+                  <option value="led-panels">بانلات (LED Panels)</option>
+                  <option value="floodlights">كشافات (Floodlights)</option>
+                  <option value="led-profiles">أعواد البروفايل (LED Profiles)</option>
+                  <option value="stair-lights">درج سلم (Stair Lights)</option>
                 </select>
               </div>
 
@@ -435,6 +437,10 @@
 
               <!-- Badges (اختياري) -->
               <div class="form-group full-width" style="display: flex; gap: 2rem; align-items: center; padding-top: 0.5rem; flex-wrap: wrap;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; font-weight: 700; cursor: pointer;">
+                  <input type="checkbox" name="adminIsNew" style="width: 18px; height: 18px; accent-color: var(--accent);" checked>
+                  <span style="color: #0F172A;">تمييز بشارة "جديد 2026" (أحدث وصولات المعرض)</span>
+                </label>
                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; font-weight: 700; cursor: pointer;">
                   <input type="checkbox" name="adminIsExclusive" style="width: 18px; height: 18px; accent-color: var(--accent);" checked>
                   <span>تمييز كـ "حصري في الشيخ زايد"</span>

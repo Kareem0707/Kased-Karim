@@ -18,37 +18,16 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=4.2">
-  <link rel="stylesheet" href="css/components.css?v=4.2">
-  <link rel="stylesheet" href="css/admin.css?v=4.2">
+  <link rel="stylesheet" href="css/style.css?v=4.3">
+  <link rel="stylesheet" href="css/components.css?v=4.3">
+  <link rel="stylesheet" href="css/admin.css?v=4.3">
 </head>
 <body class="ceremony-in-progress">
 
   <!-- ========================================================================
-       LUXURY LIGHTING CEREMONY (مراسم إشعال النور والظهور السينمائي الفاخر)
+       LUXURY LIGHTING CEREMONY (إشعال النور والظهور السينمائي الفاخر)
        ======================================================================== -->
   <div id="lightingCeremonyOverlay" class="lighting-ceremony-overlay">
-    <div class="lighting-ceremony-stage">
-      <!-- Ambient Filament & Luxury Bulb -->
-      <div class="lighting-bulb-glow-wrap">
-        <div class="lighting-ambient-halo"></div>
-        <div class="lighting-bulb-icon">
-          <i class="fas fa-lightbulb"></i>
-        </div>
-        <div class="lighting-filament-pulse"></div>
-      </div>
-
-      <!-- Ceremony Brand Typography -->
-      <div class="lighting-ceremony-brand">
-        <span class="lighting-ceremony-title">KASED KARIM</span>
-        <span class="lighting-ceremony-subtitle">قاصد كريم للإضاءة الفاخرة • الشيخ زايد</span>
-        <div class="lighting-ceremony-status">
-          <span class="lighting-status-dot"></span>
-          <span>جاري إشعال أنظمة الإنارة المعمارية...</span>
-        </div>
-      </div>
-    </div>
-
     <!-- The Master Light Flash Bloom -->
     <div class="lighting-flash-burst" id="lightingFlashBurst"></div>
   </div>
@@ -60,12 +39,6 @@
     <div class="header-container top-bar-inner">
       <div class="top-bar-right-info">
         <span>معرض الشيخ زايد • 01099687766</span>
-      </div>
-      <div class="top-bar-left-actions">
-        <button type="button" class="btn-replay-lighting" onclick="replayLightingCeremony()" title="إعادة تشغيل مراسم الإضاءة الفاخرة">
-          <i class="fas fa-lightbulb"></i>
-          <span>إعادة تجربة الإنارة</span>
-        </button>
       </div>
     </div>
   </div>
@@ -319,7 +292,7 @@
                 <i class="fas fa-check option-check"></i>
               </div>
               <div class="luxury-sort-option" data-value="newest" role="option">
-                <span>أحدث الوصولات 2025</span>
+                <span>أحدث الوصولات 2026</span>
                 <i class="fas fa-check option-check"></i>
               </div>
             </div>
@@ -328,7 +301,7 @@
               <option value="featured">المعروضات المميزة</option>
               <option value="price-desc">السعر: من الأعلى للأقل</option>
               <option value="price-asc">السعر: من الأقل للأعلى</option>
-              <option value="newest">أحدث الوصولات 2025</option>
+              <option value="newest">أحدث الوصولات 2026</option>
             </select>
           </div>
         </div>
@@ -404,15 +377,22 @@
           </div>
         </div>
 
-        <!-- Collections -->
-        <div>
+        <!-- Collections (12 Categories in 2 Compact Columns) -->
+        <div style="min-width: 280px;">
           <h4 class="footer-title">مجموعات الإضاءة</h4>
-          <ul class="footer-links">
-            <li><a href="#catalog" class="footer-link">الثريات والنجف الفاخر</a></li>
-            <li><a href="#catalog" class="footer-link">المسارات المغناطيسية Magnetic</a></li>
-            <li><a href="#catalog" class="footer-link">الأبليكات الجدارية Sconces</a></li>
-            <li><a href="#catalog" class="footer-link">إضاءات اللاندسكيب والحدائق</a></li>
-            <li><a href="#catalog" class="footer-link">البروفايل ليد المعماري Trimless</a></li>
+          <ul class="footer-links footer-links-grid">
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('table-lamps')">أباجورات</a></li>
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('pendants')">دلايات</a></li>
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('wall-sconces')">أباليك</a></li>
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('spotlights')">سبوت لايت</a></li>
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('floor-lamps')">لمباديرات</a></li>
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('track-lights')">تراك لايت</a></li>
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('bollards-lanterns')">فوانيس سور، بولارد</a></li>
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('spike-lights')">حربة</a></li>
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('led-panels')">بانلات</a></li>
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('floodlights')">كشافات</a></li>
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('led-profiles')">أعواد البروفايل</a></li>
+            <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('stair-lights')">درج سلم</a></li>
           </ul>
         </div>
 
@@ -430,7 +410,7 @@
 
       <div class="footer-bottom">
         <div class="footer-bottom-single-line">
-          <span>جميع الحقوق محفوظة © 2025 لمعرض <strong>Kased Karim Lighting</strong></span>
+          <span>جميع الحقوق محفوظة © 2026 لمعرض <strong>Kased Karim Lighting</strong></span>
           <span class="footer-dot">•</span>
           <a href="https://karimodesign.vercel.app/" target="_blank" rel="noopener noreferrer" class="footer-designer-link">
             Designed by KarimoDesign
@@ -838,9 +818,9 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/data.js?v=4.2"></script>
-  <script src="js/db.js?v=4.2"></script>
-  <script src="js/app.js?v=4.2"></script>
-  <script src="js/admin.js?v=4.2"></script>
+  <script src="js/data.js?v=4.3"></script>
+  <script src="js/db.js?v=4.3"></script>
+  <script src="js/app.js?v=4.3"></script>
+  <script src="js/admin.js?v=4.3"></script>
 </body>
 </html>

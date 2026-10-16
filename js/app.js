@@ -154,7 +154,7 @@ function renderProducts() {
         
         <div class="card-badges">
           ${item.isExclusive ? '<span class="badge-exclusive"><i class="fas fa-crown"></i> حصري في زايد</span>' : ''}
-          ${item.isNew ? '<span class="badge-new">جديد 2025</span>' : ''}
+          ${item.isNew ? '<span class="badge-new">جديد 2026</span>' : ''}
         </div>
 
         <div class="card-hover-actions">
@@ -714,16 +714,16 @@ function initLightingCeremony() {
   overlay.classList.remove("ignited");
   if (flash) flash.classList.remove("flash-active");
 
-  // Allow immediate skip by clicking anywhere on the overlay
+  // Allow immediate skip by clicking anywhere
   overlay.onclick = () => {
     igniteLightingCeremony();
   };
 
-  // Schedule ignition after brief dramatic darkness (650ms)
+  // Brief suspenseful darkness (320ms) then sudden illumination
   if (lightingCeremonyTimer) clearTimeout(lightingCeremonyTimer);
   lightingCeremonyTimer = setTimeout(() => {
     igniteLightingCeremony();
-  }, 650);
+  }, 320);
 
   function igniteLightingCeremony() {
     if (lightingCeremonyTimer) clearTimeout(lightingCeremonyTimer);
@@ -748,29 +748,6 @@ function initLightingCeremony() {
       overlay.style.display = "none";
     }, 950);
   }
-}
-
-// Function to replay the lighting ceremony at any time
-function replayLightingCeremony() {
-  const overlay = document.getElementById("lightingCeremonyOverlay");
-  const flash = document.getElementById("lightingFlashBurst");
-  if (!overlay) return;
-
-  // Scroll smoothly to top
-  window.scrollTo({ top: 0, behavior: "smooth" });
-
-  // Reset overlay
-  overlay.style.display = "flex";
-  overlay.classList.remove("ignited");
-  if (flash) flash.classList.remove("flash-active");
-
-  document.body.classList.add("ceremony-in-progress");
-  document.body.classList.remove("ceremony-illuminated");
-
-  // Re-run ignition
-  setTimeout(() => {
-    initLightingCeremony();
-  }, 100);
 }
 
 // Click outside listener to close sub-bar cleanly

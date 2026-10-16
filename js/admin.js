@@ -36,7 +36,7 @@ window.showToast = window.showToast || function(message) {
 // 0. ADMIN SECURITY GATE & ACCESS PRIVACY (إخفاء الإدارة عن العامة وبوابة الدخول)
 // ----------------------------------------------------------------------------
 const ADMIN_SECURITY = {
-  SECRET_KEYS: ["kased77", "2025", "kased"],
+  SECRET_KEYS: ["kased77", "2026", "2025", "kased"],
   STORAGE_KEY: "kk_admin_authorized"
 };
 
@@ -991,6 +991,7 @@ function handleAdminAddProductForm(e) {
   const secondaryImage = secImgInput ? secImgInput.value.trim() : "";
   const description = form.adminUnitDesc ? form.adminUnitDesc.value.trim() : "";
 
+  const isNew = form.adminIsNew ? form.adminIsNew.checked : true;
   const isExclusive = form.adminIsExclusive ? form.adminIsExclusive.checked : false;
   const isBestSeller = form.adminIsBestSeller ? form.adminIsBestSeller.checked : false;
 
@@ -1012,6 +1013,7 @@ function handleAdminAddProductForm(e) {
     image: unitImage,
     secondaryImage: secondaryImage,
     description: description,
+    isNew: isNew,
     isExclusive: isExclusive,
     isBestSeller: isBestSeller,
     specs: {
