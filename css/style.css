@@ -2034,6 +2034,60 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
 }
 
 /* ==========================================================================
+   CATALOG LOAD MORE (زر عرض المزيد المينيمالي الفخم)
+   ========================================================================== */
+.load-more-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 3.5rem;
+  margin-bottom: 1.5rem;
+  width: 100%;
+}
+.btn-load-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.95rem 2.6rem;
+  background: #FFFFFF;
+  color: var(--text-main);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-full);
+  font-family: var(--font-ar);
+  font-size: 0.96rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(197, 160, 89, 0.15);
+  transition: all var(--transition-smooth);
+}
+.btn-load-more:hover {
+  background: var(--accent-gradient);
+  color: #FFFFFF;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(197, 160, 89, 0.35);
+}
+.btn-load-more:active {
+  transform: translateY(0);
+}
+.btn-load-more-counter {
+  font-size: 0.85rem;
+  color: var(--accent-hover);
+  font-weight: 700;
+  transition: color var(--transition-fast);
+}
+.btn-load-more:hover .btn-load-more-counter {
+  color: #FFFFFF;
+}
+.btn-load-more-icon {
+  font-size: 0.82rem;
+  transition: transform var(--transition-fast);
+}
+.btn-load-more:hover .btn-load-more-icon {
+  transform: translateY(3px);
+}
+
+/* ==========================================================================
    ENGINEERING & VIP SERVICES (خدمات الإضاءة المعمارية)
    ========================================================================== */
 .services-section {
@@ -2299,8 +2353,82 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
   font-size: 0.82rem;
   color: #64748B;
 }
+/* ==========================================================================
+   FOOTER MAP WIDGET (طراز الكارت التفاعلي الداكن لخريطة الشيخ زايد)
+   ========================================================================== */
+.footer-location-block {
+  margin-bottom: 0.75rem;
+}
+.footer-location-text {
+  color: #CBD5E1;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+.footer-map-widget {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  height: 135px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #0B1120;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  transition: all var(--transition-smooth);
+}
+.footer-map-widget:hover {
+  border-color: var(--accent);
+  box-shadow: 0 8px 25px rgba(197, 160, 89, 0.2);
+  transform: translateY(-2px);
+}
+.footer-map-embed {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  filter: invert(90%) hue-rotate(180deg) brightness(95%) contrast(90%);
+  transition: filter var(--transition-smooth);
+}
+.footer-map-widget:hover .footer-map-embed {
+  filter: invert(88%) hue-rotate(180deg) brightness(100%) contrast(95%);
+}
+.footer-map-tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  background: rgba(13, 19, 31, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: system-ui, -apple-system, sans-serif;
+  padding: 0.25rem 0.6rem;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+.footer-map-tag:hover {
+  background: var(--accent);
+  color: #FFFFFF;
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+.footer-collections-col {
+  min-width: 280px;
+}
+
 .footer-bottom-single-line {
-  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2350,32 +2478,60 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
   font-weight: bold;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
+  .footer-collections-col {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
   .footer-bottom {
     padding-top: 1.25rem;
     padding-bottom: 3.5rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
   }
   .footer-bottom-single-line {
-    font-size: 0.72rem;
-    gap: 0.35rem;
-    white-space: nowrap;
+    font-size: 0.78rem;
+    gap: 0.4rem;
+    white-space: normal !important;
+    display: flex !important;
+    flex-direction: column !important;
+    text-align: center !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    line-height: 1.55 !important;
+  }
+  .footer-bottom-single-line .footer-dot {
+    display: none !important;
+  }
+}
+@media (max-width: 480px) {
+  .footer-bottom-single-line {
+    font-size: 0.73rem !important;
+    gap: 0.35rem !important;
+    white-space: normal !important;
   }
   .footer-bottom-line-1,
   .footer-bottom-line-2 {
     font-size: 0.72rem;
     gap: 0.3rem;
+    white-space: normal !important;
+  }
+  .footer-map-widget {
+    max-width: 100%;
+    height: 125px;
   }
 }
 @media (max-width: 380px) {
   .footer-bottom-single-line {
-    font-size: 0.65rem;
-    gap: 0.25rem;
-    white-space: nowrap;
+    font-size: 0.68rem !important;
+    gap: 0.25rem !important;
+    white-space: normal !important;
   }
   .footer-bottom-line-1,
   .footer-bottom-line-2 {
     font-size: 0.67rem;
     gap: 0.25rem;
+    white-space: normal !important;
   }
 }
 

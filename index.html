@@ -38,7 +38,7 @@
   <div class="top-bar">
     <div class="header-container top-bar-inner">
       <div class="top-bar-right-info">
-        <span>معرض الشيخ زايد • 01099687766</span>
+        <span>معرض الشيخ زايد • 01006367690</span>
       </div>
     </div>
   </div>
@@ -80,7 +80,7 @@
         </a>
 
         <!-- WhatsApp Header Button (Minimalist Circle Outline) -->
-        <a href="https://wa.me/201099887766" target="_blank" class="action-circle-btn" id="headerWhatsappBtn" title="تواصل مباشر عبر واتساب">
+        <a href="https://wa.me/201006367690" target="_blank" class="action-circle-btn" id="headerWhatsappBtn" title="تواصل مباشر عبر واتساب">
           <i class="fab fa-whatsapp"></i>
         </a>
 
@@ -191,7 +191,7 @@
       </li>
     </ul>
     <div class="mobile-nav-footer">
-      <a href="https://wa.me/201099887766" target="_blank" class="btn-whatsapp-quote" style="text-decoration: none;">
+      <a href="https://wa.me/201006367690" target="_blank" class="btn-whatsapp-quote" style="text-decoration: none;">
         <i class="fab fa-whatsapp"></i>
         <span>واتساب المعرض المباشر</span>
       </a>
@@ -311,6 +311,15 @@
       <div class="products-grid" id="productsGrid">
         <!-- Rendered dynamically by app.js -->
       </div>
+
+      <!-- Load More Products / زر عرض المزيد لمنع السكرول الطويل -->
+      <div class="load-more-wrapper" id="loadMoreContainer" style="display: none;">
+        <button type="button" class="btn-load-more" id="loadMoreBtn" onclick="loadMoreProducts()">
+          <span class="btn-load-more-text">عرض المزيد من المنتجات</span>
+          <span class="btn-load-more-counter" id="loadMoreRemaining"></span>
+          <i class="fas fa-chevron-down btn-load-more-icon"></i>
+        </button>
+      </div>
     </div>
   </section>
 
@@ -339,11 +348,11 @@
           </div>
 
           <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-            <a href="https://wa.me/201099887766" target="_blank" class="btn-primary">
+            <a href="https://wa.me/201006367690" target="_blank" class="btn-primary">
               <i class="fab fa-whatsapp"></i>
               <span>تواصل مع المعرض مباشرة</span>
             </a>
-            <a href="https://maps.google.com/?q=Sheikh+Zayed+City" target="_blank" class="btn-secondary" style="background: rgba(255,255,255,0.1); color: #FFFFFF; border-color: rgba(255,255,255,0.2);">
+            <a href="https://maps.app.goo.gl/EzzitFCzNSpQc7w77?g_st=ic" target="_blank" class="btn-secondary" style="background: rgba(255,255,255,0.1); color: #FFFFFF; border-color: rgba(255,255,255,0.2);">
               <i class="fas fa-location-arrow"></i>
               <span>الاتجاهات على الخريطة</span>
             </a>
@@ -351,7 +360,7 @@
         </div>
 
         <div class="showroom-image-side">
-          <img src="https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=1400&q=80" alt="معرض قاصد كريم للإضاءة الشيخ زايد">
+          <img src="assets/images/hero-white-palace.jpg" alt="معرض قاصد كريم للإضاءة الشيخ زايد">
         </div>
       </div>
     </div>
@@ -372,13 +381,13 @@
           <div class="footer-socials">
             <a href="#" class="social-btn" title="Instagram"><i class="fab fa-instagram"></i></a>
             <a href="#" class="social-btn" title="Facebook"><i class="fab fa-facebook-f"></i></a>
-            <a href="#" class="social-btn" title="Pinterest"><i class="fab fa-pinterest-p"></i></a>
-            <a href="https://wa.me/201099887766" target="_blank" class="social-btn" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+            <a href="https://maps.app.goo.gl/EzzitFCzNSpQc7w77?g_st=ic" target="_blank" class="social-btn" title="الموقع الجغرافي على خرائط Google"><i class="fas fa-location-dot"></i></a>
+            <a href="https://wa.me/201006367690" target="_blank" class="social-btn" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
           </div>
         </div>
 
         <!-- Collections (12 Categories in 2 Compact Columns) -->
-        <div style="min-width: 280px;">
+        <div class="footer-collections-col">
           <h4 class="footer-title">مجموعات الإضاءة</h4>
           <ul class="footer-links footer-links-grid">
             <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('table-lamps')">أباجورات</a></li>
@@ -399,11 +408,33 @@
         <!-- Showroom & Direct Contact -->
         <div>
           <h4 class="footer-title">معرض الشيخ زايد والتواصل</h4>
-          <ul class="footer-links">
-            <li><span style="color: #CBD5E1; font-size: 0.88rem; display: flex; align-items: flex-start; gap: 0.5rem;"><i class="fas fa-map-marker-alt" style="color: var(--accent); margin-top: 3px;"></i> الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة</span></li>
-            <li><span style="color: #CBD5E1; font-size: 0.88rem; display: flex; align-items: center; gap: 0.5rem;"><i class="fas fa-clock" style="color: var(--accent);"></i> يومياً من 11:00 صباحاً حتى 11:00 مساءً</span></li>
-            <li><a href="tel:01099887766" class="footer-link" style="display: flex; align-items: center; gap: 0.5rem;"><i class="fas fa-phone-alt" style="color: var(--accent);"></i> <span dir="ltr">010 9988 7766</span></a></li>
-            <li><a href="https://wa.me/201099887766" target="_blank" class="footer-link" style="color: #25D366; display: flex; align-items: center; gap: 0.5rem; font-weight: 700;"><i class="fab fa-whatsapp"></i> واتساب المعرض المباشر</a></li>
+          
+          <div class="footer-location-block">
+            <p class="footer-location-text">
+              <i class="fas fa-map-marker-alt" style="color: var(--accent); margin-left: 6px;"></i>
+              <span>الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة</span>
+            </p>
+
+            <!-- Dark Map Card Widget exactly like reference (Red Pizza style) -->
+            <div class="footer-map-widget">
+              <iframe 
+                src="https://maps.google.com/maps?q=%D9%82%D8%A7%D8%B5%D8%AF%20%D9%83%D8%B1%D9%8A%D9%85%202%20%D9%84%D9%84%D8%A7%D8%AF%D9%88%D8%A7%D8%AA%20%D8%A7%D9%84%D9%83%D9%87%D8%B1%D8%A8%D8%A7%D8%A6%D9%8A%D8%A9%2C%20%D8%B1%D9%82%D9%85%2039%D8%8C%20%D8%A3%D9%88%D9%84%20%D8%A7%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B2%D8%A7%D9%8A%D8%AF%D8%8C%20%D9%85%D8%AD%D8%A7%D9%81%D8%B8%D8%A9%20%D8%A7%D9%84%D8%AC%D9%8A%D8%B2%D8%A9&t=&z=14&ie=UTF8&iwloc=&output=embed" 
+                class="footer-map-embed"
+                loading="lazy" 
+                referrerpolicy="no-referrer-when-downgrade" 
+                title="موقع معرض قاصد كريم بالشيخ زايد">
+              </iframe>
+              <a href="https://maps.app.goo.gl/EzzitFCzNSpQc7w77?g_st=ic" target="_blank" rel="noopener noreferrer" class="footer-map-tag" title="فتح الموقع في خرائط Google">
+                <span>Maps</span>
+                <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.68rem;"></i>
+              </a>
+            </div>
+          </div>
+
+          <ul class="footer-links" style="margin-top: 1.15rem;">
+            <li><span style="color: #CBD5E1; font-size: 0.88rem; display: flex; align-items: center; gap: 0.55rem;"><i class="fas fa-clock" style="color: var(--accent);"></i> يومياً من 11:00 صباحاً حتى 11:00 مساءً</span></li>
+            <li><a href="tel:01006367690" class="footer-link" style="display: flex; align-items: center; gap: 0.55rem;"><i class="fas fa-phone-alt" style="color: var(--accent);"></i> <span dir="ltr">01006367690</span></a></li>
+            <li><a href="https://wa.me/201006367690" target="_blank" class="footer-link" style="color: #25D366; display: flex; align-items: center; gap: 0.55rem; font-weight: 700;"><i class="fab fa-whatsapp" style="font-size: 1.1rem;"></i> واتساب المعرض المباشر (01006367690)</a></li>
           </ul>
         </div>
       </div>
@@ -424,7 +455,7 @@
   <!-- ========================================================================
        FLOATING WHATSAPP BUTTON (Minimalist Dark Charcoal Circle from Reference)
        ======================================================================== -->
-  <a href="https://wa.me/201099887766?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%20%D9%85%D8%B9%D8%B1%D8%B6%20%D9%82%D8%A7%D8%B5%D8%AF%20%D9%83%D8%B1%D9%8A%D9%85%20%D9%84%D9%84%D8%A5%D8%B6%D8%A7%D8%A1%D8%A9%20%D8%A8%D8%A7%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B2%D8%A7%D9%8A%D8%AF%D8%8C%20%D8%A3%D9%88%D8%AF%20%D8%A7%D9%84%D8%A7%D8%B3%D8%AA%D9%81%D8%B3%D8%A7%D8%B1%20%D8%B9%D9%86%20%D9%88%D8%AD%D8%AF%D8%A7%D8%AA%20%D8%A7%D9%84%D8%A5%D8%B6%D8%A7%D8%A1%D8%A9." target="_blank" class="floating-circle-whatsapp" title="تواصل مباشر عبر واتساب">
+  <a href="https://wa.me/201006367690?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%20%D9%85%D8%B9%D8%B1%D8%B6%20%D9%82%D8%A7%D8%B5%D8%AF%20%D9%83%D8%B1%D9%8A%D9%85%20%D9%84%D9%84%D8%A5%D8%B6%D8%A7%D8%A1%D8%A9%20%D8%A8%D8%A7%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B2%D8%A7%D9%8A%D8%AF%D8%8C%20%D8%A3%D9%88%D8%AF%20%D8%A7%D9%84%D8%A7%D8%B3%D8%AA%D9%81%D8%B3%D8%A7%D8%B1%20%D8%B9%D9%86%20%D9%88%D8%AD%D8%AF%D8%A7%D8%AA%20%D8%A7%D9%84%D8%A5%D8%B6%D8%A7%D8%A1%D8%A9." target="_blank" class="floating-circle-whatsapp" title="تواصل مباشر عبر واتساب">
     <i class="fab fa-whatsapp"></i>
   </a>
 

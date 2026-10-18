@@ -10,7 +10,8 @@ const STATE = {
   searchQuery: "",
   sortBy: "featured",
   cart: [],
-  selectedProduct: null
+  selectedProduct: null,
+  visibleCount: 6
 };
 
 // Storage Keys
@@ -97,13 +98,14 @@ function renderCategoryTabs() {
   tabsContainer.querySelectorAll(".category-tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       STATE.activeCategory = btn.dataset.category;
+      STATE.visibleCount = 6;
       renderCategoryTabs();
       renderProducts();
     });
   });
 }
 
-// 4. Render Product Cards Grid
+// 4. Render Product Cards Grid (With Luxury Pagination / Load More)
 function renderProducts() {
   const grid = document.getElementById("productsGrid");
   const countBadge = document.getElementById("catalogResultsCount");
@@ -131,11 +133,35 @@ function renderProducts() {
     filtered.sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0));
   }
 
+  const totalCount = filtered.length;
+  const initialLimit = STATE.visibleCount || 6;
+  const visibleItems = filtered.slice(0, initialLimit);
+
   if (countBadge) {
-    countBadge.textContent = `${filtered.length} وحدة إضاءة فاخرة`;
+    if (totalCount <= initialLimit) {
+      countBadge.textContent = `${totalCount} وحدة إضاءة فاخرة`;
+    } else {
+      countBadge.textContent = `عرض ${visibleItems.length} من أصل ${totalCount} وحدة إضاءة`;
+    }
+  }
+
+  const loadMoreContainer = document.getElementById("loadMoreContainer");
+  const loadMoreRemaining = document.getElementById("loadMoreRemaining");
+
+  if (loadMoreContainer) {
+    if (totalCount > visibleItems.length) {
+      loadMoreContainer.style.display = "flex";
+      if (loadMoreRemaining) {
+        const remaining = totalCount - visibleItems.length;
+        loadMoreRemaining.textContent = `(${remaining} إضافية)`;
+      }
+    } else {
+      loadMoreContainer.style.display = "none";
+    }
   }
 
   if (filtered.length === 0) {
+    if (loadMoreContainer) loadMoreContainer.style.display = "none";
     grid.innerHTML = `
       <div class="catalog-empty">
         <div class="catalog-empty-icon"><i class="fas fa-lightbulb"></i></div>
@@ -147,7 +173,7 @@ function renderProducts() {
     return;
   }
 
-  grid.innerHTML = filtered.map(item => `
+  grid.innerHTML = visibleItems.map(item => `
     <article class="product-card" data-id="${item.id}">
       <div class="product-media">
         <img class="product-img" src="${item.image}" alt="${item.name}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1200&q=80'">
@@ -201,10 +227,17 @@ function renderProducts() {
   `).join("");
 }
 
+// 4.1 Load More Products Function (عرض المزيد من المنتجات)
+function loadMoreProducts() {
+  STATE.visibleCount = (STATE.visibleCount || 6) + 6;
+  renderProducts();
+}
+
 // Reset filters helper
 function resetFilters() {
   STATE.activeCategory = "all";
   STATE.searchQuery = "";
+  STATE.visibleCount = 6;
   const searchInput = document.getElementById("searchInput");
   if (searchInput) searchInput.value = "";
   renderCategoryTabs();
@@ -403,7 +436,7 @@ function sendWhatsAppQuotation() {
   msg += `*إجمالي المقايسة التقديري:* ${formatPrice(totalAmount)} جنيه مصري\n`;
   msg += `يرجى تحديد موعد لمعاينة الوحدات بالمعرض أو إرسال المخطط الهندسي.`;
 
-  const phone = SHOWROOM_INFO.whatsapp || "201099887766";
+  const phone = SHOWROOM_INFO.whatsapp || "201006367690";
   const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   window.open(url, "_blank");
 }
@@ -513,6 +546,7 @@ function setupEventListeners() {
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
       STATE.searchQuery = e.target.value;
+      STATE.visibleCount = 6;
       renderProducts();
     });
   }
@@ -652,6 +686,7 @@ function toggleCollectionsSubBar(explicitState) {
 
 function selectCategoryFromSubBar(catId) {
   STATE.activeCategory = catId;
+  STATE.visibleCount = 6;
   renderCategoryTabs();
   renderProducts();
   updateSubBarActiveCategory();

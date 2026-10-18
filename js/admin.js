@@ -1777,7 +1777,7 @@ function trackOrderFromSuccessModal() {
 function contactSupportAboutTrackedOrder(customQuery = null) {
   const targetId = customQuery || window.currentTrackedOrderId || "طلب إضاءة";
   const msg = `مرحباً معرض قاصد كريم بالشيخ زايد، أود الاستفسار عن تفاصيل وحالة طلبي رقم #${targetId}. هل يمكنكم إفادتي بآخر المستجدات وموعد المعاينة / التوصيل؟`;
-  const phone = "201099887766";
+  const phone = "201006367690";
   const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   window.open(url, "_blank");
 }
