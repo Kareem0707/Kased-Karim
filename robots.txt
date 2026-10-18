@@ -1,0 +1,10 @@
+# robots.txt for Kased Karim Lighting
+# https://www.kasedkarim.com
+
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://www.kasedkarim.com/sitemap.xml
