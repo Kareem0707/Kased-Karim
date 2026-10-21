@@ -526,6 +526,7 @@ class KasedKarimDB {
     }
 
     // 3. Fallback Cloud Storage Bins
+    for (const binUrl of this.cloudBins) {
       promises.push(
         (async () => {
           try {
