@@ -87,6 +87,9 @@ class KasedKarimDB {
     this.knownOrderIds = new Set();
     this.audioCtx = null;
     
+    this.restfulProductsUrl = "https://api.restful-api.dev/objects/ff808181a09d98f701a15f3c485443ca";
+    this.restfulOrdersUrl = "https://api.restful-api.dev/objects/ff808181a09d98f701a15f3c2b4443c9";
+
     this.cloudBins = [
       "https://extendsclass.com/api/json-storage/bin/faabcdf",
       "https://extendsclass.com/api/json-storage/bin/fdeedbd"
@@ -220,7 +223,7 @@ class KasedKarimDB {
       try {
         const endpoint = this.getCloudApiEndpoint(`/api/products?t=${t}`);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4500);
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
 
         const res = await fetch(endpoint, {
           signal: controller.signal,
@@ -235,13 +238,36 @@ class KasedKarimDB {
 
         if (res.ok) {
           const data = await res.json();
-          if (data && data.success && Array.isArray(data.products)) {
+          if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
             cloudProducts = data.products;
           }
         }
       } catch (errApi) {}
 
-      // 2. Direct Cloud Storage Bins Fallback
+      // 2. Direct Primary Cloud Storage (restful-api.dev)
+      if (!cloudProducts && this.restfulProductsUrl) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
+          const restRes = await fetch(`${this.restfulProductsUrl}?t=${t}`, {
+            signal: controller.signal,
+            cache: "no-store",
+            headers: {
+              "Accept": "application/json",
+              "Cache-Control": "no-cache, no-store"
+            }
+          });
+          clearTimeout(timeoutId);
+          if (restRes.ok) {
+            const restData = await restRes.json();
+            if (restData && restData.data && Array.isArray(restData.data.products)) {
+              cloudProducts = restData.data.products;
+            }
+          }
+        } catch (errRest) {}
+      }
+
+      // 3. Direct Cloud Storage Bins Fallback
       if (!cloudProducts) {
         for (const binUrl of this.cloudBins) {
           try {
@@ -335,7 +361,31 @@ class KasedKarimDB {
         }
       } catch (errApi) {}
 
-      // 2. Direct Cloud Storage Bins Fallback (if serverless API had delay or offline)
+      // 2. Direct Primary Cloud Storage (restful-api.dev)
+      if ((!orders || orders.length === 0) && this.restfulOrdersUrl) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
+          const restRes = await fetch(`${this.restfulOrdersUrl}?t=${t}`, {
+            signal: controller.signal,
+            cache: "no-store",
+            headers: {
+              "Accept": "application/json",
+              "Cache-Control": "no-cache, no-store"
+            }
+          });
+          clearTimeout(timeoutId);
+          if (restRes.ok) {
+            const restData = await restRes.json();
+            if (restData && restData.data && Array.isArray(restData.data.orders)) {
+              orders = restData.data.orders;
+              this.cloudProvider = "Restful Cloud Engine";
+            }
+          }
+        } catch (errRest) {}
+      }
+
+      // 3. Direct Cloud Storage Bins Fallback (if serverless API had delay or offline)
       if (!orders || orders.length === 0) {
         for (const binUrl of this.cloudBins) {
           try {
@@ -428,8 +478,36 @@ class KasedKarimDB {
       );
     } catch (e) {}
 
-    // 2. Direct Cloud Storage Bins (Parallel guarantee for instant persistence)
-    for (const binUrl of this.cloudBins) {
+    // 2. Direct Primary Cloud Storage (restful-api.dev)
+    if (this.restfulOrdersUrl) {
+      promises.push(
+        (async () => {
+          try {
+            const restRes = await fetch(`${this.restfulOrdersUrl}?t=${Date.now()}`, { cache: "no-store" });
+            if (restRes.ok) {
+              const restData = await restRes.json();
+              const ordersList = (restData && restData.data && Array.isArray(restData.data.orders))
+                ? restData.data.orders
+                : [];
+              if (!ordersList.some(o => o.id === order.id)) {
+                ordersList.unshift(order);
+              }
+              await fetch(this.restfulOrdersUrl, {
+                method: "PUT",
+                cache: "no-store",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  name: "kased_karim_orders",
+                  data: { orders: ordersList }
+                })
+              });
+            }
+          } catch (e) {}
+        })()
+      );
+    }
+
+    // 3. Fallback Cloud Storage Bins
       promises.push(
         (async () => {
           try {
@@ -511,6 +589,7 @@ class KasedKarimDB {
 
   async sendProductToCloud(product) {
     try {
+      // 1. Send to Vercel API
       const endpoint = this.getCloudApiEndpoint("/api/products");
       fetch(endpoint, {
         method: "POST",
@@ -519,6 +598,33 @@ class KasedKarimDB {
         body: JSON.stringify(product)
       }).catch(() => null);
 
+      // 2. Direct Sync to restful-api.dev Primary Storage
+      if (this.restfulProductsUrl) {
+        fetch(this.restfulProductsUrl + "?t=" + Date.now(), { cache: "no-store" })
+          .then(r => r.json())
+          .then(restData => {
+            const list = (restData && restData.data && Array.isArray(restData.data.products))
+              ? restData.data.products
+              : [];
+            const idx = list.findIndex(p => p.id === product.id);
+            if (idx > -1) {
+              list[idx] = product;
+            } else {
+              list.unshift(product);
+            }
+            fetch(this.restfulProductsUrl, {
+              method: "PUT",
+              cache: "no-store",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: "kased_karim_products_bin",
+                data: { products: list }
+              })
+            }).catch(() => null);
+          }).catch(() => null);
+      }
+
+      // 3. Fallback to extendsclass bins
       for (const binUrl of this.cloudBins) {
         fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" })
           .then(r => r.json())
@@ -545,6 +651,25 @@ class KasedKarimDB {
     try {
       const endpoint = this.getCloudApiEndpoint(`/api/products?id=${productId}`);
       fetch(endpoint, { method: "DELETE", cache: "no-store" }).catch(() => null);
+
+      if (this.restfulProductsUrl) {
+        fetch(this.restfulProductsUrl + "?t=" + Date.now(), { cache: "no-store" })
+          .then(r => r.json())
+          .then(restData => {
+            if (restData && restData.data && Array.isArray(restData.data.products)) {
+              const list = restData.data.products.filter(p => p.id !== productId);
+              fetch(this.restfulProductsUrl, {
+                method: "PUT",
+                cache: "no-store",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  name: "kased_karim_products_bin",
+                  data: { products: list }
+                })
+              }).catch(() => null);
+            }
+          }).catch(() => null);
+      }
 
       for (const binUrl of this.cloudBins) {
         fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" })

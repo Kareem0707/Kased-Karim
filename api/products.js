@@ -5,14 +5,37 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const CLOUD_BINS = [
+const RESTFUL_OBJECT_ID = "ff808181a09d98f701a15f3c485443ca";
+const RESTFUL_ENDPOINT = `https://api.restful-api.dev/objects/${RESTFUL_OBJECT_ID}`;
+
+const FALLBACK_BINS = [
   "https://extendsclass.com/api/json-storage/bin/faabcdf",
   "https://extendsclass.com/api/json-storage/bin/fdeedbd"
 ];
 
 async function fetchFromBins() {
   const t = Date.now();
-  for (const binUrl of CLOUD_BINS) {
+  
+  // 1. Primary: restful-api.dev
+  try {
+    const res = await fetch(`${RESTFUL_ENDPOINT}?t=${t}`, {
+      cache: "no-store",
+      headers: {
+        "Accept": "application/json",
+        "Cache-Control": "no-cache, no-store",
+        "Pragma": "no-cache"
+      }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.data && Array.isArray(data.data.products)) {
+        return { data: { products: data.data.products }, isRestful: true };
+      }
+    }
+  } catch (e) {}
+
+  // 2. Secondary fallback: extendsclass bins
+  for (const binUrl of FALLBACK_BINS) {
     try {
       const res = await fetch(`${binUrl}?t=${t}`, {
         cache: "no-store",
@@ -25,27 +48,49 @@ async function fetchFromBins() {
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.products)) {
-          return { data, activeBin: binUrl };
+          return { data, isRestful: false };
         }
       }
     } catch (e) {}
   }
-  return { data: { orders: [], products: [] }, activeBin: CLOUD_BINS[0] };
+  return { data: { products: [] }, isRestful: true };
 }
 
 async function saveToBins(binData) {
-  const jsonStr = JSON.stringify(binData);
-  const promises = CLOUD_BINS.map(binUrl =>
-    fetch(binUrl, {
+  const promises = [];
+
+  // 1. Primary: restful-api.dev PUT
+  promises.push(
+    fetch(RESTFUL_ENDPOINT, {
       method: "PUT",
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
         "Cache-Control": "no-cache, no-store"
       },
-      body: jsonStr
-    }).catch(err => console.warn("Save bin err:", err.message))
+      body: JSON.stringify({
+        name: "kased_karim_products_bin",
+        data: { products: binData.products || [] }
+      })
+    }).catch(err => console.warn("Save restful err:", err.message))
   );
+
+  // 2. Secondary fallback: extendsclass PUT
+  const jsonStr = JSON.stringify(binData);
+  FALLBACK_BINS.forEach(binUrl => {
+    promises.push(
+      fetch(binUrl, {
+        method: "PUT",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store"
+        },
+        body: jsonStr
+      }).catch(err => console.warn("Save fallback bin err:", err.message))
+    );
+  });
+
   await Promise.allSettled(promises);
 }
 

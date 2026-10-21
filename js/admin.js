@@ -708,7 +708,7 @@ function triggerFileInput(id) {
   if (el) el.click();
 }
 
-function compressImageFile(file, maxWidth = 1200, maxHeight = 1200, quality = 0.85) {
+function compressImageFile(file, maxWidth = 800, maxHeight = 800, quality = 0.75) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
