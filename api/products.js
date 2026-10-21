@@ -15,7 +15,7 @@ function getFirebaseUrl(req) {
   if (headerUrl && typeof headerUrl === "string" && headerUrl.startsWith("http")) {
     return headerUrl.trim().replace(/\/$/, "");
   }
-  return null;
+  return "https://kased-karim-default-rtdb.firebaseio.com";
 }
 
 // 1. Fetch Products from Cloud

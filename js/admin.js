@@ -1436,7 +1436,7 @@ function setupAdminListeners() {
 // 8. CLOUD DATABASE & VERCEL INTEGRATION CONTROLLERS
 // ----------------------------------------------------------------------------
 async function renderCloudDbSettings() {
-  const currentUrl = localStorage.getItem("kk_custom_cloud_url") || "";
+  const currentUrl = localStorage.getItem("kk_custom_cloud_url") || (window.KK_DB ? window.KK_DB.getCustomCloudUrl() : "https://kased-karim-default-rtdb.firebaseio.com");
   const inputEl = document.getElementById("cloudDbUrlInput");
   const statusEl = document.getElementById("cloudDbStatusPill");
   if (inputEl) inputEl.value = currentUrl;

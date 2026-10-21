@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-cloud-db-url, x-firebase-url");
   
   const hasKV = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-  const firebaseUrl = process.env.FIREBASE_DB_URL || req.headers["x-cloud-db-url"] || req.headers["x-firebase-url"];
+  const firebaseUrl = process.env.FIREBASE_DB_URL || req.headers["x-cloud-db-url"] || req.headers["x-firebase-url"] || "https://kased-karim-default-rtdb.firebaseio.com";
   const hasFirebase = !!(firebaseUrl && firebaseUrl.trim());
 
   let firebasePing = null;

@@ -210,9 +210,11 @@ class KasedKarimDB {
   // --------------------------------------------------------------------------
   getCustomCloudUrl() {
     try {
-      return (localStorage.getItem(DB_KEYS.CUSTOM_CLOUD_URL) || "").trim().replace(/\/$/, "");
+      const saved = localStorage.getItem(DB_KEYS.CUSTOM_CLOUD_URL);
+      if (saved && saved.trim()) return saved.trim().replace(/\/$/, "");
+      return "https://kased-karim-default-rtdb.firebaseio.com";
     } catch (e) {
-      return "";
+      return "https://kased-karim-default-rtdb.firebaseio.com";
     }
   }
 
