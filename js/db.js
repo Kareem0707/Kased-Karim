@@ -616,6 +616,26 @@ class KasedKarimDB {
         body: JSON.stringify(product)
       }).catch(() => null);
 
+      // Clean payload to prevent oversized requests
+      const safeProduct = {
+        id: product.id,
+        name: product.name,
+        enName: product.enName || "",
+        category: product.category || "pendants",
+        categoryName: product.categoryName || "دلايات",
+        style: product.style || "",
+        price: parseFloat(product.price) || 0,
+        originalPrice: product.originalPrice ? parseFloat(product.originalPrice) : null,
+        warranty: product.warranty || "",
+        image: product.image || "",
+        secondaryImage: product.secondaryImage || "",
+        description: product.description || "",
+        isNew: !!product.isNew,
+        isExclusive: !!product.isExclusive,
+        isBestSeller: !!product.isBestSeller,
+        specs: product.specs || {}
+      };
+
       // 2. Direct Sync to restful-api.dev Primary Storage
       if (this.restfulProductsUrl) {
         fetch(this.restfulProductsUrl + "?t=" + Date.now(), { cache: "no-store" })
@@ -624,11 +644,11 @@ class KasedKarimDB {
             const list = (restData && restData.data && Array.isArray(restData.data.products))
               ? restData.data.products
               : [];
-            const idx = list.findIndex(p => p.id === product.id);
+            const idx = list.findIndex(p => p.id === safeProduct.id);
             if (idx > -1) {
-              list[idx] = product;
+              list[idx] = safeProduct;
             } else {
-              list.unshift(product);
+              list.unshift(safeProduct);
             }
             fetch(this.restfulProductsUrl, {
               method: "PUT",
