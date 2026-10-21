@@ -198,6 +198,33 @@ const INITIAL_PRODUCTS = [
     },
     suitableRooms: ["ممرات الفلل الداخلية", "جوانب المرايا", "صالونات المعيشة"]
   },
+  {
+    id: "kk-79050",
+    name: "بيزك ثنائي",
+    enName: "Basic Double Sconce",
+    category: "wall-sconces",
+    categoryName: "أباليك",
+    style: "مودرن ديكوري",
+    price: 350,
+    originalPrice: 450,
+    isExclusive: false,
+    isNew: true,
+    rating: 5.0,
+    reviewsCount: 1,
+    image: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=1200&q=80",
+    secondaryImage: "",
+    description: "أبليك إضاءة بيزك ثنائي مودرن للحوائط والممرات.",
+    specs: {
+      dimensions: "مقاس عملي مناسب لجميع المساحات",
+      material: "معدن معالج مقاوم للصدأ",
+      colorTemp: "3000K دافئ",
+      wattage: "LED موفر للطاقة",
+      cri: "CRI > 90",
+      voltage: "220V",
+      warranty: "3 سنوات ضمان شامل"
+    },
+    suitableRooms: ["الممرات والمداخل", "جوانب السرير", "غرف المعيشة"]
+  },
 
   // 4. سبوت لايت (spotlights)
   {
@@ -533,6 +560,33 @@ const INITIAL_PRODUCTS = [
       warranty: "5 سنوات ضمان"
     },
     suitableRooms: ["غرف النوم والمعيشة", "ممرات الفلل", "الحمامات الماستر"]
+  },
+  {
+    id: "kk-13923",
+    name: "بانل",
+    enName: "LED Slim Architectural Panel",
+    category: "led-panels",
+    categoryName: "بانلات",
+    style: "مودرن غاطس",
+    price: 800,
+    originalPrice: 950,
+    isExclusive: false,
+    isNew: true,
+    rating: 5.0,
+    reviewsCount: 1,
+    image: "https://images.unsplash.com/photo-1540518614846-7ede433c4ef7?auto=format&fit=crop&w=1200&q=80",
+    secondaryImage: "",
+    description: "بانل إضاءة معمارية موفرة للطاقة وناعمة الانتشار.",
+    specs: {
+      dimensions: "مقاس قياسي مدمج",
+      material: "ألمنيوم داي كاست عالي الكفاءة",
+      colorTemp: "3000K دافئ / 4000K طبيعي",
+      wattage: "LED موفر للطاقة",
+      cri: "CRI > 90",
+      voltage: "220V",
+      warranty: "3 سنوات ضمان معتمد"
+    },
+    suitableRooms: ["غرف النوم والمعيشة", "الممرات واللوبي", "المطابخ والمكاتب"]
   },
 
   // 10. كشافات (floodlights)

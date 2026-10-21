@@ -102,15 +102,33 @@ class KasedKarimDB {
 
   // 1. Initialize Database & Local Cache
   initDatabase() {
-    // Initialize Products
-    if (!localStorage.getItem(DB_KEYS.PRODUCTS)) {
-      const products = INITIAL_PRODUCTS.map((p, idx) => ({
+    // Initialize Products: always ensure all INITIAL_PRODUCTS exist in cache
+    let cachedProducts = [];
+    try {
+      const raw = localStorage.getItem(DB_KEYS.PRODUCTS);
+      cachedProducts = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      cachedProducts = [];
+    }
+
+    const prodMap = new Map();
+    // 1. Base catalog first
+    INITIAL_PRODUCTS.forEach((p, idx) => {
+      prodMap.set(p.id, {
         ...p,
         salesCount: [34, 28, 22, 19, 15, 45, 12, 17, 14, 25, 9, 11][idx] || 10,
         warranty: p.specs?.warranty || "5 سنوات ضمان معتمد"
-      }));
-      localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
+      });
+    });
+
+    // 2. Overlay any previously stored local/custom products
+    if (Array.isArray(cachedProducts)) {
+      cachedProducts.forEach(p => {
+        prodMap.set(p.id, { ...prodMap.get(p.id), ...p });
+      });
     }
+
+    localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(Array.from(prodMap.values())));
 
     // Initialize Orders - sanitize and remove old dummy placeholder orders
     let localOrders = [];
