@@ -28,6 +28,7 @@ function initApp() {
   renderCategoryTabs();
   renderProducts();
   setupEventListeners();
+  setupCategoryTabsScroll();
   updateCartUI();
   handleHeaderScroll();
 }
@@ -101,8 +102,15 @@ function renderCategoryTabs() {
       STATE.visibleCount = 6;
       renderCategoryTabs();
       renderProducts();
+
+      // Smoothly bring clicked tab into view
+      btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     });
   });
+
+  if (typeof updateCategoryScrollButtons === "function") {
+    updateCategoryScrollButtons();
+  }
 }
 
 // 4. Render Product Cards Grid (With Luxury Pagination / Load More)
@@ -662,6 +670,119 @@ function setupEventListeners() {
     renderCategoryTabs();
     renderProducts();
   });
+}
+
+// ----------------------------------------------------------------------------
+// 11b. CATEGORY TABS HORIZONTAL SCROLL & ARROW CONTROLLERS
+// ----------------------------------------------------------------------------
+let updateCategoryScrollButtons = null;
+
+function setupCategoryTabsScroll() {
+  const container = document.getElementById("categoryTabs");
+  const prevBtn = document.getElementById("categoryScrollPrev");
+  const nextBtn = document.getElementById("categoryScrollNext");
+  if (!container) return;
+
+  updateCategoryScrollButtons = function() {
+    const maxScroll = container.scrollWidth - container.clientWidth;
+    if (maxScroll <= 5) {
+      if (prevBtn) prevBtn.classList.add("disabled");
+      if (nextBtn) nextBtn.classList.add("disabled");
+      return;
+    }
+
+    const sl = container.scrollLeft;
+    // In RTL:
+    // If negative scroll (Chrome/Firefox/Edge on Windows):
+    // 0 is rightmost (start of categories: الكل المعروض، أباجورات...)
+    // -maxScroll is leftmost (end of categories: بانلات، كشافات، أعواد البروفايل، درج سلم)
+    if (sl < 0) {
+      const atRight = Math.abs(sl) < 10;
+      const atLeft = Math.abs(Math.abs(sl) - maxScroll) < 15;
+      if (prevBtn) prevBtn.classList.toggle("disabled", atRight);
+      if (nextBtn) nextBtn.classList.toggle("disabled", atLeft);
+    } else {
+      // Positive scroll modes
+      if (prevBtn) prevBtn.classList.toggle("disabled", sl <= 10);
+      if (nextBtn) nextBtn.classList.toggle("disabled", sl >= maxScroll - 15);
+    }
+  };
+
+  // Click Next (reveals the rest of categories to the left: بانلات، كشافات، أعواد البروفايل، درج سلم)
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      const step = 340;
+      const prevVal = container.scrollLeft;
+      container.scrollBy({ left: -step, behavior: "smooth" });
+      setTimeout(() => {
+        if (container.scrollLeft === prevVal) {
+          container.scrollBy({ left: step, behavior: "smooth" });
+        }
+        updateCategoryScrollButtons();
+      }, 60);
+    });
+  }
+
+  // Click Prev (returns to categories on the right: الكل المعروض، أباجورات...)
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+      const step = 340;
+      const prevVal = container.scrollLeft;
+      container.scrollBy({ left: step, behavior: "smooth" });
+      setTimeout(() => {
+        if (container.scrollLeft === prevVal) {
+          container.scrollBy({ left: -step, behavior: "smooth" });
+        }
+        updateCategoryScrollButtons();
+      }, 60);
+    });
+  }
+
+  // Mouse wheel listener: roll wheel up/down to scroll categories left/right
+  container.addEventListener("wheel", (e) => {
+    if (Math.abs(e.deltaX) < Math.abs(e.deltaY)) {
+      e.preventDefault();
+      container.scrollLeft += (e.deltaY > 0 ? 90 : -90);
+      updateCategoryScrollButtons();
+    }
+  }, { passive: false });
+
+  // Mouse drag support
+  let isDown = false;
+  let startX = 0;
+  let scrollPos = 0;
+
+  container.addEventListener("mousedown", (e) => {
+    if (e.target.closest("button")) return;
+    isDown = true;
+    container.classList.add("dragging");
+    startX = e.pageX - container.offsetLeft;
+    scrollPos = container.scrollLeft;
+  });
+
+  window.addEventListener("mouseup", () => {
+    isDown = false;
+    container.classList.remove("dragging");
+  });
+
+  container.addEventListener("mousemove", (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - container.offsetLeft;
+    const walk = (x - startX) * 1.5;
+    container.scrollLeft = scrollPos - walk;
+    updateCategoryScrollButtons();
+  });
+
+  container.addEventListener("scroll", () => {
+    if (updateCategoryScrollButtons) updateCategoryScrollButtons();
+  }, { passive: true });
+
+  window.addEventListener("resize", () => {
+    if (updateCategoryScrollButtons) updateCategoryScrollButtons();
+  }, { passive: true });
+
+  setTimeout(updateCategoryScrollButtons, 200);
 }
 
 // ----------------------------------------------------------------------------

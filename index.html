@@ -80,9 +80,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=4.4">
-  <link rel="stylesheet" href="css/components.css?v=4.4">
-  <link rel="stylesheet" href="css/admin.css?v=4.4">
+  <link rel="stylesheet" href="css/style.css?v=8.0">
+  <link rel="stylesheet" href="css/components.css?v=8.0">
+  <link rel="stylesheet" href="css/admin.css?v=8.0">
 
   <!-- Schema.org JSON-LD Structured Data for Google Knowledge Graph & Local Pack -->
   <script type="application/ld+json">
@@ -507,8 +507,18 @@
 
       <!-- Category Filter Tabs -->
       <div class="catalog-toolbar">
-        <div class="category-tabs" id="categoryTabs">
-          <!-- Rendered dynamically by app.js -->
+        <div class="category-tabs-wrapper">
+          <button type="button" class="category-scroll-btn scroll-prev" id="categoryScrollPrev" aria-label="السابق" title="الأقسام السابقة">
+            <i class="fas fa-chevron-right"></i>
+          </button>
+          
+          <div class="category-tabs" id="categoryTabs">
+            <!-- Rendered dynamically by app.js -->
+          </div>
+
+          <button type="button" class="category-scroll-btn scroll-next" id="categoryScrollNext" aria-label="التالي" title="عرض باقي أقسام الإضاءة">
+            <i class="fas fa-chevron-left"></i>
+          </button>
         </div>
       </div>
 
@@ -1100,9 +1110,9 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/data.js?v=7.0"></script>
-  <script src="js/db.js?v=7.0"></script>
-  <script src="js/app.js?v=7.0"></script>
-  <script src="js/admin.js?v=7.0"></script>
+  <script src="js/data.js?v=8.0"></script>
+  <script src="js/db.js?v=8.0"></script>
+  <script src="js/app.js?v=8.0"></script>
+  <script src="js/admin.js?v=8.0"></script>
 </body>
 </html>
