@@ -700,6 +700,20 @@ function deleteProduct(productId) {
   }
 }
 
+function exportCatalogData() {
+  if (!window.KK_DB) return;
+  const prods = window.KK_DB.getProducts();
+  const jsonStr = "const INITIAL_PRODUCTS = " + JSON.stringify(prods, null, 2) + ";\n";
+  const blob = new Blob([jsonStr], { type: "application/javascript;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `kased_karim_catalog_${new Date().toISOString().slice(0, 10)}.js`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast("تم تصدير ملف الكتالوج بنجاح!");
+}
+
 // ----------------------------------------------------------------------------
 // 6. DRAG & DROP IMAGE UPLOAD CONTROLLERS & IMAGE COMPRESSION
 // ----------------------------------------------------------------------------
