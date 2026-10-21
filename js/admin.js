@@ -976,10 +976,10 @@ function handleAdminAddProductForm(e) {
 
   // 2. Optional Fields (No default values added - keep empty if user did not provide them)
   const enName = form.adminUnitEnName ? form.adminUnitEnName.value.trim() : "";
-  const category = form.adminUnitCategory ? form.adminUnitCategory.value : "chandeliers";
+  const category = form.adminUnitCategory ? form.adminUnitCategory.value : "pendants";
   const categoryName = form.adminUnitCategory && form.adminUnitCategory.selectedIndex >= 0
     ? form.adminUnitCategory.options[form.adminUnitCategory.selectedIndex].text
-    : "ثريات ونجف فاخر";
+    : "دلايات";
 
   const style = form.adminUnitStyle ? form.adminUnitStyle.value.trim() : "";
   const originalPrice = form.adminUnitOldPrice && form.adminUnitOldPrice.value
@@ -1410,6 +1410,11 @@ function setupAdminListeners() {
 
   setupCheckoutLiveValidation();
   setupImageDropZones();
+
+  window.addEventListener("kk_products_updated", () => {
+    renderAdminOverview();
+    renderAdminInventory();
+  });
 }
 
 // ----------------------------------------------------------------------------

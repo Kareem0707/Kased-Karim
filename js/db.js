@@ -36,12 +36,12 @@ const SEED_ORDERS = [
       },
       {
         id: "kk-003",
-        name: "ثريا الهالة المضيئة العائمة المعاصرة",
-        enName: "Aurora Floating Halo Chandelier",
+        name: "دلاية الهالة المضيئة العائمة المعاصرة",
+        enName: "Aurora Floating Halo Pendant",
         price: 43200,
         qty: 1,
         image: "https://images.unsplash.com/photo-1517991104123-1d56a6e81ed9?auto=format&fit=crop&w=1200&q=80",
-        categoryName: "ثريات ونجف فاخر"
+        categoryName: "دلايات فاخرة"
       }
     ],
     subtotal: 61600,
@@ -197,14 +197,100 @@ class KasedKarimDB {
   // CLOUD DATABASE SYNC ENGINE (Zero-Cache Real-Time Dual Sync)
   // --------------------------------------------------------------------------
   initCloudSync() {
-    // 1. Immediate initial sync on load
+    // 1. Immediate initial sync on load (Orders and Products)
     this.syncFromCloud(false);
+    this.syncProductsFromCloud(false);
 
-    // 2. Continuous fast background poll (every 3 seconds)
-    // Ensures admin gets notified in real time when any customer orders from ANY phone or browser!
+    // 2. Continuous fast background poll (every 3 seconds for orders, 15 seconds for products)
     setInterval(() => {
       this.syncFromCloud(true);
     }, 3000);
+
+    setInterval(() => {
+      this.syncProductsFromCloud(true);
+    }, 15000);
+  }
+
+  async syncProductsFromCloud(isBackground = false) {
+    try {
+      let cloudProducts = null;
+      const t = Date.now();
+
+      // 1. Try Vercel Serverless Endpoint
+      try {
+        const endpoint = this.getCloudApiEndpoint(`/api/products?t=${t}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4500);
+
+        const res = await fetch(endpoint, {
+          signal: controller.signal,
+          cache: "no-store",
+          headers: {
+            "Accept": "application/json",
+            "Cache-Control": "no-cache, no-store",
+            "Pragma": "no-cache"
+          }
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.products)) {
+            cloudProducts = data.products;
+          }
+        }
+      } catch (errApi) {}
+
+      // 2. Direct Cloud Storage Bins Fallback
+      if (!cloudProducts) {
+        for (const binUrl of this.cloudBins) {
+          try {
+            const binRes = await fetch(`${binUrl}?t=${t}`, {
+              cache: "no-store",
+              headers: {
+                "Accept": "application/json",
+                "Cache-Control": "no-cache, no-store"
+              }
+            });
+            if (binRes.ok) {
+              const binData = await binRes.json();
+              if (binData && Array.isArray(binData.products)) {
+                cloudProducts = binData.products;
+                break;
+              }
+            }
+          } catch (errBin) {}
+        }
+      }
+
+      if (cloudProducts && Array.isArray(cloudProducts) && cloudProducts.length > 0) {
+        const currentProducts = this.getProducts();
+        const productMap = new Map();
+
+        // Base products first
+        INITIAL_PRODUCTS.forEach(p => productMap.set(p.id, p));
+
+        // Existing local custom products
+        currentProducts.forEach(p => productMap.set(p.id, p));
+
+        // Merge incoming cloud products
+        let hasChanges = false;
+        cloudProducts.forEach(cp => {
+          if (!productMap.has(cp.id) || JSON.stringify(productMap.get(cp.id)) !== JSON.stringify(cp)) {
+            productMap.set(cp.id, cp);
+            hasChanges = true;
+          }
+        });
+
+        if (hasChanges) {
+          const mergedList = Array.from(productMap.values());
+          localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(mergedList));
+          window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: { merged: true, products: mergedList } }));
+        }
+      }
+    } catch (e) {
+      console.warn("Product sync note:", e.message);
+    }
   }
 
   getCloudApiEndpoint(route) {
@@ -502,8 +588,8 @@ class KasedKarimDB {
       id: "kk-" + Date.now().toString().slice(-5),
       name: productData.name,
       enName: productData.enName || "",
-      category: productData.category || "chandeliers",
-      categoryName: productData.categoryName || "ثريات ونجف فاخر",
+      category: productData.category || "pendants",
+      categoryName: productData.categoryName || "دلايات فاخرة",
       style: productData.style || "",
       price: parseFloat(productData.price) || 0,
       originalPrice: productData.originalPrice ? parseFloat(productData.originalPrice) : null,

@@ -655,6 +655,13 @@ function setupEventListeners() {
       mobileDrawer.classList.toggle("active");
     });
   }
+
+  // Real-time Cloud Sync Listener for Products
+  window.addEventListener("kk_products_updated", () => {
+    loadProducts();
+    renderCategoryTabs();
+    renderProducts();
+  });
 }
 
 // ----------------------------------------------------------------------------

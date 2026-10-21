@@ -63,8 +63,8 @@ const INITIAL_PRODUCTS = [
   // 2. دلايات (pendants)
   {
     id: "kk-001",
-    name: "ثريا ودلاية كريستال كاسكيد الإمبراطورية",
-    enName: "Cascade Grand Imperial Chandelier & Pendant",
+    name: "دلاية كريستال كاسكيد الإمبراطورية",
+    enName: "Cascade Grand Imperial Crystal Pendant",
     category: "pendants",
     categoryName: "دلايات",
     style: "نيوكلاسيك فاخر",
@@ -76,7 +76,7 @@ const INITIAL_PRODUCTS = [
     reviewsCount: 24,
     image: "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=1200&q=80",
     secondaryImage: "https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1200&q=80",
-    description: "دلاية ثريا استثنائية صُممت خصيصاً للقصور والفلل ذات الأسقف المرتفعة (Double Height). تتألف من آلاف حبات الكريستال النقي مع هيكل نحاسي مطلي بتقنية PVD.",
+    description: "دلاية كريستالية استثنائية صُممت خصيصاً للقصور والفلل ذات الأسقف المرتفعة (Double Height). تتألف من آلاف حبات الكريستال النقي مع هيكل نحاسي مطلي بتقنية PVD.",
     specs: {
       dimensions: "قطر 120 سم × ارتفاع 260 سم (قابل للتعديل)",
       material: "كريستال نقي منشور + نحاس مذهب فاخر",
