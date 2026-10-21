@@ -2,13 +2,15 @@
  * KASED KARIM LIGHTING - SHEIKH ZAYED
  * Hybrid Real-Time Cloud Database Engine (js/db.js)
  * متصل بنظام سحابي لحظي ومزدوج لضمان وصول واستقبال الطلبات فورياً عبر جميع الأجهزة والهواتف
+ * يدعم Firebase Realtime Database (Google Cloud) و Vercel Serverless KV
  */
 
 const DB_KEYS = {
   PRODUCTS: "kased_karim_db_products_v3",
   ORDERS: "kased_karim_db_orders_v2",
   SETTINGS: "kased_karim_db_settings_v2",
-  CLOUD_CONFIG: "kased_karim_cloud_config_v1"
+  CLOUD_CONFIG: "kased_karim_cloud_config_v1",
+  CUSTOM_CLOUD_URL: "kk_custom_cloud_url"
 };
 
 // Real Verified Orders from the Showroom (No dummy placeholder data)
@@ -87,14 +89,6 @@ class KasedKarimDB {
     this.knownOrderIds = new Set();
     this.audioCtx = null;
     
-    this.restfulProductsUrl = "https://api.restful-api.dev/objects/ff808181a09d98f701a15f3c485443ca";
-    this.restfulOrdersUrl = "https://api.restful-api.dev/objects/ff808181a09d98f701a15f3c2b4443c9";
-
-    this.cloudBins = [
-      "https://extendsclass.com/api/json-storage/bin/faabcdf",
-      "https://extendsclass.com/api/json-storage/bin/fdeedbd"
-    ];
-
     this.initDatabase();
     this.setupAudioUnlock();
     this.initCloudSync();
@@ -102,7 +96,6 @@ class KasedKarimDB {
 
   // 1. Initialize Database & Local Cache
   initDatabase() {
-    // Initialize Products: always ensure all INITIAL_PRODUCTS exist in cache
     let cachedProducts = [];
     try {
       const raw = localStorage.getItem(DB_KEYS.PRODUCTS);
@@ -139,7 +132,6 @@ class KasedKarimDB {
       localOrders = [];
     }
 
-    // Strictly filter out any old demo dummy orders
     localOrders = localOrders.filter(o => o.id !== "ORD-8941" && o.id !== "ORD-8820");
 
     if (!localOrders || localOrders.length === 0) {
@@ -147,7 +139,6 @@ class KasedKarimDB {
     }
     localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(localOrders));
 
-    // Populate known orders set
     localOrders.forEach(o => this.knownOrderIds.add(o.id));
   }
 
@@ -215,109 +206,122 @@ class KasedKarimDB {
   }
 
   // --------------------------------------------------------------------------
-  // CLOUD DATABASE SYNC ENGINE (Zero-Cache Real-Time Dual Sync)
+  // CLOUD DATABASE SETTINGS & HEADERS
+  // --------------------------------------------------------------------------
+  getCustomCloudUrl() {
+    try {
+      return (localStorage.getItem(DB_KEYS.CUSTOM_CLOUD_URL) || "").trim().replace(/\/$/, "");
+    } catch (e) {
+      return "";
+    }
+  }
+
+  setCustomCloudUrl(url) {
+    if (url && typeof url === "string") {
+      localStorage.setItem(DB_KEYS.CUSTOM_CLOUD_URL, url.trim());
+    } else {
+      localStorage.removeItem(DB_KEYS.CUSTOM_CLOUD_URL);
+    }
+  }
+
+  getCloudHeaders() {
+    const headers = {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "Cache-Control": "no-cache, no-store",
+      "Pragma": "no-cache"
+    };
+    const customUrl = this.getCustomCloudUrl();
+    if (customUrl) {
+      headers["x-cloud-db-url"] = customUrl;
+      headers["x-firebase-url"] = customUrl;
+    }
+    return headers;
+  }
+
+  // --------------------------------------------------------------------------
+  // CLOUD DATABASE SYNC ENGINE
   // --------------------------------------------------------------------------
   initCloudSync() {
     // 1. Immediate initial sync on load (Orders and Products)
     this.syncFromCloud(false);
     this.syncProductsFromCloud(false);
 
-    // 2. Continuous fast background poll (every 3 seconds for orders, 15 seconds for products)
+    // 2. Continuous fast background poll (every 4 seconds for orders, 15 seconds for products)
     setInterval(() => {
       this.syncFromCloud(true);
-    }, 3000);
+    }, 4000);
 
     setInterval(() => {
       this.syncProductsFromCloud(true);
     }, 15000);
   }
 
+  // Sync Products from Cloud to Local
   async syncProductsFromCloud(isBackground = false) {
     try {
       let cloudProducts = null;
       const t = Date.now();
+      const customUrl = this.getCustomCloudUrl();
 
-      // 1. Try Vercel Serverless Endpoint
-      try {
-        const endpoint = this.getCloudApiEndpoint(`/api/products?t=${t}`);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-        const res = await fetch(endpoint, {
-          signal: controller.signal,
-          cache: "no-store",
-          headers: {
-            "Accept": "application/json",
-            "Cache-Control": "no-cache, no-store",
-            "Pragma": "no-cache"
-          }
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
-            cloudProducts = data.products;
-          }
-        }
-      } catch (errApi) {}
-
-      // 2. Direct Primary Cloud Storage (restful-api.dev)
-      if (!cloudProducts && this.restfulProductsUrl) {
+      // 1. Direct Firebase Realtime Database Fetch (if configured)
+      if (customUrl) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
-          const restRes = await fetch(`${this.restfulProductsUrl}?t=${t}`, {
+          const timeoutId = setTimeout(() => controller.abort(), 4500);
+          const directRes = await fetch(`${customUrl}/products.json?t=${t}`, {
             signal: controller.signal,
             cache: "no-store",
-            headers: {
-              "Accept": "application/json",
-              "Cache-Control": "no-cache, no-store"
-            }
+            headers: { "Accept": "application/json" }
           });
           clearTimeout(timeoutId);
-          if (restRes.ok) {
-            const restData = await restRes.json();
-            if (restData && restData.data && Array.isArray(restData.data.products)) {
-              cloudProducts = restData.data.products;
+          if (directRes.ok) {
+            const raw = await directRes.json();
+            if (raw) {
+              if (Array.isArray(raw)) {
+                cloudProducts = raw.filter(Boolean);
+              } else if (typeof raw === "object") {
+                cloudProducts = Object.values(raw).filter(Boolean);
+              }
+              this.cloudProvider = "Firebase Realtime DB (Direct)";
             }
           }
-        } catch (errRest) {}
+        } catch (e) {}
       }
 
-      // 3. Direct Cloud Storage Bins Fallback
-      if (!cloudProducts) {
-        for (const binUrl of this.cloudBins) {
-          try {
-            const binRes = await fetch(`${binUrl}?t=${t}`, {
-              cache: "no-store",
-              headers: {
-                "Accept": "application/json",
-                "Cache-Control": "no-cache, no-store"
-              }
-            });
-            if (binRes.ok) {
-              const binData = await binRes.json();
-              if (binData && Array.isArray(binData.products)) {
-                cloudProducts = binData.products;
-                break;
-              }
+      // 2. Vercel Serverless Endpoint /api/products
+      if (!cloudProducts || cloudProducts.length === 0) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4500);
+          const res = await fetch(`/api/products?t=${t}`, {
+            signal: controller.signal,
+            cache: "no-store",
+            headers: this.getCloudHeaders()
+          });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
+              cloudProducts = data.products;
+              this.cloudProvider = data.provider === "firebase-rtdb" ? "Firebase RTDB (via Vercel)" : (data.provider === "vercel-kv" ? "Vercel KV" : "Vercel Serverless");
             }
-          } catch (errBin) {}
-        }
+          }
+        } catch (errApi) {}
       }
 
       if (cloudProducts && Array.isArray(cloudProducts) && cloudProducts.length > 0) {
         const currentProducts = this.getProducts();
         const productMap = new Map();
 
-        // Base products first
+        // 1. Base products first
         INITIAL_PRODUCTS.forEach(p => productMap.set(p.id, p));
 
-        // Existing local custom products
+        // 2. Existing local custom products
         currentProducts.forEach(p => productMap.set(p.id, p));
 
-        // Merge incoming cloud products
+        // 3. Merge incoming cloud products (Cloud is ground-truth)
         let hasChanges = false;
         cloudProducts.forEach(cp => {
           if (!productMap.has(cp.id) || JSON.stringify(productMap.get(cp.id)) !== JSON.stringify(cp)) {
@@ -337,14 +341,7 @@ class KasedKarimDB {
     }
   }
 
-  getCloudApiEndpoint(route) {
-    const savedCustom = localStorage.getItem("kk_custom_cloud_url");
-    if (savedCustom && savedCustom.trim()) {
-      return savedCustom.trim().replace(/\/$/, "") + (route.startsWith("/") ? route : "/" + route);
-    }
-    return route;
-  }
-
+  // Sync Orders from Cloud to Local
   async syncFromCloud(isBackgroundPoll = false) {
     if (this.isSyncing) return;
     this.isSyncing = true;
@@ -352,79 +349,51 @@ class KasedKarimDB {
     try {
       let orders = null;
       const t = Date.now();
+      const customUrl = this.getCustomCloudUrl();
 
-      // 1. Try Vercel Serverless Endpoint with cache-busting
-      try {
-        const endpoint = this.getCloudApiEndpoint(`/api/orders?t=${t}`);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-        const res = await fetch(endpoint, {
-          signal: controller.signal,
-          cache: "no-store",
-          headers: {
-            "Accept": "application/json",
-            "Cache-Control": "no-cache, no-store",
-            "Pragma": "no-cache"
-          }
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.success && Array.isArray(data.orders) && data.orders.length > 0) {
-            orders = data.orders;
-            this.cloudProvider = "Vercel Serverless Cloud API";
-          }
-        }
-      } catch (errApi) {}
-
-      // 2. Direct Primary Cloud Storage (restful-api.dev)
-      if ((!orders || orders.length === 0) && this.restfulOrdersUrl) {
+      // 1. Direct Firebase Realtime Database Fetch (if configured)
+      if (customUrl) {
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 4000);
-          const restRes = await fetch(`${this.restfulOrdersUrl}?t=${t}`, {
+          const directRes = await fetch(`${customUrl}/orders.json?t=${t}`, {
             signal: controller.signal,
             cache: "no-store",
-            headers: {
-              "Accept": "application/json",
-              "Cache-Control": "no-cache, no-store"
-            }
+            headers: { "Accept": "application/json" }
           });
           clearTimeout(timeoutId);
-          if (restRes.ok) {
-            const restData = await restRes.json();
-            if (restData && restData.data && Array.isArray(restData.data.orders)) {
-              orders = restData.data.orders;
-              this.cloudProvider = "Restful Cloud Engine";
+          if (directRes.ok) {
+            const raw = await directRes.json();
+            if (raw) {
+              if (Array.isArray(raw)) {
+                orders = raw.filter(Boolean);
+              } else if (typeof raw === "object") {
+                orders = Object.values(raw).filter(Boolean);
+              }
             }
           }
-        } catch (errRest) {}
+        } catch (e) {}
       }
 
-      // 3. Direct Cloud Storage Bins Fallback (if serverless API had delay or offline)
+      // 2. Vercel Serverless Endpoint /api/orders
       if (!orders || orders.length === 0) {
-        for (const binUrl of this.cloudBins) {
-          try {
-            const binRes = await fetch(`${binUrl}?t=${t}`, {
-              cache: "no-store",
-              headers: {
-                "Accept": "application/json",
-                "Cache-Control": "no-cache, no-store",
-                "Pragma": "no-cache"
-              }
-            });
-            if (binRes.ok) {
-              const binData = await binRes.json();
-              if (binData && Array.isArray(binData.orders) && binData.orders.length > 0) {
-                orders = binData.orders;
-                this.cloudProvider = "Direct Cloud Storage Bin";
-                break;
-              }
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
+          const res = await fetch(`/api/orders?t=${t}`, {
+            signal: controller.signal,
+            cache: "no-store",
+            headers: this.getCloudHeaders()
+          });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && Array.isArray(data.orders) && data.orders.length > 0) {
+              orders = data.orders;
             }
-          } catch (errBin) {}
-        }
+          }
+        } catch (errApi) {}
       }
 
       if (orders && Array.isArray(orders)) {
@@ -438,7 +407,6 @@ class KasedKarimDB {
         localOrders.forEach(o => orderMap.set(o.id, o));
 
         orders.forEach(cloudOrder => {
-          // Detect brand-new orders arriving from other devices
           if (!this.knownOrderIds.has(cloudOrder.id)) {
             this.knownOrderIds.add(cloudOrder.id);
             hasNewCloudOrders = true;
@@ -453,12 +421,10 @@ class KasedKarimDB {
           }
         });
 
-        // Save merged orders to localStorage
         const mergedOrders = Array.from(orderMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(mergedOrders));
 
         if (hasNewCloudOrders && latestNewOrder) {
-          // Play loud chime and trigger new order event ONLY for admin users
           const isAdmin = typeof document !== 'undefined' && (document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot"));
           if (isAdmin) {
             this.playLuxuryChime();
@@ -475,257 +441,175 @@ class KasedKarimDB {
     }
   }
 
-  // Force Immediate Manual Sync (e.g. from Admin refresh button)
   async forceSyncNow() {
-    return this.syncFromCloud(false);
+    await this.syncFromCloud(false);
+    await this.syncProductsFromCloud(false);
   }
 
-  async sendOrderToCloud(order) {
-    const promises = [];
+  // --------------------------------------------------------------------------
+  // PRODUCTS CLOUD PUSH & DELETE
+  // --------------------------------------------------------------------------
+  async sendProductToCloud(product) {
+    const customUrl = this.getCustomCloudUrl();
+    const safeProduct = {
+      id: product.id,
+      name: product.name,
+      enName: product.enName || "",
+      category: product.category || "pendants",
+      categoryName: product.categoryName || "دلايات",
+      style: product.style || "",
+      price: parseFloat(product.price) || 0,
+      originalPrice: product.originalPrice ? parseFloat(product.originalPrice) : null,
+      warranty: product.warranty || "",
+      image: product.image || "",
+      secondaryImage: product.secondaryImage || "",
+      description: product.description || "",
+      isNew: !!product.isNew,
+      isExclusive: !!product.isExclusive,
+      isBestSeller: !!product.isBestSeller,
+      specs: product.specs || {}
+    };
 
-    // 1. Send to Vercel API
-    try {
-      const endpoint = this.getCloudApiEndpoint("/api/orders");
-      promises.push(
-        fetch(endpoint, {
-          method: "POST",
+    let saved = false;
+
+    // 1. Direct Firebase Realtime Database
+    if (customUrl) {
+      try {
+        const safeId = encodeURIComponent(safeProduct.id);
+        const res = await fetch(`${customUrl}/products/${safeId}.json`, {
+          method: "PUT",
           cache: "no-store",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(order)
-        }).catch(() => null)
-      );
-    } catch (e) {}
-
-    // 2. Direct Primary Cloud Storage (restful-api.dev)
-    if (this.restfulOrdersUrl) {
-      promises.push(
-        (async () => {
-          try {
-            const restRes = await fetch(`${this.restfulOrdersUrl}?t=${Date.now()}`, { cache: "no-store" });
-            if (restRes.ok) {
-              const restData = await restRes.json();
-              const ordersList = (restData && restData.data && Array.isArray(restData.data.orders))
-                ? restData.data.orders
-                : [];
-              if (!ordersList.some(o => o.id === order.id)) {
-                ordersList.unshift(order);
-              }
-              await fetch(this.restfulOrdersUrl, {
-                method: "PUT",
-                cache: "no-store",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  name: "kased_karim_orders",
-                  data: { orders: ordersList }
-                })
-              });
-            }
-          } catch (e) {}
-        })()
-      );
+          body: JSON.stringify(safeProduct)
+        });
+        if (res.ok) saved = true;
+      } catch (e) {}
     }
 
-    // 3. Fallback Cloud Storage Bins
-    for (const binUrl of this.cloudBins) {
-      promises.push(
-        (async () => {
-          try {
-            const binRes = await fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" });
-            if (binRes.ok) {
-              const binData = await binRes.json();
-              if (!Array.isArray(binData.orders)) binData.orders = [];
-              if (!binData.orders.some(o => o.id === order.id)) {
-                binData.orders.unshift(order);
-              }
-              await fetch(binUrl, {
-                method: "PUT",
-                cache: "no-store",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(binData)
-              });
-            }
-          } catch (err) {}
-        })()
-      );
-    }
-
-    await Promise.allSettled(promises);
-  }
-
-  async updateOrderStatusInCloud(orderId, status) {
+    // 2. Vercel Serverless Function /api/products
     try {
-      const endpoint = this.getCloudApiEndpoint("/api/orders");
-      fetch(endpoint, {
-        method: "PATCH",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: orderId, status })
-      }).catch(() => null);
-
-      for (const binUrl of this.cloudBins) {
-        fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" })
-          .then(r => r.json())
-          .then(binData => {
-            if (Array.isArray(binData.orders)) {
-              const t = binData.orders.find(o => o.id === orderId);
-              if (t) {
-                t.status = status;
-                fetch(binUrl, {
-                  method: "PUT",
-                  cache: "no-store",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(binData)
-                });
-              }
-            }
-          }).catch(() => null);
-      }
-    } catch (e) {}
-  }
-
-  async deleteOrderFromCloud(orderId) {
-    try {
-      const endpoint = this.getCloudApiEndpoint(`/api/orders?id=${orderId}`);
-      fetch(endpoint, { method: "DELETE", cache: "no-store" }).catch(() => null);
-
-      for (const binUrl of this.cloudBins) {
-        fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" })
-          .then(r => r.json())
-          .then(binData => {
-            if (Array.isArray(binData.orders)) {
-              binData.orders = binData.orders.filter(o => o.id !== orderId);
-              fetch(binUrl, {
-                method: "PUT",
-                cache: "no-store",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(binData)
-              });
-            }
-          }).catch(() => null);
-      }
-    } catch (e) {}
-  }
-
-  async sendProductToCloud(product) {
-    try {
-      // 1. Send to Vercel API
-      const endpoint = this.getCloudApiEndpoint("/api/products");
-      fetch(endpoint, {
+      const apiRes = await fetch("/api/products", {
         method: "POST",
         cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(product)
-      }).catch(() => null);
-
-      // Clean payload to prevent oversized requests
-      const safeProduct = {
-        id: product.id,
-        name: product.name,
-        enName: product.enName || "",
-        category: product.category || "pendants",
-        categoryName: product.categoryName || "دلايات",
-        style: product.style || "",
-        price: parseFloat(product.price) || 0,
-        originalPrice: product.originalPrice ? parseFloat(product.originalPrice) : null,
-        warranty: product.warranty || "",
-        image: product.image || "",
-        secondaryImage: product.secondaryImage || "",
-        description: product.description || "",
-        isNew: !!product.isNew,
-        isExclusive: !!product.isExclusive,
-        isBestSeller: !!product.isBestSeller,
-        specs: product.specs || {}
-      };
-
-      // 2. Direct Sync to restful-api.dev Primary Storage
-      if (this.restfulProductsUrl) {
-        fetch(this.restfulProductsUrl + "?t=" + Date.now(), { cache: "no-store" })
-          .then(r => r.json())
-          .then(restData => {
-            const list = (restData && restData.data && Array.isArray(restData.data.products))
-              ? restData.data.products
-              : [];
-            const idx = list.findIndex(p => p.id === safeProduct.id);
-            if (idx > -1) {
-              list[idx] = safeProduct;
-            } else {
-              list.unshift(safeProduct);
-            }
-            fetch(this.restfulProductsUrl, {
-              method: "PUT",
-              cache: "no-store",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                name: "kased_karim_products_bin",
-                data: { products: list }
-              })
-            }).catch(() => null);
-          }).catch(() => null);
-      }
-
-      // 3. Fallback to extendsclass bins
-      for (const binUrl of this.cloudBins) {
-        fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" })
-          .then(r => r.json())
-          .then(binData => {
-            if (!Array.isArray(binData.products)) binData.products = [];
-            const idx = binData.products.findIndex(p => p.id === product.id);
-            if (idx > -1) {
-              binData.products[idx] = product;
-            } else {
-              binData.products.unshift(product);
-            }
-            fetch(binUrl, {
-              method: "PUT",
-              cache: "no-store",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(binData)
-            });
-          }).catch(() => null);
-      }
+        headers: this.getCloudHeaders(),
+        body: JSON.stringify(safeProduct)
+      });
+      if (apiRes.ok) saved = true;
     } catch (e) {}
+
+    return saved;
   }
 
   async deleteProductFromCloud(productId) {
-    try {
-      const endpoint = this.getCloudApiEndpoint(`/api/products?id=${productId}`);
-      fetch(endpoint, { method: "DELETE", cache: "no-store" }).catch(() => null);
+    const customUrl = this.getCustomCloudUrl();
+    if (customUrl) {
+      try {
+        const safeId = encodeURIComponent(productId);
+        fetch(`${customUrl}/products/${safeId}.json`, { method: "DELETE", cache: "no-store" }).catch(() => null);
+      } catch (e) {}
+    }
+    fetch(`/api/products?id=${productId}`, {
+      method: "DELETE",
+      cache: "no-store",
+      headers: this.getCloudHeaders()
+    }).catch(() => null);
+  }
 
-      if (this.restfulProductsUrl) {
-        fetch(this.restfulProductsUrl + "?t=" + Date.now(), { cache: "no-store" })
-          .then(r => r.json())
-          .then(restData => {
-            if (restData && restData.data && Array.isArray(restData.data.products)) {
-              const list = restData.data.products.filter(p => p.id !== productId);
-              fetch(this.restfulProductsUrl, {
-                method: "PUT",
-                cache: "no-store",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  name: "kased_karim_products_bin",
-                  data: { products: list }
-                })
-              }).catch(() => null);
-            }
-          }).catch(() => null);
-      }
+  // Push entire local catalog to cloud database with one call
+  async syncAllLocalProductsToCloud() {
+    const products = this.getProducts();
+    const customUrl = this.getCustomCloudUrl();
+    let count = 0;
 
-      for (const binUrl of this.cloudBins) {
-        fetch(`${binUrl}?t=${Date.now()}`, { cache: "no-store" })
-          .then(r => r.json())
-          .then(binData => {
-            if (Array.isArray(binData.products)) {
-              binData.products = binData.products.filter(p => p.id !== productId);
-              fetch(binUrl, {
-                method: "PUT",
-                cache: "no-store",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(binData)
-              });
-            }
-          }).catch(() => null);
-      }
-    } catch (e) {}
+    if (customUrl) {
+      try {
+        const mapObj = {};
+        products.forEach(p => {
+          mapObj[p.id] = p;
+        });
+        const res = await fetch(`${customUrl}/products.json`, {
+          method: "PUT",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(mapObj)
+        });
+        if (res.ok) return products.length;
+      } catch (e) {}
+    }
+
+    // Fallback: batch individual products to /api/products
+    for (const p of products) {
+      try {
+        await this.sendProductToCloud(p);
+        count++;
+      } catch (e) {}
+    }
+    return count;
+  }
+
+  // --------------------------------------------------------------------------
+  // ORDERS CLOUD PUSH & UPDATE
+  // --------------------------------------------------------------------------
+  async sendOrderToCloud(order) {
+    const customUrl = this.getCustomCloudUrl();
+
+    // 1. Direct Firebase RTDB
+    if (customUrl) {
+      try {
+        const safeId = encodeURIComponent(order.id);
+        fetch(`${customUrl}/orders/${safeId}.json`, {
+          method: "PUT",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(order)
+        }).catch(() => null);
+      } catch (e) {}
+    }
+
+    // 2. Vercel Serverless Function
+    fetch("/api/orders", {
+      method: "POST",
+      cache: "no-store",
+      headers: this.getCloudHeaders(),
+      body: JSON.stringify(order)
+    }).catch(() => null);
+  }
+
+  async updateOrderStatusInCloud(orderId, status) {
+    const customUrl = this.getCustomCloudUrl();
+    if (customUrl) {
+      try {
+        const safeId = encodeURIComponent(orderId);
+        fetch(`${customUrl}/orders/${safeId}/status.json`, {
+          method: "PUT",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(status)
+        }).catch(() => null);
+      } catch (e) {}
+    }
+
+    fetch("/api/orders", {
+      method: "PATCH",
+      cache: "no-store",
+      headers: this.getCloudHeaders(),
+      body: JSON.stringify({ id: orderId, status })
+    }).catch(() => null);
+  }
+
+  async deleteOrderFromCloud(orderId) {
+    const customUrl = this.getCustomCloudUrl();
+    if (customUrl) {
+      try {
+        const safeId = encodeURIComponent(orderId);
+        fetch(`${customUrl}/orders/${safeId}.json`, { method: "DELETE", cache: "no-store" }).catch(() => null);
+      } catch (e) {}
+    }
+    fetch(`/api/orders?id=${orderId}`, {
+      method: "DELETE",
+      cache: "no-store",
+      headers: this.getCloudHeaders()
+    }).catch(() => null);
   }
 
   // --------------------------------------------------------------------------
@@ -781,7 +665,7 @@ class KasedKarimDB {
     products.unshift(newProduct);
     localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
     
-    // Push to cloud
+    // Multi-device cloud push
     this.sendProductToCloud(newProduct);
 
     window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: newProduct }));
@@ -793,7 +677,6 @@ class KasedKarimDB {
     products = products.filter(p => p.id !== productId);
     localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
 
-    // Delete from cloud
     this.deleteProductFromCloud(productId);
 
     window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: { deletedId: productId } }));
@@ -807,7 +690,6 @@ class KasedKarimDB {
     try {
       const data = localStorage.getItem(DB_KEYS.ORDERS);
       const parsed = data ? JSON.parse(data) : [];
-      // Strictly filter out any old demo dummy orders
       return parsed.filter(o => o.id !== "ORD-8941" && o.id !== "ORD-8820");
     } catch (e) {
       console.error("DB Error getOrders:", e);
@@ -851,18 +733,13 @@ class KasedKarimDB {
       isRead: false
     };
 
-    // Prepend new order locally
     orders.unshift(newOrder);
     this.knownOrderIds.add(orderId);
     localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
 
-    // Increment sales count for each product
     this.incrementSales(cartItems);
-
-    // Multi-cloud immediate push
     this.sendOrderToCloud(newOrder);
 
-    // Play notification chime ONLY if current user is admin
     const isAdmin = typeof document !== 'undefined' && (document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot"));
     if (isAdmin) {
       this.playLuxuryChime();
@@ -882,9 +759,7 @@ class KasedKarimDB {
       }
       localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
       
-      // Update in cloud
       this.updateOrderStatusInCloud(orderId, newStatus);
-
       window.dispatchEvent(new CustomEvent("kk_orders_updated"));
       return true;
     }
@@ -904,9 +779,7 @@ class KasedKarimDB {
     this.knownOrderIds.delete(orderId);
     localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
 
-    // Delete in cloud
     this.deleteOrderFromCloud(orderId);
-
     window.dispatchEvent(new CustomEvent("kk_orders_updated"));
     return true;
   }
@@ -927,9 +800,6 @@ class KasedKarimDB {
     localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
   }
 
-  // --------------------------------------------------------------------------
-  // ANALYTICS & BEST SELLERS
-  // --------------------------------------------------------------------------
   getAnalytics() {
     const orders = this.getOrders();
     const products = this.getProducts();
@@ -939,7 +809,6 @@ class KasedKarimDB {
     const pendingOrdersCount = orders.filter(o => o.status === "pending").length;
     const activeProductsCount = products.length;
 
-    // Best sellers sorted by salesCount
     const bestSellers = [...products]
       .sort((a, b) => (b.salesCount || 0) - (a.salesCount || 0))
       .slice(0, 6);

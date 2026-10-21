@@ -405,6 +405,7 @@ function switchAdminTab(tabKey, element) {
   if (tabKey === "overview") renderAdminOverview();
   if (tabKey === "orders") renderAdminOrders();
   if (tabKey === "inventory") renderAdminInventory();
+  if (tabKey === "cloudSync") renderCloudDbSettings();
 }
 
 // ----------------------------------------------------------------------------
@@ -1434,41 +1435,140 @@ function setupAdminListeners() {
 // ----------------------------------------------------------------------------
 // 8. CLOUD DATABASE & VERCEL INTEGRATION CONTROLLERS
 // ----------------------------------------------------------------------------
-function renderCloudDbSettings() {
+async function renderCloudDbSettings() {
   const currentUrl = localStorage.getItem("kk_custom_cloud_url") || "";
   const inputEl = document.getElementById("cloudDbUrlInput");
   const statusEl = document.getElementById("cloudDbStatusPill");
   if (inputEl) inputEl.value = currentUrl;
-  if (statusEl) {
-    statusEl.innerHTML = `<i class="fas fa-check-circle" style="color: #10B981;"></i> متصل وجاهز تلقائياً للاستضافة على Vercel Serverless`;
-  }
-}
 
-async function testCloudDbConnection() {
-  showToast("جاري اختبار الاتصال بقاعدة البيانات السحابية...");
+  if (!statusEl) return;
+
+  if (currentUrl) {
+    statusEl.innerHTML = `<i class="fas fa-spinner fa-spin" style="color: var(--accent);"></i> <span>جاري فحص الاتصال بالرابط المخصص...</span>`;
+    try {
+      const cleanUrl = currentUrl.trim().replace(/\/$/, "");
+      const res = await fetch(`${cleanUrl}/.json?shallow=true`, { cache: "no-store" });
+      if (res.ok) {
+        statusEl.innerHTML = `<i class="fas fa-circle-check" style="color: #10B981;"></i> <span style="color: #065F46;">متصل ومفعل مباشرة بسحابة Firebase (جاهز 100%)</span>`;
+        statusEl.style.background = "#ECFDF5";
+        return;
+      }
+    } catch (e) {}
+    statusEl.innerHTML = `<i class="fas fa-triangle-exclamation" style="color: #F59E0B;"></i> <span style="color: #92400E;">رابط مخصص مسجل (جاري التحقق من الصلاحيات)</span>`;
+    statusEl.style.background = "#FFFBEB";
+    return;
+  }
+
+  // Check Vercel serverless /api/db-health
   try {
     const res = await fetch("/api/db-health");
     if (res.ok) {
       const data = await res.json();
-      showToast("✅ الاتصال السحابي بقاعدة بيانات Vercel يعمل بنجاح ومستقر!");
-      return;
+      if (data.database && (data.database.kvConnected || data.database.firebaseConnected)) {
+        statusEl.innerHTML = `<i class="fas fa-circle-check" style="color: #10B981;"></i> <span style="color: #065F46;">متصل تلقائياً بقاعدة بيانات Vercel Serverless</span>`;
+        statusEl.style.background = "#ECFDF5";
+        return;
+      }
     }
-  } catch (e) {
-    // Local offline or python dev server fallback
-  }
-  showToast("✅ قاعدة البيانات السحابية مهيأة ومتوافقة 100% مع استضافة Vercel!");
+  } catch (e) {}
+
+  statusEl.innerHTML = `<i class="fas fa-cloud" style="color: #3B82F6;"></i> <span style="color: #1E40AF;">السحابة بانتظار إدخال الرابط (أدخل رابط Firebase أدناه)</span>`;
+  statusEl.style.background = "#EFF6FF";
 }
 
-function saveCustomCloudUrl() {
+async function testCloudDbConnection() {
+  const currentUrl = (localStorage.getItem("kk_custom_cloud_url") || "").trim();
+  showToast("جاري اختبار الاتصال اللحظي بالسحابة...");
+
+  const startTime = Date.now();
+
+  // Test 1: Direct Firebase RTDB ping if configured
+  if (currentUrl) {
+    try {
+      const cleanUrl = currentUrl.replace(/\/$/, "");
+      const res = await fetch(`${cleanUrl}/.json?shallow=true&t=${Date.now()}`, { cache: "no-store" });
+      const latency = Date.now() - startTime;
+      if (res.ok) {
+        showToast(`✅ الاتصال بسحابة Firebase ممتاز ومستقر! (زمن الاستجابة: ${latency}ms)`);
+        renderCloudDbSettings();
+        return;
+      }
+    } catch (e) {}
+  }
+
+  // Test 2: Serverless Endpoint Health
+  try {
+    const res = await fetch(`/api/db-health?t=${Date.now()}`, {
+      headers: window.KK_DB ? window.KK_DB.getCloudHeaders() : {}
+    });
+    const latency = Date.now() - startTime;
+    if (res.ok) {
+      const data = await res.json();
+      if (data.database && data.database.readyForProduction) {
+        showToast(`✅ الاتصال بقاعدة بيانات Vercel يعمل بنجاح! (${latency}ms)`);
+        renderCloudDbSettings();
+        return;
+      }
+    }
+  } catch (e) {}
+
+  if (currentUrl) {
+    showToast("⚠️ تم إرسال الطلب للرابط ولكن يرجى التأكد من ضبط Realtime Database على (Test Mode) بالقراءة والكتابة.");
+  } else {
+    showToast("ℹ️ لم يتم ربط سحابة بعد. يرجى إدخال رابط Firebase Realtime Database أدناه لتفعيل المزامنة الشاملة.");
+  }
+  renderCloudDbSettings();
+}
+
+async function saveCustomCloudUrl() {
   const inputEl = document.getElementById("cloudDbUrlInput");
   if (!inputEl) return;
   const url = inputEl.value.trim();
   if (url) {
     localStorage.setItem("kk_custom_cloud_url", url);
-    showToast("تم حفظ رابط قاعدة البيانات السحابية المخصص بنجاح!");
+    if (window.KK_DB) {
+      window.KK_DB.setCustomCloudUrl(url);
+    }
+    showToast("✅ تم حفظ وتفعيل رابط السحابة المخصص بنجاح! جاري اختبار الاتصال...");
+    await testCloudDbConnection();
+    if (window.KK_DB) {
+      window.KK_DB.forceSyncNow();
+    }
   } else {
-    localStorage.removeItem("kk_custom_cloud_url");
-    showToast("تمت استعادة الربط التلقائي عبر Vercel Serverless API");
+    clearCustomCloudUrl();
+  }
+}
+
+function clearCustomCloudUrl() {
+  localStorage.removeItem("kk_custom_cloud_url");
+  if (window.KK_DB) {
+    window.KK_DB.setCustomCloudUrl("");
+  }
+  const inputEl = document.getElementById("cloudDbUrlInput");
+  if (inputEl) inputEl.value = "";
+  showToast("تمت استعادة الربط الافتراضي عبر Vercel Serverless");
+  renderCloudDbSettings();
+}
+
+async function syncAllCatalogToCloudNow(btn) {
+  if (!window.KK_DB) return;
+  const originalHtml = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> جاري رفع الكتالوج للسحابة...`;
+  }
+
+  try {
+    showToast("جاري إرسال جميع وحدات الإضاءة بالمعرض لقاعدة البيانات السحابية...");
+    const count = await window.KK_DB.syncAllLocalProductsToCloud();
+    showToast(`🎉 اكتملت المزامنة بنجاح! تم رفع ومزامنة ${count} قطعة إضاءة في السحابة لتظهر فوراً لجميع الأجهزة.`);
+  } catch (e) {
+    showToast("حدث خطأ أثناء المزامنة الشاملة: " + e.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
   }
 }
 

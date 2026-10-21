@@ -1,100 +1,179 @@
 // Vercel Serverless Function: /api/products
-// Handles Products Catalog Persistence across devices
-// Strictly disables all caching across Vercel Edge, Browser, and CDNs
+// Handles High-Performance Multi-Device Products Catalog Persistence
+// Supports Firebase Realtime Database (Google Cloud) & Vercel KV / Upstash Redis
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const RESTFUL_OBJECT_ID = "ff808181a09d98f701a15f3c485443ca";
-const RESTFUL_ENDPOINT = `https://api.restful-api.dev/objects/${RESTFUL_OBJECT_ID}`;
+// Resolve Cloud Database Endpoint
+function getFirebaseUrl(req) {
+  const envUrl = process.env.FIREBASE_DB_URL || process.env.NEXT_PUBLIC_FIREBASE_DB_URL;
+  if (envUrl && envUrl.trim()) {
+    return envUrl.trim().replace(/\/$/, "");
+  }
+  const headerUrl = req && (req.headers["x-cloud-db-url"] || req.headers["x-firebase-url"]);
+  if (headerUrl && typeof headerUrl === "string" && headerUrl.startsWith("http")) {
+    return headerUrl.trim().replace(/\/$/, "");
+  }
+  return null;
+}
 
-const FALLBACK_BINS = [
-  "https://extendsclass.com/api/json-storage/bin/faabcdf",
-  "https://extendsclass.com/api/json-storage/bin/fdeedbd"
-];
-
-async function fetchFromBins() {
+// 1. Fetch Products from Cloud
+async function fetchProductsFromCloud(req) {
   const t = Date.now();
-  
-  // 1. Primary: restful-api.dev
-  try {
-    const res = await fetch(`${RESTFUL_ENDPOINT}?t=${t}`, {
-      cache: "no-store",
-      headers: {
-        "Accept": "application/json",
-        "Cache-Control": "no-cache, no-store",
-        "Pragma": "no-cache"
-      }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.data && Array.isArray(data.data.products)) {
-        return { data: { products: data.data.products }, isRestful: true };
-      }
-    }
-  } catch (e) {}
+  const firebaseUrl = getFirebaseUrl(req);
 
-  // 2. Secondary fallback: extendsclass bins
-  for (const binUrl of FALLBACK_BINS) {
+  // A. Firebase Realtime Database
+  if (firebaseUrl) {
     try {
-      const res = await fetch(`${binUrl}?t=${t}`, {
+      const res = await fetch(`${firebaseUrl}/products.json?t=${t}`, {
+        cache: "no-store",
+        headers: { "Accept": "application/json", "Cache-Control": "no-cache, no-store" }
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        if (raw) {
+          if (Array.isArray(raw)) {
+            return { products: raw.filter(Boolean), provider: "firebase-rtdb" };
+          }
+          if (typeof raw === "object") {
+            return { products: Object.values(raw).filter(Boolean), provider: "firebase-rtdb" };
+          }
+        }
+        return { products: [], provider: "firebase-rtdb" };
+      }
+    } catch (err) {
+      console.warn("Firebase fetch error:", err.message);
+    }
+  }
+
+  // B. Vercel KV / Upstash Redis
+  const kvUrl = process.env.KV_REST_API_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN;
+  if (kvUrl && kvToken) {
+    try {
+      const res = await fetch(`${kvUrl}/get/kased_karim_products`, {
         cache: "no-store",
         headers: {
-          "Accept": "application/json",
-          "Cache-Control": "no-cache, no-store",
-          "Pragma": "no-cache"
+          "Authorization": `Bearer ${kvToken}`,
+          "Cache-Control": "no-cache, no-store"
         }
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && Array.isArray(data.products)) {
-          return { data, isRestful: false };
+        let products = data && data.result;
+        if (typeof products === "string") {
+          try { products = JSON.parse(products); } catch (e) {}
+        }
+        if (Array.isArray(products)) {
+          return { products, provider: "vercel-kv" };
         }
       }
-    } catch (e) {}
+    } catch (err) {
+      console.warn("KV fetch error:", err.message);
+    }
   }
-  return { data: { products: [] }, isRestful: true };
+
+  return { products: [], provider: "none" };
 }
 
-async function saveToBins(binData) {
-  const promises = [];
+// 2. Save Product to Cloud
+async function saveProductToCloud(req, product) {
+  const firebaseUrl = getFirebaseUrl(req);
 
-  // 1. Primary: restful-api.dev PUT
-  promises.push(
-    fetch(RESTFUL_ENDPOINT, {
-      method: "PUT",
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache, no-store"
-      },
-      body: JSON.stringify({
-        name: "kased_karim_products_bin",
-        data: { products: binData.products || [] }
-      })
-    }).catch(err => console.warn("Save restful err:", err.message))
-  );
-
-  // 2. Secondary fallback: extendsclass PUT
-  const jsonStr = JSON.stringify(binData);
-  FALLBACK_BINS.forEach(binUrl => {
-    promises.push(
-      fetch(binUrl, {
+  // A. Firebase Realtime Database (Direct Keyed Save)
+  if (firebaseUrl) {
+    try {
+      const safeId = encodeURIComponent(product.id);
+      const res = await fetch(`${firebaseUrl}/products/${safeId}.json`, {
         method: "PUT",
         cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store"
-        },
-        body: jsonStr
-      }).catch(err => console.warn("Save fallback bin err:", err.message))
-    );
-  });
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(product)
+      });
+      if (res.ok) {
+        return { success: true, provider: "firebase-rtdb" };
+      }
+    } catch (err) {
+      console.warn("Firebase save error:", err.message);
+    }
+  }
 
-  await Promise.allSettled(promises);
+  // B. Vercel KV / Upstash Redis
+  const kvUrl = process.env.KV_REST_API_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN;
+  if (kvUrl && kvToken) {
+    try {
+      const { products } = await fetchProductsFromCloud(req);
+      const idx = products.findIndex(p => p.id === product.id);
+      if (idx > -1) {
+        products[idx] = product;
+      } else {
+        products.unshift(product);
+      }
+      const res = await fetch(`${kvUrl}/set/kased_karim_products`, {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Authorization": `Bearer ${kvToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(products)
+      });
+      if (res.ok) {
+        return { success: true, provider: "vercel-kv" };
+      }
+    } catch (err) {
+      console.warn("KV save error:", err.message);
+    }
+  }
+
+  return { success: false, provider: "none" };
+}
+
+// 3. Delete Product from Cloud
+async function deleteProductFromCloud(req, productId) {
+  const firebaseUrl = getFirebaseUrl(req);
+
+  if (firebaseUrl) {
+    try {
+      const safeId = encodeURIComponent(productId);
+      await fetch(`${firebaseUrl}/products/${safeId}.json`, {
+        method: "DELETE",
+        cache: "no-store"
+      });
+      return { success: true, provider: "firebase-rtdb" };
+    } catch (err) {
+      console.warn("Firebase delete error:", err.message);
+    }
+  }
+
+  const kvUrl = process.env.KV_REST_API_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN;
+  if (kvUrl && kvToken) {
+    try {
+      const { products } = await fetchProductsFromCloud(req);
+      const filtered = products.filter(p => p.id !== productId);
+      await fetch(`${kvUrl}/set/kased_karim_products`, {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Authorization": `Bearer ${kvToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(filtered)
+      });
+      return { success: true, provider: "vercel-kv" };
+    } catch (err) {
+      console.warn("KV delete error:", err.message);
+    }
+  }
+
+  return { success: false, provider: "none" };
 }
 
 export default async function handler(req, res) {
+  // Ultra-Strict Anti-Caching Headers for instant real-time sync across devices
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
   res.setHeader("CDN-Cache-Control", "no-store");
   res.setHeader("Vercel-CDN-Cache-Control", "no-store");
@@ -103,62 +182,60 @@ export default async function handler(req, res) {
   res.setHeader("Surrogate-Control", "no-store");
 
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Cache-Control, Pragma");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Cache-Control, Pragma, x-cloud-db-url, x-firebase-url");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
   try {
-    // 1. GET: Fetch products
+    // 1. GET: Fetch products across all devices
     if (req.method === "GET") {
-      const { data } = await fetchFromBins();
-      const products = Array.isArray(data.products) ? data.products : [];
-      return res.status(200).json({ success: true, count: products.length, products });
+      const { products, provider } = await fetchProductsFromCloud(req);
+      return res.status(200).json({
+        success: true,
+        count: products.length,
+        provider,
+        products
+      });
     }
 
-    // 2. POST: Add or update product
-    if (req.method === "POST") {
+    // 2. POST / PUT: Add or update product
+    if (req.method === "POST" || req.method === "PUT") {
       let product = req.body;
       if (typeof product === "string") {
         try { product = JSON.parse(product); } catch (e) {}
       }
 
       if (!product || !product.name) {
-        return res.status(400).json({ error: "Invalid product data" });
+        return res.status(400).json({ error: "بيانات المنتج غير مكتملة" });
       }
 
       if (!product.id) {
-        product.id = "kk-cloud-" + Date.now();
+        product.id = "kk-" + Date.now().toString().slice(-5);
       }
 
-      const { data } = await fetchFromBins();
-      if (!Array.isArray(data.products)) data.products = [];
-
-      const idx = data.products.findIndex(p => p.id === product.id);
-      if (idx > -1) {
-        data.products[idx] = { ...data.products[idx], ...product };
-      } else {
-        data.products.unshift(product);
-      }
-
-      await saveToBins(data);
-      return res.status(201).json({ success: true, product });
+      const saveResult = await saveProductToCloud(req, product);
+      return res.status(201).json({
+        success: true,
+        persistedToCloud: saveResult.success,
+        provider: saveResult.provider,
+        product
+      });
     }
 
-    // 3. DELETE: Delete product
+    // 3. DELETE: Remove product from catalog
     if (req.method === "DELETE") {
       const { id } = req.query || {};
       if (!id) return res.status(400).json({ error: "Missing product ID" });
 
-      const { data } = await fetchFromBins();
-      if (Array.isArray(data.products)) {
-        data.products = data.products.filter(p => p.id !== id);
-        await saveToBins(data);
-      }
-
-      return res.status(200).json({ success: true, deleted: id });
+      const delResult = await deleteProductFromCloud(req, id);
+      return res.status(200).json({
+        success: true,
+        persistedToCloud: delResult.success,
+        deleted: id
+      });
     }
 
     return res.status(405).json({ error: "Method not allowed" });

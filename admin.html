@@ -128,6 +128,10 @@
           <i class="fas fa-boxes-stacked"></i>
           <span>إدارة المخزون والكتالوج</span>
         </button>
+        <button class="admin-tab-btn" onclick="switchAdminTab('cloudSync', this)">
+          <i class="fas fa-cloud-arrow-up"></i>
+          <span>المزامنة السحابية والربط</span>
+        </button>
       </div>
     </nav>
 
@@ -499,6 +503,87 @@
         </div>
       </section>
 
+      <!-- ====================================================================
+           TAB 5: CLOUD DATABASE & MULTI-DEVICE SYNC (المزامنة السحابية وقاعدة البيانات)
+           ==================================================================== -->
+      <section class="admin-tab-pane" id="adminPane_cloudSync">
+        <div style="max-width: 900px; margin: 0 auto;">
+          
+          <!-- Cloud Status Banner -->
+          <div style="background: #FFFFFF; border-radius: var(--radius-md); padding: 2rem; border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle); margin-bottom: 1.5rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+              <div style="display: flex; align-items: center; gap: 0.85rem;">
+                <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(245, 158, 11, 0.12); display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 1.5rem;">
+                  <i class="fas fa-cloud"></i>
+                </div>
+                <div>
+                  <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin: 0;">نظام المزامنة السحابية الفورية عبر جميع الأجهزة</h2>
+                  <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0.2rem 0 0;">ضمان ظهور أي منتج جديد يُضاف من لوحة الإدارة فورياً لجميع الزوار على الهواتف والأجهزة الأخرى والوضع الخفي</p>
+                </div>
+              </div>
+
+              <div id="cloudDbStatusPill" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.15rem; border-radius: 999px; background: #F1F5F9; font-size: 0.85rem; font-weight: 700; color: #475569;">
+                <i class="fas fa-circle-notch fa-spin"></i>
+                <span>جاري فحص حالة الاتصال بالسحابة...</span>
+              </div>
+            </div>
+
+            <!-- Action Buttons Row -->
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; padding-top: 1rem; border-top: 1px solid var(--border-light);">
+              <button type="button" class="btn-primary" style="font-size: 0.85rem; padding: 0.6rem 1.25rem; background: var(--accent); color: #0F172A; font-weight: 800; border: none;" onclick="testCloudDbConnection()">
+                <i class="fas fa-wifi"></i>
+                <span>فحص الاتصال اللحظي (Ping Test)</span>
+              </button>
+
+              <button type="button" class="btn-primary" style="font-size: 0.85rem; padding: 0.6rem 1.25rem; background: #10B981; color: #FFFFFF; font-weight: 800; border: none; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);" onclick="syncAllCatalogToCloudNow(this)">
+                <i class="fas fa-cloud-arrow-up"></i>
+                <span>مزامنة ورفع جميع منتجات الكتالوج للسحابة الآن</span>
+              </button>
+
+              <button type="button" class="btn-secondary" style="font-size: 0.85rem; padding: 0.6rem 1.1rem;" onclick="exportCatalogData()">
+                <i class="fas fa-download"></i>
+                <span>تصدير نسخة احتياطية من الكتالوج (Backup)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Configuration Card -->
+          <div style="background: #FFFFFF; border-radius: var(--radius-md); padding: 2rem; border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle); margin-bottom: 1.5rem;">
+            <div style="margin-bottom: 1.25rem;">
+              <span class="section-tag">DATABASE CONFIGURATION</span>
+              <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem;">رابط قاعدة البيانات السحابية المباشر</h3>
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.35rem;">
+                يمكنك ربط الموقع مباشرة بقاعدة بيانات <strong>Firebase Realtime Database</strong> (مجانية 100% وبدون حد يومي) أو أي واجهة REST سحابية:
+              </p>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem;">
+              <input type="url" id="cloudDbUrlInput" class="form-input" style="flex: 1; min-width: 280px; font-family: monospace; font-size: 0.9rem;" placeholder="https://your-project-default-rtdb.firebaseio.com">
+              
+              <button type="button" class="btn-primary" style="padding: 0.6rem 1.35rem; font-size: 0.9rem;" onclick="saveCustomCloudUrl()">
+                <i class="fas fa-save"></i>
+                <span>حفظ وتفعيل</span>
+              </button>
+
+              <button type="button" class="btn-secondary" style="padding: 0.6rem 1rem; font-size: 0.85rem;" onclick="clearCustomCloudUrl()">
+                <i class="fas fa-rotate-left"></i>
+                <span>استعادة الافتراضي</span>
+              </button>
+            </div>
+
+            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1rem; font-size: 0.82rem; color: #475569; line-height: 1.7;">
+              <strong style="color: #0F172A; display: block; margin-bottom: 0.3rem;"><i class="fas fa-circle-info" style="color: var(--accent); margin-left: 0.3rem;"></i> خطوات تفعيل Firebase مجاناً في 60 ثانية بدون أي فيزا:</strong>
+              1. افتح <a href="https://console.firebase.google.com/" target="_blank" style="color: var(--accent); font-weight: 700;">console.firebase.google.com</a> وسجل بحساب Google مجاناً.<br>
+              2. اضغط "Add Project" وسمه <code>kased-karim</code>.<br>
+              3. من القائمة الجانبية: اختر <strong>Build -> Realtime Database</strong> ثم "Create Database".<br>
+              4. اختر <strong>Start in test mode</strong> ليتمكن المتجر من القراءة والكتابة فورياً.<br>
+              5. انسخ الرابط الذي يظهر لك (مثال: <code>https://kased-karim-default-rtdb.firebaseio.com</code>) والصقه في الخانة أعلاه واضغط حفظ.
+            </div>
+          </div>
+
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -506,8 +591,8 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/data.js?v=5.0"></script>
-  <script src="js/db.js?v=5.0"></script>
-  <script src="js/admin.js?v=5.0"></script>
+  <script src="js/data.js?v=6.0"></script>
+  <script src="js/db.js?v=6.0"></script>
+  <script src="js/admin.js?v=6.0"></script>
 </body>
 </html>

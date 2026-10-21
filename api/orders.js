@@ -1,97 +1,175 @@
 // Vercel Serverless Function: /api/orders
-// Handles Shared Cloud Persistence for Kased Karim Lighting Showroom across all devices
-// Strictly disables all caching across Vercel Edge, Browser, and CDNs
+// Handles Real-Time Orders Cloud Persistence across all devices and phones
+// Supports Firebase Realtime Database (Google Cloud) & Vercel KV / Upstash Redis
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const RESTFUL_ORDERS_OBJECT_ID = "ff808181a09d98f701a15f3c2b4443c9";
-const RESTFUL_ORDERS_ENDPOINT = `https://api.restful-api.dev/objects/${RESTFUL_ORDERS_OBJECT_ID}`;
+// Resolve Cloud Database Endpoint
+function getFirebaseUrl(req) {
+  const envUrl = process.env.FIREBASE_DB_URL || process.env.NEXT_PUBLIC_FIREBASE_DB_URL;
+  if (envUrl && envUrl.trim()) {
+    return envUrl.trim().replace(/\/$/, "");
+  }
+  const headerUrl = req && (req.headers["x-cloud-db-url"] || req.headers["x-firebase-url"]);
+  if (headerUrl && typeof headerUrl === "string" && headerUrl.startsWith("http")) {
+    return headerUrl.trim().replace(/\/$/, "");
+  }
+  return null;
+}
 
-const FALLBACK_BINS = [
-  "https://extendsclass.com/api/json-storage/bin/faabcdf",
-  "https://extendsclass.com/api/json-storage/bin/fdeedbd"
-];
-
-async function fetchFromBins() {
+// 1. Fetch Orders from Cloud
+async function fetchOrdersFromCloud(req) {
   const t = Date.now();
+  const firebaseUrl = getFirebaseUrl(req);
 
-  // 1. Primary: restful-api.dev
-  try {
-    const res = await fetch(`${RESTFUL_ORDERS_ENDPOINT}?t=${t}`, {
-      cache: "no-store",
-      headers: {
-        "Accept": "application/json",
-        "Cache-Control": "no-cache, no-store",
-        "Pragma": "no-cache"
-      }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.data && Array.isArray(data.data.orders)) {
-        return { data: { orders: data.data.orders }, isRestful: true };
-      }
-    }
-  } catch (e) {}
-
-  // 2. Secondary fallback: extendsclass bins
-  for (const binUrl of FALLBACK_BINS) {
+  // A. Firebase Realtime Database
+  if (firebaseUrl) {
     try {
-      const res = await fetch(`${binUrl}?t=${t}`, {
+      const res = await fetch(`${firebaseUrl}/orders.json?t=${t}`, {
+        cache: "no-store",
+        headers: { "Accept": "application/json", "Cache-Control": "no-cache, no-store" }
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        if (raw) {
+          if (Array.isArray(raw)) {
+            return { orders: raw.filter(Boolean), provider: "firebase-rtdb" };
+          }
+          if (typeof raw === "object") {
+            const list = Object.values(raw).filter(Boolean);
+            list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            return { orders: list, provider: "firebase-rtdb" };
+          }
+        }
+        return { orders: [], provider: "firebase-rtdb" };
+      }
+    } catch (err) {
+      console.warn("Firebase fetch orders error:", err.message);
+    }
+  }
+
+  // B. Vercel KV / Upstash Redis
+  const kvUrl = process.env.KV_REST_API_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN;
+  if (kvUrl && kvToken) {
+    try {
+      const res = await fetch(`${kvUrl}/get/kased_karim_orders`, {
         cache: "no-store",
         headers: {
-          "Accept": "application/json",
-          "Cache-Control": "no-cache, no-store",
-          "Pragma": "no-cache"
+          "Authorization": `Bearer ${kvToken}`,
+          "Cache-Control": "no-cache, no-store"
         }
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && Array.isArray(data.orders)) {
-          return { data, isRestful: false };
+        let orders = data && data.result;
+        if (typeof orders === "string") {
+          try { orders = JSON.parse(orders); } catch (e) {}
+        }
+        if (Array.isArray(orders)) {
+          return { orders, provider: "vercel-kv" };
         }
       }
-    } catch (e) {}
+    } catch (err) {
+      console.warn("KV fetch orders error:", err.message);
+    }
   }
-  return { data: { orders: [] }, isRestful: true };
+
+  return { orders: [], provider: "none" };
 }
 
-async function saveToBins(binData) {
-  const promises = [];
+// 2. Save / Update Order in Cloud
+async function saveOrderToCloud(req, order) {
+  const firebaseUrl = getFirebaseUrl(req);
 
-  // 1. Primary: restful-api.dev PUT
-  promises.push(
-    fetch(RESTFUL_ORDERS_ENDPOINT, {
-      method: "PUT",
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache, no-store"
-      },
-      body: JSON.stringify({
-        name: "kased_karim_orders",
-        data: { orders: binData.orders || [] }
-      })
-    }).catch(err => console.warn("Save restful orders err:", err.message))
-  );
-
-  // 2. Secondary fallback: extendsclass PUT
-  const jsonStr = JSON.stringify(binData);
-  FALLBACK_BINS.forEach(binUrl => {
-    promises.push(
-      fetch(binUrl, {
+  if (firebaseUrl) {
+    try {
+      const safeId = encodeURIComponent(order.id);
+      const res = await fetch(`${firebaseUrl}/orders/${safeId}.json`, {
         method: "PUT",
         cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store"
-        },
-        body: jsonStr
-      }).catch(err => console.warn("Save fallback bin err:", err.message))
-    );
-  });
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(order)
+      });
+      if (res.ok) {
+        return { success: true, provider: "firebase-rtdb" };
+      }
+    } catch (err) {
+      console.warn("Firebase save order error:", err.message);
+    }
+  }
 
-  await Promise.allSettled(promises);
+  const kvUrl = process.env.KV_REST_API_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN;
+  if (kvUrl && kvToken) {
+    try {
+      const { orders } = await fetchOrdersFromCloud(req);
+      const idx = orders.findIndex(o => o.id === order.id);
+      if (idx > -1) {
+        orders[idx] = order;
+      } else {
+        orders.unshift(order);
+      }
+      const res = await fetch(`${kvUrl}/set/kased_karim_orders`, {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Authorization": `Bearer ${kvToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(orders)
+      });
+      if (res.ok) {
+        return { success: true, provider: "vercel-kv" };
+      }
+    } catch (err) {
+      console.warn("KV save order error:", err.message);
+    }
+  }
+
+  return { success: false, provider: "none" };
+}
+
+// 3. Delete Order from Cloud
+async function deleteOrderFromCloud(req, orderId) {
+  const firebaseUrl = getFirebaseUrl(req);
+
+  if (firebaseUrl) {
+    try {
+      const safeId = encodeURIComponent(orderId);
+      await fetch(`${firebaseUrl}/orders/${safeId}.json`, {
+        method: "DELETE",
+        cache: "no-store"
+      });
+      return { success: true, provider: "firebase-rtdb" };
+    } catch (err) {
+      console.warn("Firebase delete order error:", err.message);
+    }
+  }
+
+  const kvUrl = process.env.KV_REST_API_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN;
+  if (kvUrl && kvToken) {
+    try {
+      const { orders } = await fetchOrdersFromCloud(req);
+      const filtered = orders.filter(o => o.id !== orderId);
+      await fetch(`${kvUrl}/set/kased_karim_orders`, {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Authorization": `Bearer ${kvToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(filtered)
+      });
+      return { success: true, provider: "vercel-kv" };
+    } catch (err) {
+      console.warn("KV delete order error:", err.message);
+    }
+  }
+
+  return { success: false, provider: "none" };
 }
 
 export default async function handler(req, res) {
@@ -103,10 +181,9 @@ export default async function handler(req, res) {
   res.setHeader("Expires", "0");
   res.setHeader("Surrogate-Control", "no-store");
 
-  // CORS Headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Cache-Control, Pragma");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Cache-Control, Pragma, x-cloud-db-url, x-firebase-url");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -115,9 +192,8 @@ export default async function handler(req, res) {
   try {
     // 1. GET: Fetch all live orders across all devices
     if (req.method === "GET") {
-      const { data } = await fetchFromBins();
-      const orders = Array.isArray(data.orders) ? data.orders : [];
-      return res.status(200).json({ success: true, count: orders.length, orders });
+      const { orders, provider } = await fetchOrdersFromCloud(req);
+      return res.status(200).json({ success: true, count: orders.length, provider, orders });
     }
 
     // 2. POST: Create a new order from customer device
@@ -161,20 +237,8 @@ export default async function handler(req, res) {
       }
       order.isRead = false;
 
-      const { data } = await fetchFromBins();
-      if (!Array.isArray(data.orders)) data.orders = [];
-
-      // Avoid duplicate ID, place newest order at the very beginning
-      const exists = data.orders.some(o => o.id === order.id);
-      if (!exists) {
-        data.orders.unshift(order);
-      } else {
-        const idx = data.orders.findIndex(o => o.id === order.id);
-        data.orders[idx] = order;
-      }
-
-      await saveToBins(data);
-      return res.status(201).json({ success: true, order });
+      const saveResult = await saveOrderToCloud(req, order);
+      return res.status(201).json({ success: true, persistedToCloud: saveResult.success, order });
     }
 
     // 3. PATCH: Update order status (pending -> confirmed -> completed)
@@ -186,14 +250,12 @@ export default async function handler(req, res) {
       const { id, status, isRead } = body || {};
       if (!id) return res.status(400).json({ error: "Missing order ID" });
 
-      const { data } = await fetchFromBins();
-      if (Array.isArray(data.orders)) {
-        const target = data.orders.find(o => o.id === id);
-        if (target) {
-          if (status !== undefined) target.status = status;
-          if (isRead !== undefined) target.isRead = isRead;
-          await saveToBins(data);
-        }
+      const { orders } = await fetchOrdersFromCloud(req);
+      const target = orders.find(o => o.id === id);
+      if (target) {
+        if (status !== undefined) target.status = status;
+        if (isRead !== undefined) target.isRead = isRead;
+        await saveOrderToCloud(req, target);
       }
 
       return res.status(200).json({ success: true, id, status, isRead });
@@ -204,13 +266,8 @@ export default async function handler(req, res) {
       const { id } = req.query || {};
       if (!id) return res.status(400).json({ error: "Missing order ID" });
 
-      const { data } = await fetchFromBins();
-      if (Array.isArray(data.orders)) {
-        data.orders = data.orders.filter(o => o.id !== id);
-        await saveToBins(data);
-      }
-
-      return res.status(200).json({ success: true, deleted: id });
+      const delResult = await deleteOrderFromCloud(req, id);
+      return res.status(200).json({ success: true, persistedToCloud: delResult.success, deleted: id });
     }
 
     return res.status(405).json({ error: "Method not allowed" });
