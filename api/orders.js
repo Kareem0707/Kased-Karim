@@ -190,9 +190,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. GET: Fetch all live orders across all devices
+    // 1. GET: Fetch all live orders across all devices, or single order by ID
     if (req.method === "GET") {
+      const { id } = req.query || {};
       const { orders, provider } = await fetchOrdersFromCloud(req);
+
+      if (id) {
+        const cleanId = id.toString().replace(/[#]/g, "").trim();
+        const single = orders.find(o => 
+          o.id.toUpperCase() === cleanId.toUpperCase() || 
+          o.id.replace("ORD-", "") === cleanId.replace("ORD-", "")
+        );
+        if (single) {
+          return res.status(200).json({ success: true, order: single, provider });
+        }
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+
       return res.status(200).json({ success: true, count: orders.length, provider, orders });
     }
 
@@ -247,18 +261,41 @@ export default async function handler(req, res) {
       if (typeof body === "string") {
         try { body = JSON.parse(body); } catch (e) {}
       }
-      const { id, status, isRead } = body || {};
+      const { id, status, isRead, updatedAt } = body || {};
       if (!id) return res.status(400).json({ error: "Missing order ID" });
 
+      const patchTime = updatedAt || Date.now();
+      const firebaseUrl = getFirebaseUrl(req);
+
+      // Instant direct PATCH to Firebase RTDB
+      if (firebaseUrl) {
+        try {
+          const safeId = encodeURIComponent(id);
+          const patchData = { updatedAt: patchTime };
+          if (status !== undefined) patchData.status = status;
+          if (isRead !== undefined) patchData.isRead = isRead;
+          await fetch(`${firebaseUrl}/orders/${safeId}.json`, {
+            method: "PATCH",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(patchData)
+          });
+        } catch (err) {
+          console.warn("Firebase PATCH status error:", err.message);
+        }
+      }
+
+      // Also persist to KV/secondary storage
       const { orders } = await fetchOrdersFromCloud(req);
       const target = orders.find(o => o.id === id);
       if (target) {
         if (status !== undefined) target.status = status;
         if (isRead !== undefined) target.isRead = isRead;
+        target.updatedAt = patchTime;
         await saveOrderToCloud(req, target);
       }
 
-      return res.status(200).json({ success: true, id, status, isRead });
+      return res.status(200).json({ success: true, id, status, isRead, updatedAt: patchTime });
     }
 
     // 4. DELETE: Remove order from database

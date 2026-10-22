@@ -417,7 +417,14 @@ class KasedKarimDB {
 
           if (orderMap.has(cloudOrder.id)) {
             const existing = orderMap.get(cloudOrder.id);
-            orderMap.set(cloudOrder.id, { ...cloudOrder, status: existing.status || cloudOrder.status });
+            const resolvedStatus = cloudOrder.status || existing.status || "pending";
+            const isRead = typeof cloudOrder.isRead === "boolean" ? cloudOrder.isRead : existing.isRead;
+            orderMap.set(cloudOrder.id, {
+              ...existing,
+              ...cloudOrder,
+              status: resolvedStatus,
+              isRead: isRead
+            });
           } else {
             orderMap.set(cloudOrder.id, cloudOrder);
           }
@@ -577,11 +584,94 @@ class KasedKarimDB {
     }).catch(() => null);
   }
 
-  async updateOrderStatusInCloud(orderId, status) {
+  // Fetch single order directly from cloud with zero lag
+  async fetchLiveOrder(orderId) {
+    if (!orderId) return null;
+    const cleanId = orderId.toString().replace(/[#]/g, "").trim();
     const customUrl = this.getCustomCloudUrl();
+    const t = Date.now();
+    let cloudOrder = null;
+
+    // 1. Direct Firebase RTDB single-order fetch
     if (customUrl) {
       try {
-        const safeId = encodeURIComponent(orderId);
+        const safeId = encodeURIComponent(cleanId);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`${customUrl}/orders/${safeId}.json?t=${t}`, {
+          signal: controller.signal,
+          cache: "no-store",
+          headers: { "Accept": "application/json" }
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data === "object" && data.id) {
+            cloudOrder = data;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 2. Fallback to /api/orders
+    if (!cloudOrder) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`/api/orders?t=${t}`, {
+          signal: controller.signal,
+          cache: "no-store",
+          headers: this.getCloudHeaders()
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.orders && Array.isArray(json.orders)) {
+            cloudOrder = json.orders.find(o => 
+              o.id.toUpperCase() === cleanId.toUpperCase() || 
+              o.id.replace("ORD-", "") === cleanId.replace("ORD-", "")
+            );
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (cloudOrder) {
+      const orders = this.getOrders();
+      const idx = orders.findIndex(o => o.id === cloudOrder.id);
+      if (idx > -1) {
+        orders[idx] = {
+          ...orders[idx],
+          ...cloudOrder,
+          status: cloudOrder.status || orders[idx].status
+        };
+      } else {
+        orders.unshift(cloudOrder);
+      }
+      localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
+      window.dispatchEvent(new CustomEvent("kk_orders_updated"));
+      return cloudOrder;
+    }
+
+    return null;
+  }
+
+  async updateOrderStatusInCloud(orderId, status) {
+    const customUrl = this.getCustomCloudUrl();
+    const safeId = encodeURIComponent(orderId);
+    const updatedAt = Date.now();
+
+    if (customUrl) {
+      try {
+        // Fast PATCH on the order object in Firebase RTDB
+        fetch(`${customUrl}/orders/${safeId}.json`, {
+          method: "PATCH",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status, updatedAt })
+        }).catch(() => null);
+
+        // Also ensure status.json child is updated
         fetch(`${customUrl}/orders/${safeId}/status.json`, {
           method: "PUT",
           cache: "no-store",
@@ -595,7 +685,7 @@ class KasedKarimDB {
       method: "PATCH",
       cache: "no-store",
       headers: this.getCloudHeaders(),
-      body: JSON.stringify({ id: orderId, status })
+      body: JSON.stringify({ id: orderId, status, updatedAt })
     }).catch(() => null);
   }
 

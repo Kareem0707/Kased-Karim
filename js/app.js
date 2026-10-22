@@ -226,7 +226,7 @@ function renderProducts() {
             ${item.originalPrice ? `<span class="product-price-old">${formatPrice(item.originalPrice)} ج.م</span>` : ''}
           </div>
 
-          <button class="btn-card-quote" title="إضافة لقائمة المقايسة" onclick="addToCart('${item.id}', 1)">
+          <button class="btn-card-quote" title="إضافة للسلة" onclick="addToCart('${item.id}', 1)">
             <i class="fas fa-plus"></i>
           </button>
         </div>
@@ -352,13 +352,13 @@ function addToCart(productId, qty = 1) {
   }
 
   saveCart();
-  showToast(`تمت إضافة "${product.name}" إلى قائمة المقايسة بنجاح.`);
+  showToast(`تمت إضافة "${product.name}" إلى سلة طلباتك بنجاح.`);
 }
 
 function removeFromCart(productId) {
   STATE.cart = STATE.cart.filter(item => item.id !== productId);
   saveCart();
-  showToast("تم حذف الوحدة من المقايسة.");
+  showToast("تم حذف الوحدة من السلة.");
 }
 
 function updateCartUI() {
@@ -423,15 +423,15 @@ function toggleCartDrawer(open) {
 // 7. Send Quotation via WhatsApp directly to Showroom
 function sendWhatsAppQuotation() {
   if (STATE.cart.length === 0) {
-    showToast("يرجى اختيار وحدات إضاءة أولاً لطلب المقايسة");
+    showToast("يرجى اختيار وحدات إضاءة أولاً لتأكيد طلبك");
     return;
   }
 
   const totalAmount = STATE.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   
-  let msg = `*طلب مقايسة إضاءة فاخرة - معرض Kased Karim (الشيخ زايد)*\n`;
+  let msg = `*طلب وحدات إضاءة فاخرة - معرض Kased Karim (الشيخ زايد)*\n`;
   msg += `----------------------------------------\n`;
-  msg += `مرحباً مهندس قاصد كريم، أود الاستفسار وحجز مقايسة للوحدات التالية لمشروعي بالشيخ زايد:\n\n`;
+  msg += `مرحباً معرض قاصد كريم، أود الاستفسار وتأكيد حجز الوحدات التالية لموقعي بالشيخ زايد:\n\n`;
 
   STATE.cart.forEach((item, index) => {
     msg += `${index + 1}. *${item.name}* (${item.enName})\n`;
@@ -441,8 +441,8 @@ function sendWhatsAppQuotation() {
   });
 
   msg += `----------------------------------------\n`;
-  msg += `*إجمالي المقايسة التقديري:* ${formatPrice(totalAmount)} جنيه مصري\n`;
-  msg += `يرجى تحديد موعد لمعاينة الوحدات بالمعرض أو إرسال المخطط الهندسي.`;
+  msg += `*إجمالي الطلب:* ${formatPrice(totalAmount)} جنيه مصري\n`;
+  msg += `يرجى تحديد موعد لمعاينة وتأكيد استلام الوحدات بالمعرض بالشيخ زايد.`;
 
   const phone = SHOWROOM_INFO.whatsapp || "201006367690";
   const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
