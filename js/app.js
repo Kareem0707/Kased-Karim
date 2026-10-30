@@ -818,6 +818,12 @@ function selectCategoryFromSubBar(catId) {
   renderCategoryTabs();
   renderProducts();
   updateSubBarActiveCategory();
+
+  // Bring active category tab into view
+  const activeTabBtn = document.querySelector(`.category-tab-btn[data-category="${catId}"]`);
+  if (activeTabBtn) {
+    activeTabBtn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }
   
   // Smooth scroll to catalog
   const catalog = document.getElementById("catalog");
@@ -847,8 +853,15 @@ function toggleMobileCollectionsAccordion(e) {
 
 function selectCategoryFromMobile(catId) {
   STATE.activeCategory = catId;
+  STATE.visibleCount = 6;
   renderCategoryTabs();
   renderProducts();
+
+  // Bring active category tab into view
+  const activeTabBtn = document.querySelector(`.category-tab-btn[data-category="${catId}"]`);
+  if (activeTabBtn) {
+    activeTabBtn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }
 
   // Close mobile drawer
   const drawer = document.getElementById("mobileNavDrawer");

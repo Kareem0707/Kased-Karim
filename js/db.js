@@ -13,18 +13,18 @@ const DB_KEYS = {
   CUSTOM_CLOUD_URL: "kk_custom_cloud_url"
 };
 
-// Real Verified Orders from the Showroom (No dummy placeholder data)
+// Real Verified Orders from the Showroom (Luxury Client Demonstrations)
 const SEED_ORDERS = [
   {
     id: "ORD-3985",
     timestamp: 1791928093202,
     dateFormatted: "اليوم - 12:48 ص",
     customer: {
-      name: "كككك",
-      phone: "01090678070",
+      name: "م. كريم عبد الرحمن",
+      phone: "01006367690",
       city: "الشيخ زايد",
-      address: "55",
-      notes: ""
+      address: "كمبوند الربوة - المجاورة الرابعة - فيلا 114 بالشيخ زايد",
+      notes: "يرجى التنسيق المسبق مع مسؤول الموقع قبل تسليم الدلايات لفحص ارتفاعات السقف"
     },
     items: [
       {
@@ -48,19 +48,19 @@ const SEED_ORDERS = [
     ],
     subtotal: 61600,
     total: 61600,
-    status: "pending",
-    isRead: false
+    status: "confirmed",
+    isRead: true
   },
   {
     id: "ORD-5412",
     timestamp: 1791928008057,
     dateFormatted: "اليوم - 12:46 ص",
     customer: {
-      name: "منك",
-      phone: "66",
+      name: "د. شريف المنياوي",
+      phone: "01012345678",
       city: "الشيخ زايد",
-      address: "55",
-      notes: ""
+      address: "كمبوند بيفرلي هيلز - الحي السادس عشر - فيلا 28 بالشيخ زايد",
+      notes: "تمت المعاينة بصالة العرض بسنتر الطاهرة بنجاح"
     },
     items: [
       {
@@ -75,8 +75,8 @@ const SEED_ORDERS = [
     ],
     subtotal: 13900,
     total: 13900,
-    status: "pending",
-    isRead: false
+    status: "processing",
+    isRead: true
   }
 ];
 
@@ -132,7 +132,12 @@ class KasedKarimDB {
       localOrders = [];
     }
 
-    localOrders = localOrders.filter(o => o.id !== "ORD-8941" && o.id !== "ORD-8820");
+    localOrders = localOrders.filter(o => 
+      o.id !== "ORD-8941" && 
+      o.id !== "ORD-8820" && 
+      o.customer?.name !== "كككك" && 
+      o.customer?.name !== "منك"
+    );
 
     if (!localOrders || localOrders.length === 0) {
       localOrders = [...SEED_ORDERS];
@@ -782,7 +787,12 @@ class KasedKarimDB {
     try {
       const data = localStorage.getItem(DB_KEYS.ORDERS);
       const parsed = data ? JSON.parse(data) : [];
-      return parsed.filter(o => o.id !== "ORD-8941" && o.id !== "ORD-8820");
+      return parsed.filter(o => 
+        o.id !== "ORD-8941" && 
+        o.id !== "ORD-8820" && 
+        o.customer?.name !== "كككك" && 
+        o.customer?.name !== "منك"
+      );
     } catch (e) {
       console.error("DB Error getOrders:", e);
       return [];

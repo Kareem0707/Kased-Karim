@@ -992,9 +992,11 @@ function handleAdminAddProductForm(e) {
   // 2. Optional Fields (No default values added - keep empty if user did not provide them)
   const enName = form.adminUnitEnName ? form.adminUnitEnName.value.trim() : "";
   const category = form.adminUnitCategory ? form.adminUnitCategory.value : "pendants";
-  const categoryName = form.adminUnitCategory && form.adminUnitCategory.selectedIndex >= 0
-    ? form.adminUnitCategory.options[form.adminUnitCategory.selectedIndex].text
+  const catObj = typeof CATEGORIES !== "undefined" ? CATEGORIES.find(c => c.id === category) : null;
+  const rawCatOptionText = form.adminUnitCategory && form.adminUnitCategory.selectedIndex >= 0
+    ? form.adminUnitCategory.options[form.adminUnitCategory.selectedIndex].text.split("(")[0].trim()
     : "دلايات";
+  const categoryName = catObj ? catObj.name : rawCatOptionText;
 
   const style = form.adminUnitStyle ? form.adminUnitStyle.value.trim() : "";
   const originalPrice = form.adminUnitOldPrice && form.adminUnitOldPrice.value
