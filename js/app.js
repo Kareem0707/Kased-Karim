@@ -26,6 +26,10 @@ function initApp() {
   loadProducts();
   loadCart();
   renderCategoryTabs();
+  renderSubBarCategories();
+  renderMobileAccordionCategories();
+  renderFooterCategories();
+  applyDynamicSettings();
   renderProducts();
   setupEventListeners();
   setupCategoryTabsScroll();
@@ -80,7 +84,9 @@ function renderCategoryTabs() {
   const tabsContainer = document.getElementById("categoryTabs");
   if (!tabsContainer) return;
 
-  tabsContainer.innerHTML = CATEGORIES.map(cat => {
+  const cats = window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []);
+
+  tabsContainer.innerHTML = cats.map(cat => {
     const count = cat.id === "all" 
       ? STATE.products.length 
       : STATE.products.filter(p => p.category === cat.id).length;
@@ -102,6 +108,7 @@ function renderCategoryTabs() {
       STATE.visibleCount = 6;
       renderCategoryTabs();
       renderProducts();
+      updateSubBarActiveCategory();
 
       // Smoothly bring clicked tab into view
       btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
@@ -111,6 +118,136 @@ function renderCategoryTabs() {
   if (typeof updateCategoryScrollButtons === "function") {
     updateCategoryScrollButtons();
   }
+}
+
+// 3.1 Render Sub-Bar Categories
+function renderSubBarCategories() {
+  const container = document.getElementById("subBarItems");
+  if (!container) return;
+
+  const cats = window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []);
+  container.innerHTML = cats.map(cat => `
+    <button class="sub-bar-cat-btn ${STATE.activeCategory === cat.id ? 'active' : ''}" onclick="selectCategoryFromSubBar('${cat.id}')">
+      <span>${cat.name}</span>
+    </button>
+  `).join("");
+}
+
+// 3.2 Render Mobile Accordion Categories
+function renderMobileAccordionCategories() {
+  const container = document.getElementById("mobileAccordionContent");
+  if (!container) return;
+
+  const cats = window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []);
+  container.innerHTML = cats.map(cat => `
+    <button class="mobile-sub-cat-item ${STATE.activeCategory === cat.id ? 'active' : ''}" onclick="selectCategoryFromMobile('${cat.id}')">
+      <span>${cat.name}</span>
+    </button>
+  `).join("");
+}
+
+// 3.3 Render Footer Collections Categories
+function renderFooterCategories() {
+  const container = document.querySelector(".footer-links-grid");
+  if (!container) return;
+
+  const cats = (window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : [])).filter(c => c.id !== "all");
+  container.innerHTML = cats.map(cat => `
+    <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('${cat.id}')">${cat.name}</a></li>
+  `).join("");
+}
+
+// 3.4 Apply Dynamic Showroom Settings & Contact Links Across Website
+function applyDynamicSettings() {
+  const settings = window.KK_DB ? window.KK_DB.getSettings() : (typeof SHOWROOM_INFO !== "undefined" ? SHOWROOM_INFO : {});
+  if (!settings) return;
+
+  const phone = settings.phone || "01006367690";
+  const whatsapp = settings.whatsapp || "201006367690";
+  const location = settings.location || "الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة";
+  const hours = settings.workingHours || "يومياً من 11:00 صباحاً حتى 11:00 مساءً";
+  const mapUrl = settings.mapUrl || "https://maps.app.goo.gl/EzzitFCzNSpQc7w77?g_st=ic";
+  const mapEmbed = settings.mapEmbedUrl || "https://maps.google.com/maps?q=%D9%82%D8%A7%D8%B5%D8%AF%20%D9%83%D8%B1%D9%8A%D9%85%202%20%D9%84%D9%84%D8%A7%D8%AF%D9%88%D8%A7%D8%AA%20%D8%A7%D9%84%D9%83%D9%87%D8%B1%D8%A8%D8%A7%D8%A6%D9%8A%D8%A9%2C%20%D8%B1%D9%82%D9%85%2039%D8%8C%20%D8%A3%D9%88%D9%84%20%D8%A7%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B2%D8%A7%D9%8A%D8%AF%D8%8C%20%D9%85%D8%AD%D8%A7%D9%81%D8%B8%D8%A9%20%D8%A7%D9%84%D8%AC%D9%8A%D8%B2%D8%A9&t=&z=14&ie=UTF8&iwloc=&output=embed";
+  const social = settings.social || {};
+
+  // Top bar phone
+  const topPhone = document.getElementById("topBarPhone");
+  if (topPhone) topPhone.textContent = `معرض الشيخ زايد • ${phone}`;
+
+  // Header WhatsApp
+  const headerWa = document.getElementById("headerWhatsappBtn");
+  if (headerWa) headerWa.href = `https://wa.me/${whatsapp}`;
+
+  // Floating WhatsApp
+  const floatingWa = document.getElementById("floatingWhatsappBtn");
+  if (floatingWa) {
+    const waText = encodeURIComponent("مرحباً معرض قاصد كريم للإضاءة بالشيخ زايد، أود الاستفسار عن وحدات الإضاءة.");
+    floatingWa.href = `https://wa.me/${whatsapp}?text=${waText}`;
+  }
+
+  // Mobile Drawer WhatsApp
+  const mobileDrawerWa = document.getElementById("mobileDrawerWhatsappBtn");
+  if (mobileDrawerWa) mobileDrawerWa.href = `https://wa.me/${whatsapp}`;
+
+  // Showroom Section
+  const showroomLoc = document.getElementById("showroomLocationText");
+  if (showroomLoc) showroomLoc.textContent = location;
+  const showroomHrs = document.getElementById("showroomHoursText");
+  if (showroomHrs) showroomHrs.textContent = hours;
+  const showroomWa = document.getElementById("showroomWhatsappBtn");
+  if (showroomWa) showroomWa.href = `https://wa.me/${whatsapp}`;
+  const showroomMap = document.getElementById("showroomMapBtn");
+  if (showroomMap) showroomMap.href = mapUrl;
+
+  // Footer Location & Maps
+  const footerLoc = document.getElementById("footerLocationText");
+  if (footerLoc) footerLoc.textContent = location;
+  const footerMapIframe = document.getElementById("footerMapEmbed");
+  if (footerMapIframe) footerMapIframe.src = mapEmbed;
+  const footerMapLnk = document.getElementById("footerMapLink");
+  if (footerMapLnk) footerMapLnk.href = mapUrl;
+  const footerHrs = document.getElementById("footerHoursText");
+  if (footerHrs) footerHrs.textContent = hours;
+
+  // Footer Phone & WhatsApp
+  const footerPhoneLnk = document.getElementById("footerPhoneLink");
+  const footerPhoneSpn = document.getElementById("footerPhoneSpan");
+  if (footerPhoneLnk) footerPhoneLnk.href = `tel:${phone}`;
+  if (footerPhoneSpn) footerPhoneSpn.textContent = phone;
+
+  const footerWaLnk = document.getElementById("footerWhatsappLink");
+  const footerWaSpn = document.getElementById("footerWhatsappSpan");
+  if (footerWaLnk) footerWaLnk.href = `https://wa.me/${whatsapp}`;
+  if (footerWaSpn) footerWaSpn.textContent = `واتساب المعرض المباشر (${phone})`;
+
+  // Footer Socials
+  const footerInsta = document.getElementById("footerInstagramBtn");
+  if (footerInsta && social.instagram) {
+    footerInsta.href = social.instagram;
+    footerInsta.style.display = "inline-flex";
+  }
+  const footerFb = document.getElementById("footerFacebookBtn");
+  if (footerFb && social.facebook) {
+    footerFb.href = social.facebook;
+    footerFb.style.display = "inline-flex";
+  }
+  const footerTt = document.getElementById("footerTiktokBtn");
+  if (footerTt) {
+    if (social.tiktok && social.tiktok.trim()) {
+      footerTt.href = social.tiktok;
+      footerTt.style.display = "inline-flex";
+    } else {
+      footerTt.style.display = "none";
+    }
+  }
+  const footerMapSocial = document.getElementById("footerMapSocialBtn");
+  if (footerMapSocial) footerMapSocial.href = mapUrl;
+  const footerWaSocial = document.getElementById("footerWhatsappSocialBtn");
+  if (footerWaSocial) footerWaSocial.href = `https://wa.me/${whatsapp}`;
+
+  // Footer Designer link
+  const designerLink = document.getElementById("footerDesignerLink");
+  if (designerLink && social.designerUrl) designerLink.href = social.designerUrl;
 }
 
 // 4. Render Product Cards Grid (With Luxury Pagination / Load More)
@@ -643,8 +780,10 @@ function setupEventListeners() {
     modalWhatsappBtn.addEventListener("click", () => {
       if (!STATE.selectedProduct) return;
       const p = STATE.selectedProduct;
+      const settings = window.KK_DB ? window.KK_DB.getSettings() : (typeof SHOWROOM_INFO !== "undefined" ? SHOWROOM_INFO : {});
+      const waNumber = settings.whatsapp || "201006367690";
       const msg = `مرحباً، أستفسر عن وحدة الإضاءة: ${p.name} (${p.enName}) - كود: ${p.id} بسعر ${formatPrice(p.price)} ج.م من معرض Kased Karim بالشيخ زايد. هل هي متاحة للعرض في المعرض؟`;
-      const url = `https://wa.me/${SHOWROOM_INFO.whatsapp}?text=${encodeURIComponent(msg)}`;
+      const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
       window.open(url, "_blank");
     });
   }
@@ -669,6 +808,20 @@ function setupEventListeners() {
     loadProducts();
     renderCategoryTabs();
     renderProducts();
+  });
+
+  // Real-time Cloud Sync Listener for Categories
+  window.addEventListener("kk_categories_updated", () => {
+    renderCategoryTabs();
+    renderSubBarCategories();
+    renderMobileAccordionCategories();
+    renderFooterCategories();
+    renderProducts();
+  });
+
+  // Real-time Cloud Sync Listener for Settings & Contacts
+  window.addEventListener("kk_settings_updated", () => {
+    applyDynamicSettings();
   });
 }
 

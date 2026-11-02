@@ -197,12 +197,15 @@ function initAdminSystem() {
     renderAdminOverview();
     renderAdminOrders();
     renderAdminInventory();
+    populateAdminCategorySelect();
+    checkDailyBackupSchedule();
 
     if (window.KK_DB) {
       window.KK_DB.forceSyncNow().then(() => {
         renderAdminOverview();
         renderAdminOrders();
         renderAdminInventory();
+        populateAdminCategorySelect();
         updateAdminHeaderBadge();
       });
     }
@@ -255,6 +258,29 @@ function initAdminSystem() {
     if (isAdminPage || document.getElementById("adminDashboardModal")?.classList.contains("active")) {
       renderAdminOverview();
       renderAdminInventory();
+    }
+  });
+
+  // Listen to Categories update
+  window.addEventListener("kk_categories_updated", () => {
+    populateAdminCategorySelect();
+    if (isAdminPage) {
+      renderAdminCategories();
+      renderAdminInventory();
+    }
+  });
+
+  // Listen to Settings update
+  window.addEventListener("kk_settings_updated", () => {
+    if (isAdminPage) {
+      loadAdminSettingsValues();
+    }
+  });
+
+  // Listen to Restore Points update
+  window.addEventListener("kk_restore_points_updated", () => {
+    if (isAdminPage) {
+      renderAdminBackupView();
     }
   });
 
@@ -405,7 +431,10 @@ function switchAdminTab(tabKey, element) {
   if (tabKey === "overview") renderAdminOverview();
   if (tabKey === "orders") renderAdminOrders();
   if (tabKey === "inventory") renderAdminInventory();
-  if (tabKey === "cloudSync") renderCloudDbSettings();
+  if (tabKey === "addProduct") populateAdminCategorySelect();
+  if (tabKey === "categories") renderAdminCategories();
+  if (tabKey === "settings") loadAdminSettingsValues();
+  if (tabKey === "backup") renderAdminBackupView();
 }
 
 // ----------------------------------------------------------------------------
@@ -1936,8 +1965,500 @@ function trackOrderFromSuccessModal() {
 function contactSupportAboutTrackedOrder(customQuery = null) {
   const targetId = customQuery || window.currentTrackedOrderId || "طلب إضاءة";
   const msg = `مرحباً معرض قاصد كريم بالشيخ زايد، أود الاستفسار عن تفاصيل وحالة طلبي رقم #${targetId}. هل يمكنكم إفادتي بآخر المستجدات وموعد المعاينة / التوصيل؟`;
-  const phone = "201006367690";
+  const settings = window.KK_DB ? window.KK_DB.getSettings() : {};
+  const phone = settings.whatsapp || "201006367690";
   const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   window.open(url, "_blank");
 }
+
+// ============================================================================
+// 10. CATEGORY MANAGEMENT CONTROLLERS (إدارة أقسام المعرض)
+// ============================================================================
+function updateCategoryIconPreview() {
+  const iconInput = document.getElementById("newCategoryIcon");
+  const preview = document.getElementById("newCategoryIconPreview");
+  if (!iconInput || !preview) return;
+  const iconClass = iconInput.value.trim() || "fa-gem";
+  preview.innerHTML = `<i class="fas ${iconClass}"></i>`;
+}
+
+function populateAdminCategorySelect() {
+  const select = document.getElementById("adminUnitCategory");
+  if (!select) return;
+
+  const currentVal = select.value;
+  const categories = (window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []))
+    .filter(c => c.id !== "all");
+
+  select.innerHTML = `
+    <option value="" disabled ${!currentVal ? "selected" : ""}>-- اختر قسم الإضاءة من القائمة --</option>
+    ${categories.map(c => `
+      <option value="${c.id}" ${currentVal === c.id ? "selected" : ""}>
+        ${c.name} (${c.id})
+      </option>
+    `).join("")}
+  `;
+}
+
+function renderAdminCategories() {
+  const tbody = document.getElementById("adminCategoriesTableBody");
+  const countEl = document.getElementById("adminCategoriesTotalCount");
+  if (!tbody || !window.KK_DB) return;
+
+  const categories = window.KK_DB.getCategories();
+  const products = window.KK_DB.getProducts();
+
+  if (countEl) countEl.textContent = categories.length;
+
+  tbody.innerHTML = categories.map(cat => {
+    const isAll = cat.id === "all";
+    const prodCount = isAll ? products.length : products.filter(p => p.category === cat.id).length;
+    const iconClass = cat.icon || "fa-gem";
+
+    return `
+      <tr>
+        <td style="width: 60px; text-align: center;">
+          <div class="category-icon-badge">
+            <i class="fas ${iconClass}"></i>
+          </div>
+        </td>
+        <td>
+          <div style="font-weight: 800; color: #0F172A; font-size: 0.95rem;">${cat.name}</div>
+          ${cat.isCustom ? `<span style="font-size: 0.72rem; color: #059669; background: #ECFDF5; padding: 0.15rem 0.5rem; border-radius: 4px; display: inline-block; margin-top: 0.2rem;">قسم مخصص</span>` : ""}
+        </td>
+        <td>
+          <code style="background: #F1F5F9; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.82rem; color: #475569;">${cat.id}</code>
+        </td>
+        <td>
+          <span style="font-weight: 700; color: var(--accent);">${prodCount} قطعة</span>
+        </td>
+        <td>
+          <div class="action-btn-group">
+            ${isAll ? `
+              <span style="font-size: 0.75rem; color: var(--text-muted);">قسم أساسي ثابت</span>
+            ` : `
+              <button type="button" class="action-btn-sm" onclick="editCategoryPrompt('${cat.id}')" title="تعديل اسم أو أيقونة القسم">
+                <i class="fas fa-pen-to-square"></i> تعديل
+              </button>
+              <button type="button" class="action-btn-sm btn-danger" onclick="deleteCategoryConfirm('${cat.id}')" title="حذف القسم">
+                <i class="fas fa-trash-alt"></i> حذف
+              </button>
+            `}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function handleAdminAddCategory(e) {
+  e.preventDefault();
+  const nameInput = document.getElementById("newCategoryName");
+  const idInput = document.getElementById("newCategoryId");
+  const iconInput = document.getElementById("newCategoryIcon");
+
+  const name = nameInput ? nameInput.value.trim() : "";
+  let id = idInput ? idInput.value.trim() : "";
+  const icon = iconInput ? iconInput.value.trim() : "fa-gem";
+
+  if (!name) {
+    showToast("⚠️ يرجى إدخال اسم القسم بالعربية");
+    return;
+  }
+
+  if (!id) {
+    id = "cat-" + Date.now().toString().slice(-6);
+  } else {
+    id = id.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-");
+  }
+
+  if (window.KK_DB) {
+    const res = window.KK_DB.addCategory({ id, name, icon });
+    if (res.success) {
+      showToast(`✅ تم إضافة قسم "${name}" بنجاح للكتالوج والمعرض`);
+      if (nameInput) nameInput.value = "";
+      if (idInput) idInput.value = "";
+      renderAdminCategories();
+      populateAdminCategorySelect();
+    } else {
+      showToast(`⚠️ ${res.error || "حدث خطأ أثناء إضافة القسم"}`);
+    }
+  }
+}
+
+function editCategoryPrompt(catId) {
+  if (!window.KK_DB) return;
+  const categories = window.KK_DB.getCategories();
+  const cat = categories.find(c => c.id === catId);
+  if (!cat) return;
+
+  const newName = prompt("أدخل الاسم الجديد للقسم:", cat.name);
+  if (newName === null) return;
+  const cleanName = newName.trim();
+  if (!cleanName) {
+    showToast("⚠️ لا يمكن ترك اسم القسم فارغاً");
+    return;
+  }
+
+  const newIcon = prompt("أدخل كود أيقونة FontAwesome (مثال: fa-gem, fa-lightbulb, fa-sun):", cat.icon || "fa-gem");
+  const cleanIcon = newIcon !== null && newIcon.trim() ? newIcon.trim() : (cat.icon || "fa-gem");
+
+  const res = window.KK_DB.updateCategory(catId, { name: cleanName, icon: cleanIcon });
+  if (res.success) {
+    showToast(`✅ تم تحديث قسم "${cleanName}" بنجاح`);
+    renderAdminCategories();
+    populateAdminCategorySelect();
+  } else {
+    showToast(`⚠️ ${res.error || "فشل التعديل"}`);
+  }
+}
+
+function deleteCategoryConfirm(catId) {
+  if (!window.KK_DB) return;
+  const categories = window.KK_DB.getCategories();
+  const cat = categories.find(c => c.id === catId);
+  if (!cat) return;
+
+  const products = window.KK_DB.getProducts();
+  const relatedCount = products.filter(p => p.category === catId).length;
+
+  let msg = `هل أنت متأكد من حذف قسم "${cat.name}"؟`;
+  if (relatedCount > 0) {
+    msg += `\n\nتنبيه: يوجد ${relatedCount} منتج مرتبط بهذا القسم حالياً.\n(سيتم حفظ نقطة استرجاع تلقائية في حال أردت التراجع).`;
+  }
+
+  if (!confirm(msg)) return;
+
+  const res = window.KK_DB.deleteCategory(catId);
+  if (res.success) {
+    showToast(`🗑️ تم حذف قسم "${cat.name}" بنجاح (تم حفظ نقطة استرجاع تلقائية)`);
+    renderAdminCategories();
+    populateAdminCategorySelect();
+  } else {
+    showToast(`⚠️ ${res.error || "فشل الحذف"}`);
+  }
+}
+
+// ============================================================================
+// 11. SHOWROOM SETTINGS & CONTACT INFO CONTROLLERS
+// ============================================================================
+function loadAdminSettingsValues() {
+  if (!window.KK_DB) return;
+  const s = window.KK_DB.getSettings();
+  if (!s) return;
+
+  const phoneEl = document.getElementById("settingsPhone");
+  const waEl = document.getElementById("settingsWhatsapp");
+  const locEl = document.getElementById("settingsLocation");
+  const hrsEl = document.getElementById("settingsWorkingHours");
+  const emailEl = document.getElementById("settingsEmail");
+  const mapEl = document.getElementById("settingsMapUrl");
+  const mapEmbedEl = document.getElementById("settingsMapEmbedUrl");
+  const fbEl = document.getElementById("settingsFacebook");
+  const igEl = document.getElementById("settingsInstagram");
+  const ttEl = document.getElementById("settingsTiktok");
+  const desEl = document.getElementById("settingsDesignerUrl");
+
+  if (phoneEl) phoneEl.value = s.phone || "";
+  if (waEl) waEl.value = s.whatsapp || "";
+  if (locEl) locEl.value = s.location || "";
+  if (hrsEl) hrsEl.value = s.workingHours || "";
+  if (emailEl) emailEl.value = s.email || "";
+  if (mapEl) mapEl.value = s.mapUrl || "";
+  if (mapEmbedEl) mapEmbedEl.value = s.mapEmbedUrl || "";
+
+  const social = s.social || {};
+  if (fbEl) fbEl.value = social.facebook || "";
+  if (igEl) igEl.value = social.instagram || "";
+  if (ttEl) ttEl.value = social.tiktok || "";
+  if (desEl) desEl.value = social.designerUrl || "https://karimodesign.vercel.app/";
+}
+
+function handleAdminSettingsSubmit(e) {
+  e.preventDefault();
+  if (!window.KK_DB) return;
+
+  const phone = (document.getElementById("settingsPhone")?.value || "").trim();
+  const whatsapp = (document.getElementById("settingsWhatsapp")?.value || "").trim().replace(/[+ ]/g, "");
+  const location = (document.getElementById("settingsLocation")?.value || "").trim();
+  const workingHours = (document.getElementById("settingsWorkingHours")?.value || "").trim();
+  const email = (document.getElementById("settingsEmail")?.value || "").trim();
+  const mapUrl = (document.getElementById("settingsMapUrl")?.value || "").trim();
+  const mapEmbedUrl = (document.getElementById("settingsMapEmbedUrl")?.value || "").trim();
+
+  const facebook = (document.getElementById("settingsFacebook")?.value || "").trim();
+  const instagram = (document.getElementById("settingsInstagram")?.value || "").trim();
+  const tiktok = (document.getElementById("settingsTiktok")?.value || "").trim();
+  const designerUrl = (document.getElementById("settingsDesignerUrl")?.value || "").trim();
+
+  const newSettings = {
+    phone,
+    whatsapp,
+    location,
+    workingHours,
+    email,
+    mapUrl,
+    mapEmbedUrl,
+    social: {
+      facebook,
+      instagram,
+      tiktok,
+      designerUrl
+    }
+  };
+
+  const res = window.KK_DB.updateSettings(newSettings);
+  if (res.success) {
+    showToast("✅ تم حفظ وتطبيق بيانات التواصل والروابط فورياً على المعرض");
+  } else {
+    showToast("⚠️ حدث خطأ أثناء حفظ الإعدادات");
+  }
+}
+
+// ============================================================================
+// 12. DUAL BACKUP & RESTORE SYSTEM CONTROLLERS
+// ============================================================================
+window.pendingFileBackupData = null;
+
+function triggerDailyBackupDownload() {
+  if (!window.KK_DB) return;
+  const res = window.KK_DB.downloadBackupFile("تحميل يدوي للمدير");
+  if (res && res.success) {
+    showToast(`🛡️ تم تحميل ملف النسخة الاحتياطية (${res.fileName}) بنجاح على جهازك`);
+    checkDailyBackupSchedule();
+    renderAdminBackupView();
+  }
+}
+
+function checkDailyBackupSchedule() {
+  const today = new Date().toISOString().slice(0, 10);
+  const lastDownload = localStorage.getItem("kk_last_downloaded_backup_date");
+  const banner = document.getElementById("adminDailyBackupBanner");
+  const lastDownloadInfo = document.getElementById("adminLastDownloadInfo");
+
+  // Check and create daily restore point
+  if (window.KK_DB) {
+    window.KK_DB.checkAndCreateDailyRestorePoint();
+  }
+
+  if (lastDownload === today) {
+    if (banner) banner.style.display = "none";
+    if (lastDownloadInfo) {
+      lastDownloadInfo.innerHTML = `<i class="fas fa-circle-check" style="color: #10B981;"></i> <span>تم تحميل نسخة اليوم على جهازك بنجاح (${today})</span>`;
+    }
+  } else {
+    const isDismissed = sessionStorage.getItem("kk_dismissed_backup_banner_date") === today;
+    if (banner) banner.style.display = isDismissed ? "none" : "flex";
+    if (lastDownloadInfo) {
+      lastDownloadInfo.innerHTML = `<i class="fas fa-triangle-exclamation" style="color: #F59E0B;"></i> <span>آخر تحميل: ${lastDownload ? lastDownload : "لم يتم التحميل اليوم بعد"}</span>`;
+    }
+  }
+}
+
+function dismissDailyBackupBanner() {
+  const today = new Date().toISOString().slice(0, 10);
+  sessionStorage.setItem("kk_dismissed_backup_banner_date", today);
+  const banner = document.getElementById("adminDailyBackupBanner");
+  if (banner) banner.style.display = "none";
+}
+
+function renderAdminBackupView() {
+  checkDailyBackupSchedule();
+  const tbody = document.getElementById("adminRestorePointsTableBody");
+  if (!tbody || !window.KK_DB) return;
+
+  const points = window.KK_DB.getWebRestorePoints();
+
+  if (points.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+          لا توجد نقاط استرجاع محفوظة حالياً. يتم إنشاء النقاط تلقائياً عند حذف العناصر أو عبر زر "حفظ نقطة استرجاع".
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = points.map(p => {
+    const counts = p.counts || {};
+    const pCount = counts.products || (p.data?.products?.length) || 0;
+    const oCount = counts.orders || (p.data?.orders?.length) || 0;
+    const cCount = counts.categories || (p.data?.categories?.length) || 0;
+    const rev = p.totalRevenue || (p.data?.analytics?.totalRevenue) || 0;
+
+    return `
+      <tr>
+        <td>
+          <div style="font-weight: 800; color: #0F172A; font-size: 0.9rem;">${p.dateFormatted || ""}</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted);">${p.timeFormatted || ""}</div>
+        </td>
+        <td>
+          <div style="font-weight: 700; color: #1E293B; font-size: 0.9rem;">${p.label}</div>
+          <code style="font-size: 0.72rem; color: #64748B;">ID: ${p.id}</code>
+        </td>
+        <td>
+          <div style="font-size: 0.85rem; color: #334155;">
+            <span><strong>${pCount}</strong> منتج</span> • 
+            <span><strong>${oCount}</strong> طلب</span> • 
+            <span><strong>${cCount}</strong> قسم</span>
+          </div>
+        </td>
+        <td>
+          <span style="font-weight: 800; color: #10B981;">${formatPrice(rev)} ج.م</span>
+        </td>
+        <td>
+          <div class="action-btn-group">
+            <button type="button" class="action-btn-sm btn-restore" onclick="restoreWebPointById('${p.id}')" title="استرجاع هذه النقطة فوراً">
+              <i class="fas fa-rotate-left"></i> استرجاع بنقرة واحدة
+            </button>
+            <button type="button" class="action-btn-sm btn-danger" onclick="deleteWebPointById('${p.id}')" title="حذف النقطة">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function createManualWebRestorePoint() {
+  if (!window.KK_DB) return;
+  const label = prompt("أدخل سبباً أو ملاحظة لنقطة الاسترجاع:", "نقطة يدوية - " + new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }));
+  if (label === null) return;
+  const cleanLabel = label.trim() || "نقطة استرجاع يدوية";
+
+  window.KK_DB.saveWebRestorePoint(cleanLabel);
+  showToast("🛡️ تم حفظ نقطة الاسترجاع السريعة على الويب بنجاح");
+  renderAdminBackupView();
+}
+
+function restoreWebPointById(pointId) {
+  if (!window.KK_DB) return;
+  const points = window.KK_DB.getWebRestorePoints();
+  const point = points.find(p => p.id === pointId);
+  if (!point) return;
+
+  const confirmMsg = `هل أنت متأكد من استرجاع البيانات إلى نقطة: "${point.label}" (${point.dateFormatted} - ${point.timeFormatted})؟\n\nسيتم استرجاع جميع المنتجات والطلبات والأقسام كما كانت في هذه اللحظة، مع حفظ نقطة أمان تلقائية للوضع الحالي.`;
+  if (!confirm(confirmMsg)) return;
+
+  const res = window.KK_DB.restoreFromWebPoint(pointId);
+  if (res.success) {
+    showToast("✅ تم استرجاع البيانات بنجاح تام من نقطة الويب!");
+    renderAdminOverview();
+    renderAdminOrders();
+    renderAdminInventory();
+    renderAdminCategories();
+    loadAdminSettingsValues();
+    renderAdminBackupView();
+  } else {
+    showToast(`⚠️ ${res.error || "فشل الاسترجاع"}`);
+  }
+}
+
+function deleteWebPointById(pointId) {
+  if (!window.KK_DB) return;
+  if (!confirm("هل أنت متأكد من حذف نقطة الاسترجاع هذه نهائياً؟")) return;
+  window.KK_DB.deleteWebRestorePoint(pointId);
+  showToast("🗑️ تم حذف نقطة الاسترجاع");
+  renderAdminBackupView();
+}
+
+function handleBackupFileSelected(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data || (!data.products && !data.orders)) {
+        showToast("⚠️ ملف النسخة الاحتياطية غير صالح أو فارغ");
+        return;
+      }
+
+      window.pendingFileBackupData = data;
+
+      const promptEl = document.getElementById("backupFilePrompt");
+      const previewEl = document.getElementById("backupFilePreview");
+      const nameEl = document.getElementById("backupFileNameDisplay");
+      const statsEl = document.getElementById("backupFileStatsDisplay");
+
+      if (promptEl) promptEl.style.display = "none";
+      if (previewEl) previewEl.style.display = "block";
+      if (nameEl) nameEl.textContent = file.name;
+      if (statsEl) {
+        const pCount = data.products?.length || 0;
+        const oCount = data.orders?.length || 0;
+        const cCount = data.categories?.length || 0;
+        const rev = data.analytics?.totalRevenue || 0;
+        statsEl.innerHTML = `يحتوي الملف على: <strong>${pCount}</strong> منتج • <strong>${oCount}</strong> طلب • <strong>${cCount}</strong> قسم • مبيعات بقيمة <strong>${formatPrice(rev)} ج.م</strong> (${data.dateFormatted || "تاريخ مجهول"})`;
+      }
+    } catch (err) {
+      showToast("⚠️ تعذر قراءة الملف، تأكد من أنه بصيغة JSON صحيحة");
+    }
+  };
+  reader.readAsText(file);
+}
+
+function cancelFileRestore(e) {
+  if (e) e.stopPropagation();
+  window.pendingFileBackupData = null;
+  const input = document.getElementById("backupFileInput");
+  if (input) input.value = "";
+  const promptEl = document.getElementById("backupFilePrompt");
+  const previewEl = document.getElementById("backupFilePreview");
+  if (promptEl) promptEl.style.display = "flex";
+  if (previewEl) previewEl.style.display = "none";
+}
+
+function applyFileRestore(e) {
+  if (e) e.stopPropagation();
+  if (!window.pendingFileBackupData || !window.KK_DB) {
+    showToast("⚠️ لا توجد بيانات محددة للاسترجاع");
+    return;
+  }
+
+  if (!confirm("تحذير: هل أنت متأكد من استرجاع بيانات هذا الملف بالكامل؟ سيتم استبدال المنتجات والطلبات الحالية مع حفظ نقطة أمان تلقائية أولاً.")) {
+    return;
+  }
+
+  const res = window.KK_DB.restoreFromData(window.pendingFileBackupData, true);
+  if (res.success) {
+    showToast(`✅ تم استرجاع البيانات بنجاح من الملف (${res.restoredCounts.products} منتج، ${res.restoredCounts.orders} طلب)`);
+    cancelFileRestore();
+    renderAdminOverview();
+    renderAdminOrders();
+    renderAdminInventory();
+    renderAdminCategories();
+    loadAdminSettingsValues();
+    renderAdminBackupView();
+  } else {
+    showToast(`⚠️ ${res.error || "فشل استرجاع الملف"}`);
+  }
+}
+
+function emergencyFactoryReset() {
+  if (!window.KK_DB) return;
+  const firstConfirm = confirm("تنبيه خطير جداً:\nهل أنت متأكد من رغبتك في إعادة ضبط المصنع؟\nسيتم استرجاع الكتالوج الأصلي والطلبات الافتراضية مع حفظ نقطة استرجاع أمان تلقائية.");
+  if (!firstConfirm) return;
+
+  const pin = prompt("لإتمام إعادة ضبط المصنع، يرجى كتابة كلمة 'تأكيد':");
+  if (pin !== "تأكيد" && pin !== "confirm") {
+    showToast("⚠️ تم إلغاء العملية");
+    return;
+  }
+
+  const res = window.KK_DB.restoreFactoryDefaults();
+  if (res.success) {
+    showToast("🔄 تم استعادة ضبط المصنع بنجاح");
+    renderAdminOverview();
+    renderAdminOrders();
+    renderAdminInventory();
+    renderAdminCategories();
+    loadAdminSettingsValues();
+    renderAdminBackupView();
+  }
+}
+
 

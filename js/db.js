@@ -8,7 +8,9 @@
 const DB_KEYS = {
   PRODUCTS: "kased_karim_db_products_v3",
   ORDERS: "kased_karim_db_orders_v2",
-  SETTINGS: "kased_karim_db_settings_v2",
+  CATEGORIES: "kased_karim_db_categories_v2",
+  SETTINGS: "kased_karim_db_settings_v3",
+  BACKUPS: "kased_karim_db_backups_v1",
   CLOUD_CONFIG: "kased_karim_cloud_config_v1",
   CUSTOM_CLOUD_URL: "kk_custom_cloud_url"
 };
@@ -145,6 +147,82 @@ class KasedKarimDB {
     localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(localOrders));
 
     localOrders.forEach(o => this.knownOrderIds.add(o.id));
+
+    // 3. Initialize Categories
+    let cachedCategories = null;
+    try {
+      const raw = localStorage.getItem(DB_KEYS.CATEGORIES);
+      if (raw) cachedCategories = JSON.parse(raw);
+    } catch (e) {}
+
+    if (Array.isArray(cachedCategories) && cachedCategories.length > 0) {
+      if (!cachedCategories.some(c => c.id === "all")) {
+        cachedCategories.unshift({ id: "all", name: "الكل المعروض", icon: "fa-sparkles" });
+      }
+      localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(cachedCategories));
+      window.CATEGORIES = cachedCategories;
+      if (typeof CATEGORIES !== "undefined") CATEGORIES = cachedCategories;
+    } else {
+      const defaultCats = typeof INITIAL_CATEGORIES !== "undefined" ? [...INITIAL_CATEGORIES] : [
+        { id: "all", name: "الكل المعروض", icon: "fa-sparkles" },
+        { id: "table-lamps", name: "أباجورات", icon: "fa-lamp" },
+        { id: "pendants", name: "دلايات", icon: "fa-gem" },
+        { id: "wall-sconces", name: "أباليك", icon: "fa-lightbulb" },
+        { id: "spotlights", name: "سبوت لايت", icon: "fa-bullseye" },
+        { id: "floor-lamps", name: "لمباديرات", icon: "fa-sun" },
+        { id: "track-lights", name: "تراك لايت", icon: "fa-bolt" },
+        { id: "bollards-lanterns", name: "فوانيس سور، بولارد", icon: "fa-landmark" },
+        { id: "spike-lights", name: "حربة", icon: "fa-tree" },
+        { id: "led-panels", name: "بانلات", icon: "fa-border-all" },
+        { id: "floodlights", name: "كشافات", icon: "fa-tower-broadcast" },
+        { id: "led-profiles", name: "أعواد البروفايل", icon: "fa-microchip" },
+        { id: "stair-lights", name: "درج سلم", icon: "fa-stairs" }
+      ];
+      localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(defaultCats));
+      window.CATEGORIES = defaultCats;
+      if (typeof CATEGORIES !== "undefined") CATEGORIES = defaultCats;
+    }
+
+    // 4. Initialize Settings
+    let cachedSettings = null;
+    try {
+      const raw = localStorage.getItem(DB_KEYS.SETTINGS);
+      if (raw) cachedSettings = JSON.parse(raw);
+    } catch (e) {}
+
+    const defaultSettings = typeof INITIAL_SHOWROOM_INFO !== "undefined" ? { ...INITIAL_SHOWROOM_INFO } : {
+      brandName: "Kased Karim",
+      brandArabic: "قاصد كريم للإضاءة الفاخرة",
+      tagline: "أيقونة الإضاءة الديكورية والمعمارية في الشيخ زايد",
+      location: "الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة، مصر",
+      mapUrl: "https://maps.app.goo.gl/EzzitFCzNSpQc7w77?g_st=ic",
+      mapEmbedUrl: "https://maps.google.com/maps?q=%D9%82%D8%A7%D8%B5%D8%AF%20%D9%83%D8%B1%D9%8A%D9%85%202%20%D9%84%D9%84%D8%A7%D8%AF%D9%88%D8%A7%D8%AA%20%D8%A7%D9%84%D9%83%D9%87%D8%B1%D8%A8%D8%A7%D8%A6%D9%8A%D8%A9%2C%20%D8%B1%D9%82%D9%85%2039%D8%8C%20%D8%A3%D9%88%D9%84%20%D8%A7%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B2%D8%A7%D9%8A%D8%AF%D8%8C%20%D9%85%D8%AD%D8%A7%D9%81%D8%B8%D8%A9%20%D8%A7%D9%84%D8%AC%D9%8A%D8%B2%D8%A9&t=&z=14&ie=UTF8&iwloc=&output=embed",
+      phone: "01006367690",
+      whatsapp: "201006367690",
+      email: "vip@kasedkarim.com",
+      workingHours: "يومياً من 11:00 صباحاً حتى 11:00 مساءً",
+      consultationFee: "مجاناً للمشاريع والفيلات السكنية عند التعاقد",
+      social: {
+        facebook: "https://facebook.com",
+        instagram: "https://instagram.com",
+        tiktok: "https://tiktok.com",
+        designerUrl: "https://karimodesign.vercel.app/"
+      }
+    };
+
+    if (cachedSettings && typeof cachedSettings === "object") {
+      const mergedSettings = { ...defaultSettings, ...cachedSettings, social: { ...defaultSettings.social, ...(cachedSettings.social || {}) } };
+      localStorage.setItem(DB_KEYS.SETTINGS, JSON.stringify(mergedSettings));
+      window.SHOWROOM_INFO = mergedSettings;
+      if (typeof SHOWROOM_INFO !== "undefined") SHOWROOM_INFO = mergedSettings;
+    } else {
+      localStorage.setItem(DB_KEYS.SETTINGS, JSON.stringify(defaultSettings));
+      window.SHOWROOM_INFO = defaultSettings;
+      if (typeof SHOWROOM_INFO !== "undefined") SHOWROOM_INFO = defaultSettings;
+    }
+
+    // 5. Automatic Daily Restore Point on first visit of day
+    this.checkAndCreateDailyRestorePoint();
   }
 
   // --------------------------------------------------------------------------
@@ -250,17 +328,21 @@ class KasedKarimDB {
   // CLOUD DATABASE SYNC ENGINE
   // --------------------------------------------------------------------------
   initCloudSync() {
-    // 1. Immediate initial sync on load (Orders and Products)
+    // 1. Immediate initial sync on load (Orders, Products, Categories, Settings)
     this.syncFromCloud(false);
     this.syncProductsFromCloud(false);
+    this.syncCategoriesFromCloud();
+    this.syncSettingsFromCloud();
 
-    // 2. Continuous fast background poll (every 4 seconds for orders, 15 seconds for products)
+    // 2. Continuous fast background poll (every 4 seconds for orders, 15 seconds for catalog/settings)
     setInterval(() => {
       this.syncFromCloud(true);
     }, 4000);
 
     setInterval(() => {
       this.syncProductsFromCloud(true);
+      this.syncCategoriesFromCloud();
+      this.syncSettingsFromCloud();
     }, 15000);
   }
 
@@ -458,6 +540,8 @@ class KasedKarimDB {
   async forceSyncNow() {
     await this.syncFromCloud(false);
     await this.syncProductsFromCloud(false);
+    await this.syncCategoriesFromCloud();
+    await this.syncSettingsFromCloud();
   }
 
   // --------------------------------------------------------------------------
@@ -771,6 +855,10 @@ class KasedKarimDB {
 
   deleteProduct(productId) {
     let products = this.getProducts();
+    const target = products.find(p => p.id === productId);
+    if (target) {
+      this.saveWebRestorePoint(`قبل حذف المنتج: ${target.name}`);
+    }
     products = products.filter(p => p.id !== productId);
     localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
 
@@ -877,6 +965,10 @@ class KasedKarimDB {
 
   deleteOrder(orderId) {
     let orders = this.getOrders();
+    const target = orders.find(o => o.id === orderId);
+    if (target) {
+      this.saveWebRestorePoint(`قبل حذف طلب: #${orderId} (${target.customer?.name || ''})`);
+    }
     orders = orders.filter(o => o.id !== orderId);
     this.knownOrderIds.delete(orderId);
     localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
@@ -922,6 +1014,517 @@ class KasedKarimDB {
       activeProductsCount,
       bestSellers
     };
+  }
+
+  // --------------------------------------------------------------------------
+  // CATEGORIES MANAGEMENT (إدارة وتخصيص الأقسام ديناميكياً)
+  // --------------------------------------------------------------------------
+  getCategories() {
+    try {
+      const raw = localStorage.getItem(DB_KEYS.CATEGORIES);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      return typeof INITIAL_CATEGORIES !== "undefined" ? [...INITIAL_CATEGORIES] : [];
+    } catch (e) {
+      return typeof INITIAL_CATEGORIES !== "undefined" ? [...INITIAL_CATEGORIES] : [];
+    }
+  }
+
+  addCategory(categoryData) {
+    if (!categoryData || !categoryData.name || !categoryData.name.trim()) {
+      return { success: false, error: "اسم القسم إجباري" };
+    }
+    const name = categoryData.name.trim();
+    const categories = this.getCategories();
+
+    // Check if name already exists
+    if (categories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+      return { success: false, error: "هذا القسم موجود بالفعل في الكتالوج" };
+    }
+
+    let id = (categoryData.id || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+    if (!id || categories.some(c => c.id === id)) {
+      id = "cat-" + Date.now().toString().slice(-5);
+    }
+
+    const newCat = {
+      id: id,
+      name: name,
+      icon: (categoryData.icon || "fa-gem").trim(),
+      isCustom: true,
+      createdAt: Date.now()
+    };
+
+    categories.push(newCat);
+    localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(categories));
+    window.CATEGORIES = categories;
+    if (typeof CATEGORIES !== "undefined") CATEGORIES = categories;
+
+    this.sendCategoriesToCloud(categories);
+    window.dispatchEvent(new CustomEvent("kk_categories_updated", { detail: { action: "add", category: newCat } }));
+    return { success: true, category: newCat };
+  }
+
+  updateCategory(id, updatedData) {
+    if (!id || id === "all") return { success: false, error: "لا يمكن تعديل هذا القسم الأساسي" };
+    const categories = this.getCategories();
+    const cat = categories.find(c => c.id === id);
+    if (!cat) return { success: false, error: "القسم غير موجود" };
+
+    if (updatedData.name && updatedData.name.trim()) cat.name = updatedData.name.trim();
+    if (updatedData.icon && updatedData.icon.trim()) cat.icon = updatedData.icon.trim();
+
+    localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(categories));
+    window.CATEGORIES = categories;
+    if (typeof CATEGORIES !== "undefined") CATEGORIES = categories;
+
+    this.sendCategoriesToCloud(categories);
+    window.dispatchEvent(new CustomEvent("kk_categories_updated", { detail: { action: "update", category: cat } }));
+    return { success: true, category: cat };
+  }
+
+  deleteCategory(id) {
+    if (!id || id === "all") return { success: false, error: "لا يمكن حذف قسم الكل المعروض" };
+    let categories = this.getCategories();
+    const deletedCat = categories.find(c => c.id === id);
+    if (!deletedCat) return { success: false, error: "القسم غير موجود" };
+
+    // Auto-save a restore point before deleting category
+    this.saveWebRestorePoint(`قبل حذف قسم: ${deletedCat.name}`);
+
+    categories = categories.filter(c => c.id !== id);
+    localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(categories));
+    window.CATEGORIES = categories;
+    if (typeof CATEGORIES !== "undefined") CATEGORIES = categories;
+
+    this.sendCategoriesToCloud(categories);
+    window.dispatchEvent(new CustomEvent("kk_categories_updated", { detail: { action: "delete", id } }));
+    return { success: true };
+  }
+
+  async syncCategoriesFromCloud() {
+    try {
+      const customUrl = this.getCustomCloudUrl();
+      const t = Date.now();
+      let cloudCats = null;
+
+      if (customUrl) {
+        try {
+          const res = await fetch(`${customUrl}/categories.json?t=${t}`, {
+            cache: "no-store",
+            headers: { "Accept": "application/json" }
+          });
+          if (res.ok) {
+            const raw = await res.json();
+            if (raw && Array.isArray(raw)) cloudCats = raw;
+            else if (raw && typeof raw === "object") cloudCats = Object.values(raw);
+          }
+        } catch (e) {}
+      }
+
+      if (!cloudCats) {
+        try {
+          const res = await fetch(`/api/settings?type=categories&t=${t}`, {
+            cache: "no-store",
+            headers: this.getCloudHeaders()
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && Array.isArray(data.categories)) {
+              cloudCats = data.categories;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (cloudCats && Array.isArray(cloudCats) && cloudCats.length > 0) {
+        const localCats = this.getCategories();
+        const catMap = new Map();
+        localCats.forEach(c => catMap.set(c.id, c));
+        cloudCats.forEach(c => {
+          if (c && c.id) catMap.set(c.id, { ...catMap.get(c.id), ...c });
+        });
+
+        const merged = Array.from(catMap.values());
+        if (JSON.stringify(merged) !== JSON.stringify(localCats)) {
+          localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(merged));
+          window.CATEGORIES = merged;
+          if (typeof CATEGORIES !== "undefined") CATEGORIES = merged;
+          window.dispatchEvent(new CustomEvent("kk_categories_updated", { detail: { merged: true, categories: merged } }));
+        }
+      }
+    } catch (e) {}
+  }
+
+  async sendCategoriesToCloud(categories) {
+    const customUrl = this.getCustomCloudUrl();
+    if (customUrl) {
+      try {
+        fetch(`${customUrl}/categories.json`, {
+          method: "PUT",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(categories)
+        }).catch(() => null);
+      } catch (e) {}
+    }
+
+    try {
+      fetch("/api/settings", {
+        method: "POST",
+        cache: "no-store",
+        headers: this.getCloudHeaders(),
+        body: JSON.stringify({ type: "categories", categories: categories })
+      }).catch(() => null);
+    } catch (e) {}
+  }
+
+  // --------------------------------------------------------------------------
+  // SHOWROOM SETTINGS & CONTACT INFO (أرقام التواصل واللينكات)
+  // --------------------------------------------------------------------------
+  getSettings() {
+    try {
+      const raw = localStorage.getItem(DB_KEYS.SETTINGS);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === "object") return parsed;
+      return typeof INITIAL_SHOWROOM_INFO !== "undefined" ? { ...INITIAL_SHOWROOM_INFO } : (typeof SHOWROOM_INFO !== "undefined" ? { ...SHOWROOM_INFO } : {});
+    } catch (e) {
+      return typeof INITIAL_SHOWROOM_INFO !== "undefined" ? { ...INITIAL_SHOWROOM_INFO } : {};
+    }
+  }
+
+  updateSettings(newSettings) {
+    if (!newSettings || typeof newSettings !== "object") return { success: false };
+    const current = this.getSettings();
+    const merged = {
+      ...current,
+      ...newSettings,
+      social: {
+        ...(current.social || {}),
+        ...(newSettings.social || {})
+      },
+      updatedAt: Date.now()
+    };
+
+    localStorage.setItem(DB_KEYS.SETTINGS, JSON.stringify(merged));
+    window.SHOWROOM_INFO = merged;
+    if (typeof SHOWROOM_INFO !== "undefined") SHOWROOM_INFO = merged;
+
+    this.sendSettingsToCloud(merged);
+    window.dispatchEvent(new CustomEvent("kk_settings_updated", { detail: merged }));
+    return { success: true, settings: merged };
+  }
+
+  async syncSettingsFromCloud() {
+    try {
+      const customUrl = this.getCustomCloudUrl();
+      const t = Date.now();
+      let cloudSettings = null;
+
+      if (customUrl) {
+        try {
+          const res = await fetch(`${customUrl}/settings.json?t=${t}`, {
+            cache: "no-store",
+            headers: { "Accept": "application/json" }
+          });
+          if (res.ok) {
+            cloudSettings = await res.json();
+          }
+        } catch (e) {}
+      }
+
+      if (!cloudSettings) {
+        try {
+          const res = await fetch(`/api/settings?type=settings&t=${t}`, {
+            cache: "no-store",
+            headers: this.getCloudHeaders()
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && data.settings) {
+              cloudSettings = data.settings;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (cloudSettings && typeof cloudSettings === "object") {
+        const localSettings = this.getSettings();
+        if (cloudSettings.updatedAt && (!localSettings.updatedAt || cloudSettings.updatedAt > localSettings.updatedAt)) {
+          const merged = { ...localSettings, ...cloudSettings, social: { ...localSettings.social, ...(cloudSettings.social || {}) } };
+          localStorage.setItem(DB_KEYS.SETTINGS, JSON.stringify(merged));
+          window.SHOWROOM_INFO = merged;
+          if (typeof SHOWROOM_INFO !== "undefined") SHOWROOM_INFO = merged;
+          window.dispatchEvent(new CustomEvent("kk_settings_updated", { detail: merged }));
+        }
+      }
+    } catch (e) {}
+  }
+
+  async sendSettingsToCloud(settings) {
+    const customUrl = this.getCustomCloudUrl();
+    if (customUrl) {
+      try {
+        fetch(`${customUrl}/settings.json`, {
+          method: "PUT",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(settings)
+        }).catch(() => null);
+      } catch (e) {}
+    }
+
+    try {
+      fetch("/api/settings", {
+        method: "POST",
+        cache: "no-store",
+        headers: this.getCloudHeaders(),
+        body: JSON.stringify({ type: "settings", settings: settings })
+      }).catch(() => null);
+    } catch (e) {}
+  }
+
+  // --------------------------------------------------------------------------
+  // DAILY BACKUP & RESTORE SYSTEM (نظام النسخ الاحتياطي والاسترجاع المزدوج)
+  // --------------------------------------------------------------------------
+  generateBackupData(label = "Daily Backup") {
+    const products = this.getProducts();
+    const orders = this.getOrders();
+    const categories = this.getCategories();
+    const settings = this.getSettings();
+    const analytics = this.getAnalytics();
+    const now = new Date();
+    const dateFormatted = now.toISOString().slice(0, 10);
+    const timeFormatted = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+
+    return {
+      system: "Kased Karim Lighting OS",
+      version: "2.1",
+      backupType: "full_snapshot",
+      label: label,
+      timestamp: Date.now(),
+      dateFormatted: dateFormatted,
+      timeFormatted: timeFormatted,
+      analytics: {
+        totalRevenue: analytics.totalRevenue,
+        totalOrdersCount: analytics.totalOrdersCount,
+        pendingOrdersCount: analytics.pendingOrdersCount,
+        activeProductsCount: analytics.activeProductsCount,
+        bestSellersSummary: (analytics.bestSellers || []).map(b => ({
+          id: b.id,
+          name: b.name,
+          categoryName: b.categoryName,
+          price: b.price,
+          salesCount: b.salesCount || 0,
+          totalRevenue: (b.price || 0) * (b.salesCount || 0)
+        }))
+      },
+      counts: {
+        products: products.length,
+        orders: orders.length,
+        categories: categories.length
+      },
+      products: products,
+      orders: orders,
+      categories: categories,
+      settings: settings
+    };
+  }
+
+  downloadBackupFile(label = "نسخة احتياطية يومية") {
+    const backupData = this.generateBackupData(label);
+    const jsonStr = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const fileName = `kased-karim-backup-${dateStr}.json`;
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+    // Record today as having downloaded backup
+    localStorage.setItem("kk_last_downloaded_backup_date", dateStr);
+    localStorage.setItem("kk_last_downloaded_backup_time", Date.now().toString());
+
+    // Also auto-save a web restore point
+    this.saveWebRestorePoint(`تحميل ملف جهاز: ${dateStr}`, backupData);
+
+    return { success: true, fileName, backupData };
+  }
+
+  getWebRestorePoints() {
+    try {
+      const raw = localStorage.getItem(DB_KEYS.BACKUPS);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  saveWebRestorePoint(label = "نقطة استرجاع", explicitData = null) {
+    const backupData = explicitData || this.generateBackupData(label);
+    let points = this.getWebRestorePoints();
+
+    const newPoint = {
+      id: "RST-" + Date.now().toString().slice(-7),
+      timestamp: Date.now(),
+      dateFormatted: backupData.dateFormatted,
+      timeFormatted: backupData.timeFormatted,
+      label: label,
+      counts: backupData.counts,
+      totalRevenue: backupData.analytics?.totalRevenue || 0,
+      data: backupData
+    };
+
+    // Prepend and limit to 15 points
+    points = [newPoint, ...points.filter(p => p.id !== newPoint.id)].slice(0, 15);
+    localStorage.setItem(DB_KEYS.BACKUPS, JSON.stringify(points));
+
+    // Push latest restore point to cloud
+    const customUrl = this.getCustomCloudUrl();
+    if (customUrl) {
+      try {
+        fetch(`${customUrl}/backups/latest.json`, {
+          method: "PUT",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: newPoint.id,
+            timestamp: newPoint.timestamp,
+            dateFormatted: newPoint.dateFormatted,
+            label: newPoint.label,
+            counts: newPoint.counts,
+            totalRevenue: newPoint.totalRevenue,
+            data: backupData
+          })
+        }).catch(() => null);
+      } catch (e) {}
+    }
+
+    window.dispatchEvent(new CustomEvent("kk_restore_points_updated"));
+    return newPoint;
+  }
+
+  checkAndCreateDailyRestorePoint() {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const lastDaily = localStorage.getItem("kk_last_daily_restore_point_date");
+      if (lastDaily !== today) {
+        this.saveWebRestorePoint(`نسخة يومية تلقائية (${today})`);
+        localStorage.setItem("kk_last_daily_restore_point_date", today);
+      }
+    } catch (e) {}
+  }
+
+  restoreFromData(backupData, syncToCloud = true) {
+    if (!backupData || typeof backupData !== "object") {
+      return { success: false, error: "بيانات النسخة الاحتياطية غير صالحة" };
+    }
+
+    // Auto-save a restore point of current state before applying restore!
+    this.saveWebRestorePoint("نقطة أمان تلقائية (قبل الاسترجاع)");
+
+    // 1. Restore Products
+    if (Array.isArray(backupData.products) && backupData.products.length > 0) {
+      localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(backupData.products));
+      if (syncToCloud) {
+        this.syncAllLocalProductsToCloud();
+      }
+      window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: { merged: true, products: backupData.products } }));
+    }
+
+    // 2. Restore Orders
+    if (Array.isArray(backupData.orders)) {
+      localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(backupData.orders));
+      this.knownOrderIds.clear();
+      backupData.orders.forEach(o => this.knownOrderIds.add(o.id));
+      if (syncToCloud) {
+        const customUrl = this.getCustomCloudUrl();
+        if (customUrl) {
+          const mapObj = {};
+          backupData.orders.forEach(o => { mapObj[encodeURIComponent(o.id)] = o; });
+          fetch(`${customUrl}/orders.json`, {
+            method: "PUT",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(mapObj)
+          }).catch(() => null);
+        }
+      }
+      window.dispatchEvent(new CustomEvent("kk_orders_updated"));
+    }
+
+    // 3. Restore Categories
+    if (Array.isArray(backupData.categories) && backupData.categories.length > 0) {
+      localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(backupData.categories));
+      window.CATEGORIES = backupData.categories;
+      if (typeof CATEGORIES !== "undefined") CATEGORIES = backupData.categories;
+      if (syncToCloud) {
+        this.sendCategoriesToCloud(backupData.categories);
+      }
+      window.dispatchEvent(new CustomEvent("kk_categories_updated"));
+    }
+
+    // 4. Restore Settings
+    if (backupData.settings && typeof backupData.settings === "object") {
+      localStorage.setItem(DB_KEYS.SETTINGS, JSON.stringify(backupData.settings));
+      window.SHOWROOM_INFO = backupData.settings;
+      if (typeof SHOWROOM_INFO !== "undefined") SHOWROOM_INFO = backupData.settings;
+      if (syncToCloud) {
+        this.sendSettingsToCloud(backupData.settings);
+      }
+      window.dispatchEvent(new CustomEvent("kk_settings_updated", { detail: backupData.settings }));
+    }
+
+    return {
+      success: true,
+      restoredCounts: {
+        products: backupData.products?.length || 0,
+        orders: backupData.orders?.length || 0,
+        categories: backupData.categories?.length || 0
+      }
+    };
+  }
+
+  restoreFromWebPoint(pointId) {
+    const points = this.getWebRestorePoints();
+    const point = points.find(p => p.id === pointId);
+    if (!point || !point.data) {
+      return { success: false, error: "نقطة الاسترجاع غير موجودة" };
+    }
+    return this.restoreFromData(point.data, true);
+  }
+
+  deleteWebRestorePoint(pointId) {
+    let points = this.getWebRestorePoints();
+    points = points.filter(p => p.id !== pointId);
+    localStorage.setItem(DB_KEYS.BACKUPS, JSON.stringify(points));
+    window.dispatchEvent(new CustomEvent("kk_restore_points_updated"));
+    return true;
+  }
+
+  restoreFactoryDefaults() {
+    this.saveWebRestorePoint("قبل استعادة ضبط المصنع");
+
+    const defaultProducts = [...INITIAL_PRODUCTS];
+    const defaultOrders = [...SEED_ORDERS];
+    const defaultCategories = typeof INITIAL_CATEGORIES !== "undefined" ? [...INITIAL_CATEGORIES] : [...CATEGORIES];
+    const defaultSettings = typeof INITIAL_SHOWROOM_INFO !== "undefined" ? { ...INITIAL_SHOWROOM_INFO } : { ...SHOWROOM_INFO };
+
+    return this.restoreFromData({
+      products: defaultProducts,
+      orders: defaultOrders,
+      categories: defaultCategories,
+      settings: defaultSettings
+    }, true);
   }
 }
 

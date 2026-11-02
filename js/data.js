@@ -758,35 +758,44 @@ const INITIAL_PRODUCTS = [
   }
 ];
 
-// تصنيفات المعرض المعتمدة (12 قسماً رئيسياً)
-const CATEGORIES = [
-  { id: "all", name: "الكل المعروض" },
-  { id: "table-lamps", name: "أباجورات" },
-  { id: "pendants", name: "دلايات" },
-  { id: "wall-sconces", name: "أباليك" },
-  { id: "spotlights", name: "سبوت لايت" },
-  { id: "floor-lamps", name: "لمباديرات" },
-  { id: "track-lights", name: "تراك لايت" },
-  { id: "bollards-lanterns", name: "فوانيس سور، بولارد" },
-  { id: "spike-lights", name: "حربة" },
-  { id: "led-panels", name: "بانلات" },
-  { id: "floodlights", name: "كشافات" },
-  { id: "led-profiles", name: "أعواد البروفايل" },
-  { id: "stair-lights", name: "درج سلم" }
+// تصنيفات المعرض المعتمدة الأولية (12 قسماً رئيسياً قابلة للزيادة والتعديل من الإدارة)
+const INITIAL_CATEGORIES = [
+  { id: "all", name: "الكل المعروض", icon: "fa-sparkles" },
+  { id: "table-lamps", name: "أباجورات", icon: "fa-lamp" },
+  { id: "pendants", name: "دلايات", icon: "fa-gem" },
+  { id: "wall-sconces", name: "أباليك", icon: "fa-lightbulb" },
+  { id: "spotlights", name: "سبوت لايت", icon: "fa-bullseye" },
+  { id: "floor-lamps", name: "لمباديرات", icon: "fa-sun" },
+  { id: "track-lights", name: "تراك لايت", icon: "fa-bolt" },
+  { id: "bollards-lanterns", name: "فوانيس سور، بولارد", icon: "fa-landmark" },
+  { id: "spike-lights", name: "حربة", icon: "fa-tree" },
+  { id: "led-panels", name: "بانلات", icon: "fa-border-all" },
+  { id: "floodlights", name: "كشافات", icon: "fa-tower-broadcast" },
+  { id: "led-profiles", name: "أعواد البروفايل", icon: "fa-microchip" },
+  { id: "stair-lights", name: "درج سلم", icon: "fa-stairs" }
 ];
 
-// معلومات معرض قاصد كريم بالشيخ زايد
-const SHOWROOM_INFO = {
+let CATEGORIES = [...INITIAL_CATEGORIES];
+
+// معلومات معرض قاصد كريم بالشيخ زايد المعتمدة (قابلة للتعديل اللحظي من الإدارة)
+const INITIAL_SHOWROOM_INFO = {
   brandName: "Kased Karim",
   brandArabic: "قاصد كريم للإضاءة الفاخرة",
   tagline: "أيقونة الإضاءة الديكورية والمعمارية في الشيخ زايد",
   location: "الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة، مصر",
   mapUrl: "https://maps.app.goo.gl/EzzitFCzNSpQc7w77?g_st=ic",
+  mapEmbedUrl: "https://maps.google.com/maps?q=%D9%82%D8%A7%D8%B5%D8%AF%20%D9%83%D8%B1%D9%8A%D9%85%202%20%D9%84%D9%84%D8%A7%D8%AF%D9%88%D8%A7%D8%AA%20%D8%A7%D9%84%D9%83%D9%87%D8%B1%D8%A8%D8%A7%D8%A6%D9%8A%D8%A9%2C%20%D8%B1%D9%82%D9%85%2039%D8%8C%20%D8%A3%D9%88%D9%84%20%D8%A7%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B2%D8%A7%D9%8A%D8%AF%D8%8C%20%D9%85%D8%AD%D8%A7%D9%81%D8%B8%D8%A9%20%D8%A7%D9%84%D8%AC%D9%8A%D8%B2%D8%A9&t=&z=14&ie=UTF8&iwloc=&output=embed",
   phone: "01006367690",
   whatsapp: "201006367690",
   email: "vip@kasedkarim.com",
   workingHours: "يومياً من 11:00 صباحاً حتى 11:00 مساءً",
   consultationFee: "مجاناً للمشاريع والفيلات السكنية عند التعاقد",
+  social: {
+    facebook: "https://facebook.com",
+    instagram: "https://instagram.com",
+    tiktok: "https://tiktok.com",
+    designerUrl: "https://karimodesign.vercel.app/"
+  },
   features: [
     { title: "أكبر معرض متخصص في الشيخ زايد", desc: "أكثر من 1500 متر مربع تضم محاكاة حية للغرف والمساحات المفتوحة." },
     { title: "استشارات إضاءة متخصصة", desc: "فريق متخصص يساعدك في توزيع وتنسيق الإضاءة باحترافية لتناسب ديكورات منزلك." },
@@ -794,3 +803,12 @@ const SHOWROOM_INFO = {
     { title: "ضمان ذهبي حتى 5 سنوات", desc: "خدمة ما بعد البيع، قطع غيار أصلية، وزيارات دورية للموقع." }
   ]
 };
+
+let SHOWROOM_INFO = { ...INITIAL_SHOWROOM_INFO };
+
+if (typeof window !== "undefined") {
+  window.INITIAL_CATEGORIES = INITIAL_CATEGORIES;
+  window.CATEGORIES = CATEGORIES;
+  window.INITIAL_SHOWROOM_INFO = INITIAL_SHOWROOM_INFO;
+  window.SHOWROOM_INFO = SHOWROOM_INFO;
+}

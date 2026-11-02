@@ -18,9 +18,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=8.0">
-  <link rel="stylesheet" href="css/components.css?v=8.0">
-  <link rel="stylesheet" href="css/admin.css?v=8.0">
+  <link rel="stylesheet" href="css/style.css?v=9.0">
+  <link rel="stylesheet" href="css/components.css?v=9.0">
+  <link rel="stylesheet" href="css/admin.css?v=9.0">
 </head>
 <body class="admin-page-body">
 
@@ -93,6 +93,10 @@
         </div>
 
         <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <button type="button" class="btn-daily-backup-top" onclick="triggerDailyBackupDownload()" title="تحميل النسخة الاحتياطية اليومية للجهاز فوراً (.json)">
+            <i class="fas fa-file-arrow-down"></i>
+            <span>نسخة اليوم للجهاز</span>
+          </button>
           <button type="button" class="btn-copy-admin-link" onclick="copyAdminSecretLink()" title="نسخ رابط الإدارة السري المخصص لمشاركته مع المديرين">
             <i class="fas fa-link"></i>
             <span>نسخ رابط الإدارة السري</span>
@@ -128,15 +132,44 @@
           <i class="fas fa-boxes-stacked"></i>
           <span>إدارة المخزون والكتالوج</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('cloudSync', this)">
-          <i class="fas fa-cloud-arrow-up"></i>
-          <span>المزامنة السحابية والربط</span>
+        <button class="admin-tab-btn" onclick="switchAdminTab('categories', this)">
+          <i class="fas fa-layer-group"></i>
+          <span>أقسام المعرض</span>
+        </button>
+        <button class="admin-tab-btn" onclick="switchAdminTab('settings', this)">
+          <i class="fas fa-address-card"></i>
+          <span>أرقام التواصل واللينكات</span>
+        </button>
+        <button class="admin-tab-btn" onclick="switchAdminTab('backup', this)">
+          <i class="fas fa-shield-halved"></i>
+          <span>النسخ الاحتياطي والاسترجاع</span>
         </button>
       </div>
     </nav>
 
     <!-- Main Content Area -->
     <main class="admin-page-content">
+
+      <!-- Daily Backup Safety Notice Banner -->
+      <div id="adminDailyBackupBanner" style="display: none; background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04)); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-md); padding: 1rem 1.5rem; margin-bottom: 1.5rem; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.85rem;">
+          <div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 1.2rem;">
+            <i class="fas fa-shield-halved"></i>
+          </div>
+          <div>
+            <div style="font-weight: 800; font-size: 0.95rem; color: #0F172A;">تذكير الحماية اليومية: لم يتم تنزيل نسخة احتياطية على جهازك اليوم بعد</div>
+            <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.15rem;">يوصى بتحميل ملف النسخة الاحتياطية يومياً لحفظ بيانات المبيعات والمنتجات والطلبات والتحليلات بأمان.</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <button type="button" class="btn-primary" style="font-size: 0.82rem; padding: 0.45rem 1rem; background: var(--accent); color: #0F172A; font-weight: 800; border: none;" onclick="triggerDailyBackupDownload()">
+            <i class="fas fa-download"></i> تحميل نسخة اليوم الآن
+          </button>
+          <button type="button" class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.75rem;" onclick="dismissDailyBackupBanner()">
+            <span>تجاهل لليوم</span>
+          </button>
+        </div>
+      </div>
 
       <!-- ====================================================================
            TAB 1: OVERVIEW & BEST SELLERS (أكثر المبيعات)
@@ -504,81 +537,343 @@
       </section>
 
       <!-- ====================================================================
-           TAB 5: CLOUD DATABASE & MULTI-DEVICE SYNC (المزامنة السحابية وقاعدة البيانات)
+           TAB 5: CATEGORIES MANAGER (إدارة أقسام المعرض والأنواع)
            ==================================================================== -->
-      <section class="admin-tab-pane" id="adminPane_cloudSync">
-        <div style="max-width: 900px; margin: 0 auto;">
-          
-          <!-- Cloud Status Banner -->
-          <div style="background: #FFFFFF; border-radius: var(--radius-md); padding: 2rem; border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle); margin-bottom: 1.5rem;">
-            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
-              <div style="display: flex; align-items: center; gap: 0.85rem;">
-                <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(245, 158, 11, 0.12); display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 1.5rem;">
-                  <i class="fas fa-cloud"></i>
-                </div>
-                <div>
-                  <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin: 0;">نظام المزامنة السحابية الفورية عبر جميع الأجهزة</h2>
-                  <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0.2rem 0 0;">ضمان ظهور أي منتج جديد يُضاف من لوحة الإدارة فورياً لجميع الزوار على الهواتف والأجهزة الأخرى والوضع الخفي</p>
-                </div>
-              </div>
+      <section class="admin-tab-pane" id="adminPane_categories">
+        <div style="max-width: 960px; margin: 0 auto;">
 
-              <div id="cloudDbStatusPill" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1.15rem; border-radius: 999px; background: #F1F5F9; font-size: 0.85rem; font-weight: 700; color: #475569;">
-                <i class="fas fa-circle-notch fa-spin"></i>
-                <span>جاري فحص حالة الاتصال بالسحابة...</span>
-              </div>
-            </div>
-
-            <!-- Action Buttons Row -->
-            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; padding-top: 1rem; border-top: 1px solid var(--border-light);">
-              <button type="button" class="btn-primary" style="font-size: 0.85rem; padding: 0.6rem 1.25rem; background: var(--accent); color: #0F172A; font-weight: 800; border: none;" onclick="testCloudDbConnection()">
-                <i class="fas fa-wifi"></i>
-                <span>فحص الاتصال اللحظي (Ping Test)</span>
-              </button>
-
-              <button type="button" class="btn-primary" style="font-size: 0.85rem; padding: 0.6rem 1.25rem; background: #10B981; color: #FFFFFF; font-weight: 800; border: none; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);" onclick="syncAllCatalogToCloudNow(this)">
-                <i class="fas fa-cloud-arrow-up"></i>
-                <span>مزامنة ورفع جميع منتجات الكتالوج للسحابة الآن</span>
-              </button>
-
-              <button type="button" class="btn-secondary" style="font-size: 0.85rem; padding: 0.6rem 1.1rem;" onclick="exportCatalogData()">
-                <i class="fas fa-download"></i>
-                <span>تصدير نسخة احتياطية من الكتالوج (Backup)</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Configuration Card (Hidden from view as requested) -->
-          <div style="display: none; background: #FFFFFF; border-radius: var(--radius-md); padding: 2rem; border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle); margin-bottom: 1.5rem;">
-            <div style="margin-bottom: 1.25rem;">
-              <span class="section-tag">DATABASE CONFIGURATION</span>
-              <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem;">رابط قاعدة البيانات السحابية المباشر</h3>
+          <!-- Add Category Card -->
+          <div style="background: #FFFFFF; border-radius: var(--radius-md); padding: 2rem; border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle); margin-bottom: 2rem;">
+            <div style="margin-bottom: 1.5rem;">
+              <span class="section-tag">CATEGORY CREATOR</span>
+              <h2 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem;">
+                <i class="fas fa-plus-circle" style="color: var(--accent); margin-left: 0.5rem;"></i>
+                إضافة قسم أو نوع إضاءة جديد للكتالوج
+              </h2>
               <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.35rem;">
-                يمكنك ربط الموقع مباشرة بقاعدة بيانات <strong>Firebase Realtime Database</strong> (مجانية 100% وبدون حد يومي) أو أي واجهة REST سحابية:
+                بمجرد إضافة القسم (مثل: دلايات، إضاءة حدائق، ثريات مودرن...)، سيظهر فوراً في تبويبات التصفح الرئيسية، والشريط الفرعي، وقائمة الهاتف، وتذييل الموقع، وخيارات إضافة المنتجات.
               </p>
             </div>
 
-            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem;">
-              <input type="url" id="cloudDbUrlInput" class="form-input" style="flex: 1; min-width: 280px; font-family: monospace; font-size: 0.9rem;" placeholder="https://your-project-default-rtdb.firebaseio.com">
-              
-              <button type="button" class="btn-primary" style="padding: 0.6rem 1.35rem; font-size: 0.9rem;" onclick="saveCustomCloudUrl()">
-                <i class="fas fa-save"></i>
-                <span>حفظ وتفعيل</span>
-              </button>
+            <form id="adminAddCategoryForm" onsubmit="handleAdminAddCategory(event)">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+                <div class="form-group">
+                  <label class="form-label">
+                    <span>اسم القسم (بالعربية)</span>
+                    <span class="required-tag">* (إجباري)</span>
+                  </label>
+                  <input type="text" id="newCategoryName" class="form-input" placeholder="مثال: دلايات مودرن فاخرة" required>
+                </div>
 
-              <button type="button" class="btn-secondary" style="padding: 0.6rem 1rem; font-size: 0.85rem;" onclick="clearCustomCloudUrl()">
+                <div class="form-group">
+                  <label class="form-label">
+                    <span>معرف القسم بالإنجليزية (ID Slug اختياري)</span>
+                    <span class="optional-tag">(اختياري - يُنشأ تلقائياً)</span>
+                  </label>
+                  <input type="text" id="newCategoryId" class="form-input" placeholder="e.g. modern-pendants">
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">
+                    <span>أيقونة القسم (FontAwesome Icon)</span>
+                    <span class="optional-tag">(اختر من القائمة أو اكتب الكود)</span>
+                  </label>
+                  <div style="display: flex; gap: 0.5rem;">
+                    <select id="newCategoryIconSelect" class="form-select" onchange="document.getElementById('newCategoryIcon').value = this.value; updateCategoryIconPreview();">
+                      <option value="fa-gem">💎 جوهرة / كريستال (fa-gem)</option>
+                      <option value="fa-lightbulb">💡 مصباح إضاءة (fa-lightbulb)</option>
+                      <option value="fa-sun">☀️ شمس / توهج (fa-sun)</option>
+                      <option value="fa-star">⭐ نجمة مميزة (fa-star)</option>
+                      <option value="fa-shapes">🔷 أشكال وتراكيب (fa-shapes)</option>
+                      <option value="fa-ring">💍 حلقة مضيئة (fa-ring)</option>
+                      <option value="fa-bolt">⚡ طاقة / مسار (fa-bolt)</option>
+                      <option value="fa-wand-magic-sparkles">✨ سحر وفخامة (fa-wand-magic-sparkles)</option>
+                      <option value="fa-tree">🌳 حدائق ولاندسكيب (fa-tree)</option>
+                      <option value="fa-stairs">🪜 درجات سلم (fa-stairs)</option>
+                      <option value="fa-cubes">📦 مكعبات معمارية (fa-cubes)</option>
+                      <option value="fa-circle-dot">🔘 سبوت دائري (fa-circle-dot)</option>
+                    </select>
+                    <input type="text" id="newCategoryIcon" class="form-input" value="fa-gem" style="max-width: 130px; font-family: monospace;" placeholder="fa-gem" oninput="updateCategoryIconPreview()">
+                    <div id="newCategoryIconPreview" style="width: 44px; height: 44px; border-radius: 8px; background: #F1F5F9; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; color: var(--accent); flex-shrink: 0;">
+                      <i class="fas fa-gem"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="btn-primary" style="padding: 0.75rem 1.75rem; font-size: 0.95rem; font-weight: 800;">
+                <i class="fas fa-plus"></i>
+                <span>حفظ وإضافة القسم الآن</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- Existing Categories List -->
+          <div class="admin-section-block">
+            <div class="admin-block-header">
+              <div class="admin-block-title">
+                <i class="fas fa-layer-group" style="color: var(--accent);"></i>
+                <span>الأقسام المفعلة حالياً في المعرض والمتجر (<span id="adminCategoriesTotalCount">0</span> قسم)</span>
+              </div>
+              <span style="font-size: 0.8rem; color: var(--text-muted);">يمكنك تعديل أسماء وأيقونات الأقسام أو حذفها</span>
+            </div>
+
+            <div style="overflow-x: auto;">
+              <table class="best-sellers-table">
+                <thead>
+                  <tr>
+                    <th>الأيقونة</th>
+                    <th>اسم القسم</th>
+                    <th>المعرف البرمجي (ID)</th>
+                    <th>الوحدات النشطة</th>
+                    <th>إجراءات التحكم</th>
+                  </tr>
+                </thead>
+                <tbody id="adminCategoriesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           TAB 6: SHOWROOM SETTINGS & CONTACT INFO (أرقام التواصل واللينكات)
+           ==================================================================== -->
+      <section class="admin-tab-pane" id="adminPane_settings">
+        <div style="max-width: 900px; margin: 0 auto; background: #FFFFFF; border-radius: var(--radius-md); padding: 2.25rem; border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle);">
+          <div style="margin-bottom: 2rem;">
+            <span class="section-tag">SHOWROOM SETTINGS</span>
+            <h2 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem;">
+              <i class="fas fa-address-card" style="color: var(--accent); margin-left: 0.5rem;"></i>
+              إدارة بيانات التواصل والروابط وتذييل المعرض
+            </h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.35rem;">
+              عدل أرقام هواتف المعرض، الواتساب، العنوان، مواعيد العمل، وروابط السوشيال ميديا. تنعكس جميع التعديلات فورياً على جميع أزرار الاتصال وروابط الموقع للعملاء.
+            </p>
+          </div>
+
+          <form id="adminSettingsForm" onsubmit="handleAdminSettingsSubmit(event)">
+            
+            <h3 style="font-size: 1.05rem; font-weight: 800; color: #0F172A; margin: 1.5rem 0 1rem; border-bottom: 1px solid #E2E8F0; padding-bottom: 0.5rem;">
+              <i class="fas fa-phone" style="color: var(--accent); margin-left: 0.4rem;"></i> أرقام الهواتف والمحادثة
+            </h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+              <div class="form-group">
+                <label class="form-label">
+                  <span>رقم الهاتف الأساسي للاتصال</span>
+                  <span class="required-tag">*</span>
+                </label>
+                <input type="tel" id="settingsPhone" class="form-input" placeholder="01006367690" required>
+                <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">يظهر في الشريط العلوي وتذييل الصفحة وزر الاتصال</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">
+                  <span>رقم الواتساب الرسمي (مع كود الدولة بدون +)</span>
+                  <span class="required-tag">*</span>
+                </label>
+                <input type="text" id="settingsWhatsapp" class="form-input" placeholder="201006367690" required>
+                <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">مثال: 201006367690 للربط التلقائي بمحادثات واتساب</span>
+              </div>
+            </div>
+
+            <h3 style="font-size: 1.05rem; font-weight: 800; color: #0F172A; margin: 1.5rem 0 1rem; border-bottom: 1px solid #E2E8F0; padding-bottom: 0.5rem;">
+              <i class="fas fa-location-dot" style="color: var(--accent); margin-left: 0.4rem;"></i> عنوان المعرض ومواعيد العمل
+            </h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+              <div class="form-group full-width">
+                <label class="form-label"><span>عنوان المعرض بالكامل</span></label>
+                <input type="text" id="settingsLocation" class="form-input" placeholder="الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label"><span>مواعيد العمل الرسمية</span></label>
+                <input type="text" id="settingsWorkingHours" class="form-input" placeholder="يومياً من 11:00 صباحاً حتى 11:00 مساءً">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label"><span>البريد الإلكتروني للمعرض</span></label>
+                <input type="email" id="settingsEmail" class="form-input" placeholder="kasedkarim.lighting@gmail.com">
+              </div>
+
+              <div class="form-group full-width">
+                <label class="form-label"><span>رابط خرائط جوجل (Google Maps Link)</span></label>
+                <input type="url" id="settingsMapUrl" class="form-input" placeholder="https://maps.app.goo.gl/...">
+              </div>
+
+              <div class="form-group full-width">
+                <label class="form-label"><span>كود تضمين خريطة جوجل التفاعلية (Embed Iframe URL)</span></label>
+                <input type="url" id="settingsMapEmbedUrl" class="form-input" placeholder="https://maps.google.com/maps?q=...">
+              </div>
+            </div>
+
+            <h3 style="font-size: 1.05rem; font-weight: 800; color: #0F172A; margin: 1.5rem 0 1rem; border-bottom: 1px solid #E2E8F0; padding-bottom: 0.5rem;">
+              <i class="fas fa-share-nodes" style="color: var(--accent); margin-left: 0.4rem;"></i> روابط التواصل الاجتماعي والمصمم
+            </h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+              <div class="form-group">
+                <label class="form-label"><i class="fab fa-facebook" style="color: #1877F2;"></i> <span>رابط فيسبوك (Facebook)</span></label>
+                <input type="url" id="settingsFacebook" class="form-input" placeholder="https://facebook.com/...">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label"><i class="fab fa-instagram" style="color: #E1306C;"></i> <span>رابط انستجرام (Instagram)</span></label>
+                <input type="url" id="settingsInstagram" class="form-input" placeholder="https://instagram.com/...">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label"><i class="fab fa-tiktok" style="color: #000000;"></i> <span>رابط تيك توك (TikTok - اختياري)</span></label>
+                <input type="url" id="settingsTiktok" class="form-input" placeholder="https://tiktok.com/@...">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label"><i class="fas fa-laptop-code" style="color: var(--accent);"></i> <span>رابط مصمم الموقع (Designed by KarimoDesign)</span></label>
+                <input type="url" id="settingsDesignerUrl" class="form-input" placeholder="https://karimodesign.vercel.app/">
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; align-items: center;">
+              <button type="submit" class="btn-primary" style="padding: 0.85rem 2rem; font-size: 1rem; font-weight: 800;">
+                <i class="fas fa-floppy-disk"></i>
+                <span>حفظ وتطبيق التعديلات فوراً</span>
+              </button>
+              <button type="button" class="btn-secondary" onclick="loadAdminSettingsValues()">
                 <i class="fas fa-rotate-left"></i>
-                <span>استعادة الافتراضي</span>
+                <span>إعادة ضبط الحقول</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           TAB 7: DUAL BACKUP & RESTORE CENTER (النسخ الاحتياطي والاسترجاع المزدوج)
+           ==================================================================== -->
+      <section class="admin-tab-pane" id="adminPane_backup">
+        <div style="max-width: 960px; margin: 0 auto;">
+
+          <!-- Format A: Downloadable Daily File Backup -->
+          <div style="background: linear-gradient(135deg, #0F172A, #1E293B); border-radius: var(--radius-md); padding: 2.25rem; color: #FFFFFF; box-shadow: var(--shadow-elevated); margin-bottom: 2rem;">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem;">
+              <div>
+                <div style="display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(245, 158, 11, 0.15); color: var(--accent); padding: 0.35rem 0.85rem; border-radius: 999px; font-size: 0.78rem; font-weight: 800; margin-bottom: 0.75rem;">
+                  <i class="fas fa-download"></i>
+                  <span>الصيغة الأولى: ملف خارجي ينزل على جهازك</span>
+                </div>
+                <h2 style="font-size: 1.45rem; font-weight: 900; margin-bottom: 0.5rem; color: #FFFFFF;">
+                  النسخة الاحتياطية اليومية للجهاز (.json Backup)
+                </h2>
+                <p style="font-size: 0.88rem; color: #94A3B8; max-width: 600px; line-height: 1.6; margin: 0;">
+                  تحميل ملف شامل يحتوي على كافة المنتجات، وسجل الطلبات، وإحصائيات المبيعات، والأقسام، والإعدادات. احفظ هذا الملف على حاسوبك يومياً لتضمن أمان بياناتك 100% حتى لو تم مسح أي شيء بالخطأ.
+                </p>
+                <div style="font-size: 0.8rem; color: #E2E8F0; margin-top: 0.75rem;" id="adminLastDownloadInfo">
+                  <i class="fas fa-clock"></i> <span>آخر تحميل تم تسجيله: </span><strong>لم يتم التحميل اليوم بعد</strong>
+                </div>
+              </div>
+
+              <button type="button" class="btn-primary" style="padding: 0.95rem 1.85rem; font-size: 1rem; font-weight: 800; background: linear-gradient(135deg, #10B981, #059669); color: #FFFFFF; border: none; box-shadow: 0 4px 18px rgba(16, 185, 129, 0.4);" onclick="triggerDailyBackupDownload()">
+                <i class="fas fa-file-arrow-down" style="font-size: 1.15rem;"></i>
+                <span>تحميل نسخة اليوم للجهاز الآن</span>
               </button>
             </div>
 
-            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1rem; font-size: 0.82rem; color: #475569; line-height: 1.7;">
-              <strong style="color: #0F172A; display: block; margin-bottom: 0.3rem;"><i class="fas fa-circle-info" style="color: var(--accent); margin-left: 0.3rem;"></i> خطوات تفعيل Firebase مجاناً في 60 ثانية بدون أي فيزا:</strong>
-              1. افتح <a href="https://console.firebase.google.com/" target="_blank" style="color: var(--accent); font-weight: 700;">console.firebase.google.com</a> وسجل بحساب Google مجاناً.<br>
-              2. اضغط "Add Project" وسمه <code>kased-karim</code>.<br>
-              3. من القائمة الجانبية: اختر <strong>Build -> Realtime Database</strong> ثم "Create Database".<br>
-              4. اختر <strong>Start in test mode</strong> ليتمكن المتجر من القراءة والكتابة فورياً.<br>
-              5. انسخ الرابط الذي يظهر لك (مثال: <code>https://kased-karim-default-rtdb.firebaseio.com</code>) والصقه في الخانة أعلاه واضغط حفظ.
+            <!-- Restore from Local File Dropzone -->
+            <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+              <div style="font-size: 0.95rem; font-weight: 700; color: #F1F5F9; margin-bottom: 0.75rem;">
+                <i class="fas fa-file-import" style="color: var(--accent); margin-left: 0.4rem;"></i>
+                استرجاع البيانات من ملف محفوظ سابقاً على جهازك:
+              </div>
+
+              <div class="drop-zone-container" style="background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.2);" onclick="document.getElementById('backupFileInput').click()">
+                <input type="file" id="backupFileInput" accept=".json,application/json" style="display: none;" onchange="handleBackupFileSelected(this)">
+                
+                <div class="drop-zone-prompt" id="backupFilePrompt">
+                  <div class="drop-zone-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--accent);">
+                    <i class="fas fa-file-arrow-up"></i>
+                  </div>
+                  <div class="drop-zone-title" style="color: #FFFFFF;">
+                    اسحب ملف النسخة الاحتياطية (.json) هنا أو <span class="browse-link">اختر من جهازك</span>
+                  </div>
+                  <div class="drop-zone-hint" style="color: #94A3B8;">
+                    يقوم النظام فورياً بفحص محتويات الملف وعرض تفاصيل المنتجات والطلبات المسترجعة قبل التطبيق.
+                  </div>
+                </div>
+
+                <div id="backupFilePreview" style="display: none; padding: 1rem; text-align: center; width: 100%;">
+                  <div style="display: inline-flex; align-items: center; gap: 0.75rem; background: rgba(16, 185, 129, 0.15); border: 1px solid #10B981; padding: 0.75rem 1.25rem; border-radius: 8px; color: #A7F3D0;">
+                    <i class="fas fa-circle-check" style="color: #10B981; font-size: 1.25rem;"></i>
+                    <span id="backupFileNameDisplay" style="font-weight: 700; color: #FFFFFF;"></span>
+                  </div>
+                  <div id="backupFileStatsDisplay" style="font-size: 0.85rem; color: #CBD5E1; margin-top: 0.75rem;"></div>
+                  <div style="display: flex; gap: 0.75rem; justify-content: center; margin-top: 1rem;">
+                    <button type="button" class="btn-primary" style="background: #10B981; border: none;" onclick="applyFileRestore(event)">
+                      <i class="fas fa-arrow-rotate-left"></i> تأكيد استرجاع هذه البيانات
+                    </button>
+                    <button type="button" class="btn-secondary" style="color: #FFFFFF; border-color: rgba(255,255,255,0.3);" onclick="cancelFileRestore(event)">
+                      إلغاء
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
+          </div>
+
+          <!-- Format B: Web Restore Points -->
+          <div class="admin-section-block" style="margin-bottom: 2rem;">
+            <div class="admin-block-header">
+              <div>
+                <div style="display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(59, 130, 246, 0.1); color: #2563EB; padding: 0.35rem 0.85rem; border-radius: 999px; font-size: 0.78rem; font-weight: 800; margin-bottom: 0.35rem;">
+                  <i class="fas fa-globe"></i>
+                  <span>الصيغة الثانية: نقاط استرجاع سريعة بنقرة زر على الويب</span>
+                </div>
+                <div class="admin-block-title">
+                  <i class="fas fa-clock-rotate-left" style="color: var(--accent);"></i>
+                  <span>نقاط الاسترجاع السريعة (Web Restore Points)</span>
+                </div>
+                <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0.35rem 0 0;">
+                  يقوم النظام تلقائياً بإنشاء نقطة استرجاع قبل أي عملية حذف (لمنتج، لطلب، أو لقسم) بالإضافة لنقطة يومية تلقائية. يمكنك استرجاع أي نقطة بضغطة زر واحدة.
+                </p>
+              </div>
+
+              <button type="button" class="btn-secondary" style="font-size: 0.85rem; padding: 0.55rem 1.15rem;" onclick="createManualWebRestorePoint()">
+                <i class="fas fa-bookmark" style="color: var(--accent);"></i>
+                <span>حفظ نقطة استرجاع يدوية الآن</span>
+              </button>
+            </div>
+
+            <div style="overflow-x: auto;">
+              <table class="best-sellers-table">
+                <thead>
+                  <tr>
+                    <th>توقيت النقطة</th>
+                    <th>سبب أو عنوان النقطة</th>
+                    <th>محتويات النسخة</th>
+                    <th>المبيعات المحققة</th>
+                    <th>إجراء الاسترجاع السريع</th>
+                  </tr>
+                </thead>
+                <tbody id="adminRestorePointsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Factory Defaults / Reset -->
+          <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: var(--radius-md); padding: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <div style="font-weight: 800; color: #92400E; font-size: 0.95rem;">
+                <i class="fas fa-triangle-exclamation" style="margin-left: 0.4rem;"></i>
+                إعادة ضبط المصنع الافتراضي (Factory Reset)
+              </div>
+              <div style="font-size: 0.82rem; color: #78350F; margin-top: 0.25rem;">
+                في حال حدوث أي خطأ جسيم، يمكنك إعادة الموقع لحالته الأصلية الافتراضية مع حفظ نقطة أمان تلقائية أولاً.
+              </div>
+            </div>
+
+            <button type="button" class="btn-secondary" style="background: #FFFFFF; border-color: #F59E0B; color: #B45309; font-weight: 700; font-size: 0.85rem; padding: 0.55rem 1.15rem;" onclick="emergencyFactoryReset()">
+              <i class="fas fa-rotate-left"></i>
+              <span>استعادة ضبط المصنع</span>
+            </button>
           </div>
 
         </div>
@@ -591,8 +886,8 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/data.js?v=8.0"></script>
-  <script src="js/db.js?v=8.0"></script>
-  <script src="js/admin.js?v=8.0"></script>
+  <script src="js/data.js?v=9.0"></script>
+  <script src="js/db.js?v=9.0"></script>
+  <script src="js/admin.js?v=9.0"></script>
 </body>
 </html>
