@@ -758,21 +758,21 @@ const INITIAL_PRODUCTS = [
   }
 ];
 
-// تصنيفات المعرض المعتمدة الأولية (12 قسماً رئيسياً قابلة للزيادة والتعديل من الإدارة)
+// تصنيفات المعرض المعتمدة الأولية (12 قسماً رئيسياً قابلة للزيادة والتعديل وإضافة أقسام فرعية من الإدارة)
 const INITIAL_CATEGORIES = [
-  { id: "all", name: "الكل المعروض", icon: "fa-sparkles" },
-  { id: "table-lamps", name: "أباجورات", icon: "fa-lamp" },
-  { id: "pendants", name: "دلايات", icon: "fa-gem" },
-  { id: "wall-sconces", name: "أباليك", icon: "fa-lightbulb" },
-  { id: "spotlights", name: "سبوت لايت", icon: "fa-bullseye" },
-  { id: "floor-lamps", name: "لمباديرات", icon: "fa-sun" },
-  { id: "track-lights", name: "تراك لايت", icon: "fa-bolt" },
-  { id: "bollards-lanterns", name: "فوانيس سور، بولارد", icon: "fa-landmark" },
-  { id: "spike-lights", name: "حربة", icon: "fa-tree" },
-  { id: "led-panels", name: "بانلات", icon: "fa-border-all" },
-  { id: "floodlights", name: "كشافات", icon: "fa-tower-broadcast" },
-  { id: "led-profiles", name: "أعواد البروفايل", icon: "fa-microchip" },
-  { id: "stair-lights", name: "درج سلم", icon: "fa-stairs" }
+  { id: "all", name: "الكل المعروض", parentId: null },
+  { id: "table-lamps", name: "أباجورات", parentId: null },
+  { id: "pendants", name: "دلايات", parentId: null },
+  { id: "wall-sconces", name: "أباليك", parentId: null },
+  { id: "spotlights", name: "سبوت لايت", parentId: null },
+  { id: "floor-lamps", name: "لمباديرات", parentId: null },
+  { id: "track-lights", name: "تراك لايت", parentId: null },
+  { id: "bollards-lanterns", name: "فوانيس سور، بولارد", parentId: null },
+  { id: "spike-lights", name: "حربة", parentId: null },
+  { id: "led-panels", name: "بانلات", parentId: null },
+  { id: "floodlights", name: "كشافات", parentId: null },
+  { id: "led-profiles", name: "أعواد البروفايل", parentId: null },
+  { id: "stair-lights", name: "درج سلم", parentId: null }
 ];
 
 let CATEGORIES = [...INITIAL_CATEGORIES];

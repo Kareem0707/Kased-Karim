@@ -89,7 +89,17 @@ class KasedKarimDB {
     this.isSyncing = false;
     this.cloudProvider = "Vercel / Cloud Sync";
     this.knownOrderIds = new Set();
+    this.notifiedOrderIds = new Set();
+    this.pageSessionStartTime = Date.now();
+    this.isInitialSyncCompleted = false;
     this.audioCtx = null;
+
+    try {
+      const storedNotified = localStorage.getItem("kk_notified_orders");
+      if (storedNotified) {
+        JSON.parse(storedNotified).forEach(id => this.notifiedOrderIds.add(id));
+      }
+    } catch (e) {}
     
     this.initDatabase();
     this.setupAudioUnlock();
@@ -125,7 +135,7 @@ class KasedKarimDB {
 
     localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(Array.from(prodMap.values())));
 
-    // Initialize Orders - sanitize and remove old dummy placeholder orders
+    // Initialize Orders - sanitize and remove old dummy placeholder and test orders
     let localOrders = [];
     try {
       const raw = localStorage.getItem(DB_KEYS.ORDERS);
@@ -134,19 +144,34 @@ class KasedKarimDB {
       localOrders = [];
     }
 
-    localOrders = localOrders.filter(o => 
+    localOrders = (localOrders || []).filter(o => 
+      o && o.id &&
       o.id !== "ORD-8941" && 
       o.id !== "ORD-8820" && 
-      o.customer?.name !== "كككك" && 
-      o.customer?.name !== "منك"
+      (!o.customer || (
+        !o.customer.name.includes("ككك") && 
+        !o.customer.name.includes("منك") &&
+        o.customer.name !== "test"
+      ))
     );
+
+    // If ORD-3985 was altered by test submissions in localStorage, restore its verified version
+    const ord3985 = localOrders.find(o => o.id === "ORD-3985");
+    if (ord3985 && ord3985.customer && ord3985.customer.name.includes("ككك")) {
+      ord3985.customer.name = "م. كريم عبد الرحمن";
+      ord3985.customer.phone = "01006367690";
+      ord3985.customer.address = "كمبوند الربوة - المجاورة الرابعة - فيلا 114 بالشيخ زايد";
+    }
 
     if (!localOrders || localOrders.length === 0) {
       localOrders = [...SEED_ORDERS];
     }
     localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(localOrders));
 
-    localOrders.forEach(o => this.knownOrderIds.add(o.id));
+    localOrders.forEach(o => {
+      this.knownOrderIds.add(o.id);
+      this.notifiedOrderIds.add(o.id); // Historical orders are marked as already known
+    });
 
     // 3. Initialize Categories
     let cachedCategories = null;
@@ -157,26 +182,29 @@ class KasedKarimDB {
 
     if (Array.isArray(cachedCategories) && cachedCategories.length > 0) {
       if (!cachedCategories.some(c => c.id === "all")) {
-        cachedCategories.unshift({ id: "all", name: "الكل المعروض", icon: "fa-sparkles" });
+        cachedCategories.unshift({ id: "all", name: "الكل المعروض", parentId: null });
       }
+      cachedCategories.forEach(c => {
+        if (typeof c.parentId === "undefined") c.parentId = null;
+      });
       localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(cachedCategories));
       window.CATEGORIES = cachedCategories;
       if (typeof CATEGORIES !== "undefined") CATEGORIES = cachedCategories;
     } else {
       const defaultCats = typeof INITIAL_CATEGORIES !== "undefined" ? [...INITIAL_CATEGORIES] : [
-        { id: "all", name: "الكل المعروض", icon: "fa-sparkles" },
-        { id: "table-lamps", name: "أباجورات", icon: "fa-lamp" },
-        { id: "pendants", name: "دلايات", icon: "fa-gem" },
-        { id: "wall-sconces", name: "أباليك", icon: "fa-lightbulb" },
-        { id: "spotlights", name: "سبوت لايت", icon: "fa-bullseye" },
-        { id: "floor-lamps", name: "لمباديرات", icon: "fa-sun" },
-        { id: "track-lights", name: "تراك لايت", icon: "fa-bolt" },
-        { id: "bollards-lanterns", name: "فوانيس سور، بولارد", icon: "fa-landmark" },
-        { id: "spike-lights", name: "حربة", icon: "fa-tree" },
-        { id: "led-panels", name: "بانلات", icon: "fa-border-all" },
-        { id: "floodlights", name: "كشافات", icon: "fa-tower-broadcast" },
-        { id: "led-profiles", name: "أعواد البروفايل", icon: "fa-microchip" },
-        { id: "stair-lights", name: "درج سلم", icon: "fa-stairs" }
+        { id: "all", name: "الكل المعروض", parentId: null },
+        { id: "table-lamps", name: "أباجورات", parentId: null },
+        { id: "pendants", name: "دلايات", parentId: null },
+        { id: "wall-sconces", name: "أباليك", parentId: null },
+        { id: "spotlights", name: "سبوت لايت", parentId: null },
+        { id: "floor-lamps", name: "لمباديرات", parentId: null },
+        { id: "track-lights", name: "تراك لايت", parentId: null },
+        { id: "bollards-lanterns", name: "فوانيس سور، بولارد", parentId: null },
+        { id: "spike-lights", name: "حربة", parentId: null },
+        { id: "led-panels", name: "بانلات", parentId: null },
+        { id: "floodlights", name: "كشافات", parentId: null },
+        { id: "led-profiles", name: "أعواد البروفايل", parentId: null },
+        { id: "stair-lights", name: "درج سلم", parentId: null }
       ];
       localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(defaultCats));
       window.CATEGORIES = defaultCats;
@@ -488,18 +516,38 @@ class KasedKarimDB {
       if (orders && Array.isArray(orders)) {
         this.lastSyncTimestamp = Date.now();
 
-        let hasNewCloudOrders = false;
-        let latestNewOrder = null;
+        // 1. Sanitize: filter out fake test orders
+        const cleanCloudOrders = orders.filter(o => {
+          if (!o || !o.id) return false;
+          if (o.id === "ORD-8941" || o.id === "ORD-8820") return false;
+          if (o.customer && (
+            (o.customer.name && (o.customer.name.includes("ككك") || o.customer.name.includes("منك") || o.customer.name === "test"))
+          )) {
+            this.deleteOrderFromCloud(o.id);
+            return false;
+          }
+          return true;
+        });
 
-        const localOrders = this.getOrders().filter(o => o.id !== "ORD-8941" && o.id !== "ORD-8820");
+        const localOrders = this.getOrders();
         const orderMap = new Map();
         localOrders.forEach(o => orderMap.set(o.id, o));
 
-        orders.forEach(cloudOrder => {
-          if (!this.knownOrderIds.has(cloudOrder.id)) {
-            this.knownOrderIds.add(cloudOrder.id);
-            hasNewCloudOrders = true;
-            latestNewOrder = cloudOrder;
+        const trulyNewOrders = [];
+
+        cleanCloudOrders.forEach(cloudOrder => {
+          const isKnown = this.knownOrderIds.has(cloudOrder.id);
+          this.knownOrderIds.add(cloudOrder.id);
+
+          // Only consider an order for instant alert if:
+          // 1. Initial sync has already completed (so historical orders on page load never alert!)
+          // 2. The order was not known and not previously notified
+          // 3. The order was placed either during this session or within the last 5 minutes!
+          if (!isKnown && this.isInitialSyncCompleted) {
+            const isRecent = (cloudOrder.timestamp >= this.pageSessionStartTime) || (cloudOrder.timestamp >= Date.now() - 5 * 60 * 1000);
+            if (isRecent && !this.notifiedOrderIds.has(cloudOrder.id)) {
+              trulyNewOrders.push(cloudOrder);
+            }
           }
 
           if (orderMap.has(cloudOrder.id)) {
@@ -517,10 +565,25 @@ class KasedKarimDB {
           }
         });
 
+        // Mark initial sync complete
+        this.isInitialSyncCompleted = true;
+
         const mergedOrders = Array.from(orderMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(mergedOrders));
 
-        if (hasNewCloudOrders && latestNewOrder) {
+        // Recalculate sales for products from all active orders
+        this.recalculateAllProductSales();
+
+        if (trulyNewOrders.length > 0) {
+          // Strictly pick the newest order with highest timestamp
+          trulyNewOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          const latestNewOrder = trulyNewOrders[0];
+
+          this.notifiedOrderIds.add(latestNewOrder.id);
+          try {
+            localStorage.setItem("kk_notified_orders", JSON.stringify(Array.from(this.notifiedOrderIds)));
+          } catch (e) {}
+
           const isAdmin = typeof document !== 'undefined' && (document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot"));
           if (isAdmin) {
             this.playLuxuryChime();
@@ -950,6 +1013,7 @@ class KasedKarimDB {
       localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
       
       this.updateOrderStatusInCloud(orderId, newStatus);
+      this.recalculateAllProductSales();
       window.dispatchEvent(new CustomEvent("kk_orders_updated"));
       return true;
     }
@@ -974,6 +1038,7 @@ class KasedKarimDB {
     localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
 
     this.deleteOrderFromCloud(orderId);
+    this.recalculateAllProductSales();
     window.dispatchEvent(new CustomEvent("kk_orders_updated"));
     return true;
   }
@@ -988,24 +1053,94 @@ class KasedKarimDB {
     cartItems.forEach(item => {
       const p = products.find(prod => prod.id === item.id);
       if (p) {
-        p.salesCount = (p.salesCount || 0) + item.qty;
+        const qty = parseInt(item.qty) || 1;
+        p.salesCount = (p.salesCount || 0) + qty;
+        this.sendProductToCloud(p); // Multi-device cloud sync
       }
     });
     localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
+    this.recalculateAllProductSales();
+    window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: products }));
+  }
+
+  recalculateAllProductSales() {
+    const orders = this.getOrders();
+    const products = this.getProducts();
+    const activeOrders = orders.filter(o => o.status !== "cancelled");
+
+    const salesMap = new Map();
+    activeOrders.forEach(o => {
+      if (Array.isArray(o.items)) {
+        o.items.forEach(it => {
+          if (it.id) {
+            salesMap.set(it.id, (salesMap.get(it.id) || 0) + (parseInt(it.qty) || 1));
+          }
+        });
+      }
+    });
+
+    let hasChanges = false;
+    products.forEach(p => {
+      const orderSales = salesMap.get(p.id) || 0;
+      if (typeof p.baseSalesCount !== "number") {
+        p.baseSalesCount = p.salesCount || (p.isCustom ? 0 : 10);
+      }
+      const calculated = p.baseSalesCount + orderSales;
+      if (p.salesCount !== calculated) {
+        p.salesCount = calculated;
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges) {
+      localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
+      window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: products }));
+    }
   }
 
   getAnalytics() {
     const orders = this.getOrders();
     const products = this.getProducts();
 
-    const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+    // 1. Total revenue excludes cancelled orders!
+    const activeOrders = orders.filter(o => o.status !== "cancelled");
+    const totalRevenue = activeOrders.reduce((sum, o) => sum + (o.total || 0), 0);
     const totalOrdersCount = orders.length;
     const pendingOrdersCount = orders.filter(o => o.status === "pending").length;
     const activeProductsCount = products.length;
 
-    const bestSellers = [...products]
-      .sort((a, b) => (b.salesCount || 0) - (a.salesCount || 0))
-      .slice(0, 6);
+    // 2. Real-time sales per product
+    const salesMap = new Map();
+    activeOrders.forEach(o => {
+      if (Array.isArray(o.items)) {
+        o.items.forEach(it => {
+          if (it.id) {
+            salesMap.set(it.id, (salesMap.get(it.id) || 0) + (parseInt(it.qty) || 1));
+          }
+        });
+      }
+    });
+
+    const enrichedProducts = products.map(p => {
+      const orderSales = salesMap.get(p.id) || 0;
+      const base = typeof p.baseSalesCount === "number" ? p.baseSalesCount : (p.salesCount || (p.isCustom ? 0 : 10));
+      const totalSales = Math.max(p.salesCount || 0, base + orderSales);
+      return {
+        ...p,
+        salesCount: totalSales,
+        totalRevenue: totalSales * (p.price || 0)
+      };
+    });
+
+    // 3. Best Sellers:
+    // Boost products marked with isBestSeller to top, then sort by salesCount descending
+    const bestSellers = [...enrichedProducts]
+      .sort((a, b) => {
+        if (a.isBestSeller && !b.isBestSeller && (b.salesCount || 0) < 50) return -1;
+        if (!a.isBestSeller && b.isBestSeller && (a.salesCount || 0) < 50) return 1;
+        return (b.salesCount || 0) - (a.salesCount || 0);
+      })
+      .slice(0, 10);
 
     return {
       totalRevenue,
@@ -1017,7 +1152,7 @@ class KasedKarimDB {
   }
 
   // --------------------------------------------------------------------------
-  // CATEGORIES MANAGEMENT (إدارة وتخصيص الأقسام ديناميكياً)
+  // CATEGORIES MANAGEMENT (إدارة وتخصيص الأقسام والأقسام الفرعية ديناميكياً)
   // --------------------------------------------------------------------------
   getCategories() {
     try {
@@ -1036,9 +1171,10 @@ class KasedKarimDB {
     }
     const name = categoryData.name.trim();
     const categories = this.getCategories();
+    const parentId = (categoryData.parentId && categoryData.parentId.trim()) ? categoryData.parentId.trim() : null;
 
-    // Check if name already exists
-    if (categories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+    // Check if name already exists under the same parent
+    if (categories.some(c => c.name.toLowerCase() === name.toLowerCase() && (c.parentId || null) === parentId)) {
       return { success: false, error: "هذا القسم موجود بالفعل في الكتالوج" };
     }
 
@@ -1050,7 +1186,7 @@ class KasedKarimDB {
     const newCat = {
       id: id,
       name: name,
-      icon: (categoryData.icon || "fa-gem").trim(),
+      parentId: parentId,
       isCustom: true,
       createdAt: Date.now()
     };
@@ -1072,7 +1208,9 @@ class KasedKarimDB {
     if (!cat) return { success: false, error: "القسم غير موجود" };
 
     if (updatedData.name && updatedData.name.trim()) cat.name = updatedData.name.trim();
-    if (updatedData.icon && updatedData.icon.trim()) cat.icon = updatedData.icon.trim();
+    if (typeof updatedData.parentId !== "undefined") {
+      cat.parentId = (updatedData.parentId && updatedData.parentId.trim()) ? updatedData.parentId.trim() : null;
+    }
 
     localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(categories));
     window.CATEGORIES = categories;
@@ -1092,7 +1230,8 @@ class KasedKarimDB {
     // Auto-save a restore point before deleting category
     this.saveWebRestorePoint(`قبل حذف قسم: ${deletedCat.name}`);
 
-    categories = categories.filter(c => c.id !== id);
+    // If deleting a parent category, also delete or un-parent its subcategories
+    categories = categories.filter(c => c.id !== id && c.parentId !== id);
     localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(categories));
     window.CATEGORIES = categories;
     if (typeof CATEGORIES !== "undefined") CATEGORIES = categories;
@@ -1186,10 +1325,13 @@ class KasedKarimDB {
     try {
       const raw = localStorage.getItem(DB_KEYS.SETTINGS);
       const parsed = raw ? JSON.parse(raw) : null;
-      if (parsed && typeof parsed === "object") return parsed;
-      return typeof INITIAL_SHOWROOM_INFO !== "undefined" ? { ...INITIAL_SHOWROOM_INFO } : (typeof SHOWROOM_INFO !== "undefined" ? { ...SHOWROOM_INFO } : {});
+      const base = parsed && typeof parsed === "object" ? parsed : (typeof INITIAL_SHOWROOM_INFO !== "undefined" ? { ...INITIAL_SHOWROOM_INFO } : (typeof SHOWROOM_INFO !== "undefined" ? { ...SHOWROOM_INFO } : {}));
+      base.social = { ...(base.social || {}), designerUrl: "https://karimodesign.vercel.app/" };
+      return base;
     } catch (e) {
-      return typeof INITIAL_SHOWROOM_INFO !== "undefined" ? { ...INITIAL_SHOWROOM_INFO } : {};
+      const fallback = typeof INITIAL_SHOWROOM_INFO !== "undefined" ? { ...INITIAL_SHOWROOM_INFO } : {};
+      fallback.social = { ...(fallback.social || {}), designerUrl: "https://karimodesign.vercel.app/" };
+      return fallback;
     }
   }
 
@@ -1201,7 +1343,8 @@ class KasedKarimDB {
       ...newSettings,
       social: {
         ...(current.social || {}),
-        ...(newSettings.social || {})
+        ...(newSettings.social || {}),
+        designerUrl: "https://karimodesign.vercel.app/" // Permanent locked designer attribution
       },
       updatedAt: Date.now()
     };

@@ -1656,6 +1656,14 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
   color: #1E1E1E;
   font-weight: 800;
 }
+.category-tab-btn.is-subcategory {
+  background: #F8FAFC;
+  border-style: dashed;
+}
+.category-tab-btn.is-subcategory.active {
+  background: #1E1E1E;
+  border-style: solid;
+}
 .tab-count {
   background: #F1F1F4;
   color: #5A5A5A;

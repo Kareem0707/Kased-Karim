@@ -339,8 +339,27 @@ function promptAdminDeviceLink() {
 }
 
 function showAdminLiveOrderAlert(order) {
+  if (!order || !order.id) return;
   const isAdmin = document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot");
   if (!isAdmin) return;
+
+  // Never alert for seed orders or test dummy names
+  if (order.id === "ORD-3985" || order.id === "ORD-8941" || order.id === "ORD-8820") return;
+  if (order.customer && order.customer.name && (
+    order.customer.name.includes("ككك") || 
+    order.customer.name.includes("منك") || 
+    order.customer.name === "test"
+  )) return;
+
+  // Prevent duplicate alert across sessions
+  try {
+    const notified = JSON.parse(localStorage.getItem("kk_notified_orders") || "[]");
+    if (notified.includes(order.id) && (Date.now() - (order.timestamp || 0) > 60000)) {
+      return;
+    }
+  } catch (e) {}
+
+  if (sessionStorage.getItem("kk_dismissed_alert_" + order.id)) return;
 
   let banner = document.getElementById("adminLiveOrderAlertBanner");
   if (!banner) {
@@ -358,10 +377,18 @@ function showAdminLiveOrderAlert(order) {
       </div>
       <div style="display: flex; align-items: center; gap: 0.6rem;">
         <a href="admin.html" class="btn-primary" style="padding: 0.35rem 0.85rem; font-size: 0.78rem; text-decoration: none; background: #F59E0B; color: #0F172A; font-weight: 700;">عرض في لوحة التحكم</a>
-        <button type="button" class="banner-close-btn" onclick="document.getElementById('adminLiveOrderAlertBanner')?.remove()">×</button>
+        <button type="button" class="banner-close-btn" onclick="dismissAdminLiveOrderAlert('${order.id}')">×</button>
       </div>
     </div>
   `;
+}
+
+function dismissAdminLiveOrderAlert(orderId) {
+  if (orderId) {
+    sessionStorage.setItem("kk_dismissed_alert_" + orderId, "1");
+  }
+  const banner = document.getElementById("adminLiveOrderAlertBanner");
+  if (banner) banner.remove();
 }
 
 // ----------------------------------------------------------------------------
@@ -702,24 +729,32 @@ function renderAdminInventory() {
   const container = document.getElementById("adminInventoryTableBody");
   if (!container) return;
 
-  container.innerHTML = products.map(item => `
-    <tr>
-      <td style="width: 60px;">
-        <img class="seller-thumb" src="${item.image}" alt="${item.name}" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
-      </td>
-      <td>
-        <div style="font-weight: 700; color: var(--text-main);">${item.name}</div>
-        <div style="font-size: 0.75rem; color: var(--text-muted);">${item.categoryName} • ضمان ${item.warranty || '5 سنوات'}</div>
-      </td>
-      <td><span style="font-weight: 700;">${formatPrice(item.price)} ج.م</span></td>
-      <td><span class="sales-badge">${item.salesCount || 0} مبيعات</span></td>
-      <td>
-        <button class="cart-item-remove-btn" style="color: #EF4444;" onclick="deleteProduct('${item.id}')" title="حذف المنتج من المتجر">
-          <i class="fas fa-trash-alt"></i> حذف
-        </button>
-      </td>
-    </tr>
-  `).join("");
+  container.innerHTML = products.map(item => {
+    const unitsSold = item.salesCount || 0;
+    const totalRev = unitsSold * (item.price || 0);
+
+    return `
+      <tr>
+        <td style="width: 60px;">
+          <img class="seller-thumb" src="${item.image}" alt="${item.name}" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
+        </td>
+        <td>
+          <div style="font-weight: 700; color: var(--text-main);">${item.name}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">${item.categoryName} • ضمان ${item.warranty || '5 سنوات'}</div>
+        </td>
+        <td><span style="font-weight: 700;">${formatPrice(item.price)} ج.م</span></td>
+        <td>
+          <div style="font-weight: 800; color: #10B981; font-size: 0.92rem;">${formatPrice(totalRev)} ج.م</div>
+          <span class="sales-badge" style="margin-top: 0.2rem; display: inline-block;">${unitsSold} وحدة مباعة</span>
+        </td>
+        <td>
+          <button class="cart-item-remove-btn" style="color: #EF4444;" onclick="deleteProduct('${item.id}')" title="حذف المنتج من المتجر">
+            <i class="fas fa-trash-alt"></i> حذف
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function deleteProduct(productId) {
@@ -1972,32 +2007,46 @@ function contactSupportAboutTrackedOrder(customQuery = null) {
 }
 
 // ============================================================================
-// 10. CATEGORY MANAGEMENT CONTROLLERS (إدارة أقسام المعرض)
+// 10. CATEGORY MANAGEMENT CONTROLLERS (إدارة أقسام وأقسام فرعية بالمعرض)
 // ============================================================================
-function updateCategoryIconPreview() {
-  const iconInput = document.getElementById("newCategoryIcon");
-  const preview = document.getElementById("newCategoryIconPreview");
-  if (!iconInput || !preview) return;
-  const iconClass = iconInput.value.trim() || "fa-gem";
-  preview.innerHTML = `<i class="fas ${iconClass}"></i>`;
-}
-
 function populateAdminCategorySelect() {
   const select = document.getElementById("adminUnitCategory");
-  if (!select) return;
+  const parentSelect = document.getElementById("newCategoryParent");
+  if (!window.KK_DB) return;
 
-  const currentVal = select.value;
-  const categories = (window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []))
-    .filter(c => c.id !== "all");
+  const categories = window.KK_DB.getCategories();
+  const mainCats = categories.filter(c => !c.parentId && c.id !== "all");
 
-  select.innerHTML = `
-    <option value="" disabled ${!currentVal ? "selected" : ""}>-- اختر قسم الإضاءة من القائمة --</option>
-    ${categories.map(c => `
-      <option value="${c.id}" ${currentVal === c.id ? "selected" : ""}>
-        ${c.name} (${c.id})
-      </option>
-    `).join("")}
-  `;
+  // 1. Populate category selector in Add Product form
+  if (select) {
+    const currentVal = select.value;
+    let html = `<option value="" disabled ${!currentVal ? "selected" : ""}>-- اختر قسم الإضاءة من القائمة --</option>`;
+
+    mainCats.forEach(main => {
+      const subCats = categories.filter(c => c.parentId === main.id);
+      if (subCats.length === 0) {
+        html += `<option value="${main.id}" ${currentVal === main.id ? "selected" : ""}>${main.name}</option>`;
+      } else {
+        html += `<optgroup label="${main.name}">`;
+        html += `<option value="${main.id}" ${currentVal === main.id ? "selected" : ""}>${main.name} (عام)</option>`;
+        subCats.forEach(sub => {
+          html += `<option value="${sub.id}" ${currentVal === sub.id ? "selected" : ""}>↳ ${sub.name}</option>`;
+        });
+        html += `</optgroup>`;
+      }
+    });
+    select.innerHTML = html;
+  }
+
+  // 2. Populate parent category selector in Add Category form
+  if (parentSelect) {
+    const currentParent = parentSelect.value;
+    let parentHtml = `<option value="">-- قسم رئيسي مستقل (بدون قسم رئيسي) --</option>`;
+    mainCats.forEach(m => {
+      parentHtml += `<option value="${m.id}" ${currentParent === m.id ? "selected" : ""}>${m.name}</option>`;
+    });
+    parentSelect.innerHTML = parentHtml;
+  }
 }
 
 function renderAdminCategories() {
@@ -2010,74 +2059,104 @@ function renderAdminCategories() {
 
   if (countEl) countEl.textContent = categories.length;
 
-  tbody.innerHTML = categories.map(cat => {
-    const isAll = cat.id === "all";
-    const prodCount = isAll ? products.length : products.filter(p => p.category === cat.id).length;
-    const iconClass = cat.icon || "fa-gem";
+  const mainCats = categories.filter(c => !c.parentId);
+  const rows = [];
 
-    return `
-      <tr>
-        <td style="width: 60px; text-align: center;">
-          <div class="category-icon-badge">
-            <i class="fas ${iconClass}"></i>
-          </div>
+  mainCats.forEach(main => {
+    const isAll = main.id === "all";
+    const subCats = categories.filter(c => c.parentId === main.id);
+    const subCatIds = subCats.map(s => s.id);
+    const prodCount = isAll ? products.length : products.filter(p => p.category === main.id || subCatIds.includes(p.category)).length;
+
+    rows.push(`
+      <tr style="background: ${isAll ? '#F8FAFC' : '#FFFFFF'};">
+        <td>
+          <span style="display: inline-flex; align-items: center; gap: 0.35rem; background: rgba(245, 158, 11, 0.15); color: #B45309; padding: 0.25rem 0.65rem; border-radius: 6px; font-weight: 800; font-size: 0.78rem;">
+            <i class="fas fa-layer-group"></i> قسم رئيسي
+          </span>
         </td>
         <td>
-          <div style="font-weight: 800; color: #0F172A; font-size: 0.95rem;">${cat.name}</div>
-          ${cat.isCustom ? `<span style="font-size: 0.72rem; color: #059669; background: #ECFDF5; padding: 0.15rem 0.5rem; border-radius: 4px; display: inline-block; margin-top: 0.2rem;">قسم مخصص</span>` : ""}
+          <div style="font-weight: 800; color: #0F172A; font-size: 0.95rem;">${main.name}</div>
+          <code style="font-size: 0.72rem; color: #64748B;">ID: ${main.id}</code>
         </td>
         <td>
-          <code style="background: #F1F5F9; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.82rem; color: #475569;">${cat.id}</code>
+          <span style="color: var(--text-muted); font-size: 0.82rem;">-</span>
         </td>
         <td>
-          <span style="font-weight: 700; color: var(--accent);">${prodCount} قطعة</span>
+          <span style="font-weight: 800; color: var(--accent);">${prodCount} قطعة</span>
         </td>
         <td>
           <div class="action-btn-group">
             ${isAll ? `
               <span style="font-size: 0.75rem; color: var(--text-muted);">قسم أساسي ثابت</span>
             ` : `
-              <button type="button" class="action-btn-sm" onclick="editCategoryPrompt('${cat.id}')" title="تعديل اسم أو أيقونة القسم">
+              <button type="button" class="action-btn-sm" onclick="editCategoryPrompt('${main.id}')" title="تعديل اسم القسم">
                 <i class="fas fa-pen-to-square"></i> تعديل
               </button>
-              <button type="button" class="action-btn-sm btn-danger" onclick="deleteCategoryConfirm('${cat.id}')" title="حذف القسم">
+              <button type="button" class="action-btn-sm btn-danger" onclick="deleteCategoryConfirm('${main.id}')" title="حذف القسم وجميع أقسامه الفرعية">
                 <i class="fas fa-trash-alt"></i> حذف
               </button>
             `}
           </div>
         </td>
       </tr>
-    `;
-  }).join("");
+    `);
+
+    subCats.forEach(sub => {
+      const subProdCount = products.filter(p => p.category === sub.id).length;
+      rows.push(`
+        <tr style="background: #F8FAFC;">
+          <td>
+            <span style="display: inline-flex; align-items: center; gap: 0.35rem; background: rgba(59, 130, 246, 0.1); color: #1D4ED8; padding: 0.2rem 0.6rem; border-radius: 6px; font-weight: 700; font-size: 0.75rem;">
+              <i class="fas fa-arrow-turn-down-right"></i> قسم فرعي
+            </span>
+          </td>
+          <td style="padding-right: 1.5rem;">
+            <div style="font-weight: 700; color: #1E293B; font-size: 0.9rem;">↳ ${sub.name}</div>
+            <code style="font-size: 0.72rem; color: #94A3B8;">ID: ${sub.id}</code>
+          </td>
+          <td>
+            <span style="font-size: 0.82rem; font-weight: 700; color: #475569;">${main.name}</span>
+          </td>
+          <td>
+            <span style="font-weight: 700; color: #2563EB;">${subProdCount} قطعة</span>
+          </td>
+          <td>
+            <div class="action-btn-group">
+              <button type="button" class="action-btn-sm" onclick="editCategoryPrompt('${sub.id}')" title="تعديل اسم القسم الفرعي">
+                <i class="fas fa-pen-to-square"></i> تعديل
+              </button>
+              <button type="button" class="action-btn-sm btn-danger" onclick="deleteCategoryConfirm('${sub.id}')" title="حذف القسم الفرعي">
+                <i class="fas fa-trash-alt"></i> حذف
+              </button>
+            </div>
+          </td>
+        </tr>
+      `);
+    });
+  });
+
+  tbody.innerHTML = rows.join("");
 }
 
 function handleAdminAddCategory(e) {
   e.preventDefault();
   const nameInput = document.getElementById("newCategoryName");
-  const idInput = document.getElementById("newCategoryId");
-  const iconInput = document.getElementById("newCategoryIcon");
+  const parentSelect = document.getElementById("newCategoryParent");
 
   const name = nameInput ? nameInput.value.trim() : "";
-  let id = idInput ? idInput.value.trim() : "";
-  const icon = iconInput ? iconInput.value.trim() : "fa-gem";
+  const parentId = parentSelect ? parentSelect.value.trim() : null;
 
   if (!name) {
-    showToast("⚠️ يرجى إدخال اسم القسم بالعربية");
+    showToast("⚠️ يرجى إدخال اسم القسم");
     return;
   }
 
-  if (!id) {
-    id = "cat-" + Date.now().toString().slice(-6);
-  } else {
-    id = id.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-");
-  }
-
   if (window.KK_DB) {
-    const res = window.KK_DB.addCategory({ id, name, icon });
+    const res = window.KK_DB.addCategory({ name, parentId });
     if (res.success) {
       showToast(`✅ تم إضافة قسم "${name}" بنجاح للكتالوج والمعرض`);
       if (nameInput) nameInput.value = "";
-      if (idInput) idInput.value = "";
       renderAdminCategories();
       populateAdminCategorySelect();
     } else {
@@ -2100,10 +2179,7 @@ function editCategoryPrompt(catId) {
     return;
   }
 
-  const newIcon = prompt("أدخل كود أيقونة FontAwesome (مثال: fa-gem, fa-lightbulb, fa-sun):", cat.icon || "fa-gem");
-  const cleanIcon = newIcon !== null && newIcon.trim() ? newIcon.trim() : (cat.icon || "fa-gem");
-
-  const res = window.KK_DB.updateCategory(catId, { name: cleanName, icon: cleanIcon });
+  const res = window.KK_DB.updateCategory(catId, { name: cleanName });
   if (res.success) {
     showToast(`✅ تم تحديث قسم "${cleanName}" بنجاح`);
     renderAdminCategories();
@@ -2157,7 +2233,6 @@ function loadAdminSettingsValues() {
   const fbEl = document.getElementById("settingsFacebook");
   const igEl = document.getElementById("settingsInstagram");
   const ttEl = document.getElementById("settingsTiktok");
-  const desEl = document.getElementById("settingsDesignerUrl");
 
   if (phoneEl) phoneEl.value = s.phone || "";
   if (waEl) waEl.value = s.whatsapp || "";
@@ -2171,7 +2246,6 @@ function loadAdminSettingsValues() {
   if (fbEl) fbEl.value = social.facebook || "";
   if (igEl) igEl.value = social.instagram || "";
   if (ttEl) ttEl.value = social.tiktok || "";
-  if (desEl) desEl.value = social.designerUrl || "https://karimodesign.vercel.app/";
 }
 
 function handleAdminSettingsSubmit(e) {
@@ -2189,7 +2263,6 @@ function handleAdminSettingsSubmit(e) {
   const facebook = (document.getElementById("settingsFacebook")?.value || "").trim();
   const instagram = (document.getElementById("settingsInstagram")?.value || "").trim();
   const tiktok = (document.getElementById("settingsTiktok")?.value || "").trim();
-  const designerUrl = (document.getElementById("settingsDesignerUrl")?.value || "").trim();
 
   const newSettings = {
     phone,
@@ -2203,7 +2276,7 @@ function handleAdminSettingsSubmit(e) {
       facebook,
       instagram,
       tiktok,
-      designerUrl
+      designerUrl: "https://karimodesign.vercel.app/"
     }
   };
 
@@ -2233,18 +2306,36 @@ function triggerDailyBackupDownload() {
 function checkDailyBackupSchedule() {
   const today = new Date().toISOString().slice(0, 10);
   const lastDownload = localStorage.getItem("kk_last_downloaded_backup_date");
+  const autoDownloadedDate = localStorage.getItem("kk_auto_backup_downloaded_date");
   const banner = document.getElementById("adminDailyBackupBanner");
   const lastDownloadInfo = document.getElementById("adminLastDownloadInfo");
+  const isAdminPage = !!document.getElementById("adminPageRoot");
 
-  // Check and create daily restore point
+  // 1. Check and create daily web restore point
   if (window.KK_DB) {
     window.KK_DB.checkAndCreateDailyRestorePoint();
   }
 
-  if (lastDownload === today) {
+  // 2. AUTOMATIC DAILY BACKUP DOWNLOAD TO DEVICE (Once per day on admin visit)
+  if (isAdminPage && autoDownloadedDate !== today) {
+    setTimeout(() => {
+      if (window.KK_DB) {
+        window.KK_DB.downloadBackupFile("نسخة يومية تلقائية للجهاز");
+        localStorage.setItem("kk_auto_backup_downloaded_date", today);
+        localStorage.setItem("kk_last_downloaded_backup_date", today);
+        showToast("🛡️ تم تنزيل النسخة الاحتياطية اليومية للمتجر والمبيعات تلقائياً على جهازك!");
+        if (banner) banner.style.display = "none";
+        if (lastDownloadInfo) {
+          lastDownloadInfo.innerHTML = `<i class="fas fa-circle-check" style="color: #10B981;"></i> <span>تم تنزيل نسخة اليوم على جهازك تلقائياً بنجاح (${today})</span>`;
+        }
+      }
+    }, 1500);
+  }
+
+  if (lastDownload === today || autoDownloadedDate === today) {
     if (banner) banner.style.display = "none";
     if (lastDownloadInfo) {
-      lastDownloadInfo.innerHTML = `<i class="fas fa-circle-check" style="color: #10B981;"></i> <span>تم تحميل نسخة اليوم على جهازك بنجاح (${today})</span>`;
+      lastDownloadInfo.innerHTML = `<i class="fas fa-circle-check" style="color: #10B981;"></i> <span>تم تنزيل نسخة اليوم على جهازك بنجاح (${today})</span>`;
     }
   } else {
     const isDismissed = sessionStorage.getItem("kk_dismissed_backup_banner_date") === today;

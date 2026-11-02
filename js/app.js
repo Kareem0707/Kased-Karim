@@ -87,15 +87,21 @@ function renderCategoryTabs() {
   const cats = window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []);
 
   tabsContainer.innerHTML = cats.map(cat => {
-    const count = cat.id === "all" 
-      ? STATE.products.length 
-      : STATE.products.filter(p => p.category === cat.id).length;
+    let count = 0;
+    if (cat.id === "all") {
+      count = STATE.products.length;
+    } else {
+      const childIds = cats.filter(c => c.parentId === cat.id).map(c => c.id);
+      count = STATE.products.filter(p => p.category === cat.id || childIds.includes(p.category)).length;
+    }
     
     const isActive = STATE.activeCategory === cat.id ? "active" : "";
+    const isSub = !!cat.parentId;
+    const displayName = isSub ? `<span style="opacity: 0.6; font-size: 0.8em; margin-left: 3px;">↳</span>${cat.name}` : cat.name;
 
     return `
-      <button class="category-tab-btn ${isActive}" data-category="${cat.id}">
-        <span>${cat.name}</span>
+      <button class="category-tab-btn ${isActive} ${isSub ? 'is-subcategory' : ''}" data-category="${cat.id}">
+        <span>${displayName}</span>
         <span class="tab-count">${count}</span>
       </button>
     `;
@@ -126,11 +132,15 @@ function renderSubBarCategories() {
   if (!container) return;
 
   const cats = window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []);
-  container.innerHTML = cats.map(cat => `
-    <button class="sub-bar-cat-btn ${STATE.activeCategory === cat.id ? 'active' : ''}" onclick="selectCategoryFromSubBar('${cat.id}')">
-      <span>${cat.name}</span>
-    </button>
-  `).join("");
+  container.innerHTML = cats.map(cat => {
+    const isSub = !!cat.parentId;
+    const displayName = isSub ? `<span style="opacity: 0.6; font-size: 0.8em; margin-left: 3px;">↳</span>${cat.name}` : cat.name;
+    return `
+      <button class="sub-bar-cat-btn ${STATE.activeCategory === cat.id ? 'active' : ''}" onclick="selectCategoryFromSubBar('${cat.id}')">
+        <span>${displayName}</span>
+      </button>
+    `;
+  }).join("");
 }
 
 // 3.2 Render Mobile Accordion Categories
@@ -139,11 +149,15 @@ function renderMobileAccordionCategories() {
   if (!container) return;
 
   const cats = window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []);
-  container.innerHTML = cats.map(cat => `
-    <button class="mobile-sub-cat-item ${STATE.activeCategory === cat.id ? 'active' : ''}" onclick="selectCategoryFromMobile('${cat.id}')">
-      <span>${cat.name}</span>
-    </button>
-  `).join("");
+  container.innerHTML = cats.map(cat => {
+    const isSub = !!cat.parentId;
+    const displayName = isSub ? `— ${cat.name}` : cat.name;
+    return `
+      <button class="mobile-sub-cat-item ${STATE.activeCategory === cat.id ? 'active' : ''} ${isSub ? 'is-mobile-subcat' : ''}" onclick="selectCategoryFromMobile('${cat.id}')" style="${isSub ? 'padding-right: 1.75rem; font-size: 0.88rem; opacity: 0.9;' : ''}">
+        <span>${displayName}</span>
+      </button>
+    `;
+  }).join("");
 }
 
 // 3.3 Render Footer Collections Categories
@@ -257,8 +271,16 @@ function renderProducts() {
   if (!grid) return;
 
   // Filter products
+  const allCats = window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []);
+  const activeCat = STATE.activeCategory;
+  const childCatIds = (activeCat && activeCat !== "all")
+    ? allCats.filter(c => c.parentId === activeCat).map(c => c.id)
+    : [];
+
   let filtered = STATE.products.filter(item => {
-    const matchesCat = STATE.activeCategory === "all" || item.category === STATE.activeCategory;
+    const matchesCat = activeCat === "all" || 
+      item.category === activeCat || 
+      childCatIds.includes(item.category);
     const q = STATE.searchQuery.trim().toLowerCase();
     const matchesSearch = !q || 
       item.name.toLowerCase().includes(q) || 
