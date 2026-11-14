@@ -59,11 +59,19 @@ async function checkAdminSecurityGate() {
   if (isForceRelock) {
     sessionStorage.removeItem(ADMIN_TOKEN_KEY);
     localStorage.removeItem(ADMIN_TOKEN_KEY);
+    localStorage.removeItem("kk_admin_authorized");
+    localStorage.removeItem("kk_admin_device_linked");
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
-  // Enforce session-level authentication: require valid token in sessionStorage
-  const token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  // Enforce session-level authentication: require valid token in sessionStorage or authorized device localStorage
+  let token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  if (!token) {
+    token = localStorage.getItem(ADMIN_TOKEN_KEY);
+    if (token) {
+      sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+    }
+  }
 
   if (!token) {
     document.body.classList.remove("is-admin-user", "is-admin-authenticated");
@@ -265,6 +273,7 @@ function completeAdminAuthSuccess(token) {
   sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
   localStorage.setItem(ADMIN_TOKEN_KEY, token);
   localStorage.setItem("kk_admin_authorized", "true");
+  localStorage.setItem("kk_admin_device_linked", "true");
 
   const gateEl = document.getElementById("adminAuthGate");
   const rootEl = document.getElementById("adminPageRoot");
@@ -438,7 +447,9 @@ function logoutAdmin() {
   sessionStorage.removeItem(ADMIN_TOKEN_KEY);
   localStorage.removeItem(ADMIN_TOKEN_KEY);
   localStorage.removeItem("kk_admin_authorized");
-  document.body.classList.remove("is-admin-user", "is-admin-authenticated");
+  localStorage.removeItem("kk_admin_device_linked");
+  document.body.classList.remove("is-admin-user", "is-admin-authenticated", "is-admin-device");
+  document.documentElement.classList.remove("is-admin-user", "is-admin-authenticated", "is-admin-device");
   showToast("تم تسجيل خروج الإدارة بنجاح");
   setTimeout(() => {
     window.location.reload();

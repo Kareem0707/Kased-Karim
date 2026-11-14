@@ -33,6 +33,7 @@ const STORAGE_KEYS = {
 
 // Initialize Application
 function initApp() {
+  checkAndDisplayAdminHeaderIcon();
   initLightingCeremony();
   loadProducts();
   loadCart();
@@ -46,7 +47,6 @@ function initApp() {
   setupCategoryTabsScroll();
   updateCartUI();
   handleHeaderScroll();
-  checkAndDisplayAdminHeaderIcon();
 }
 
 // 1. Load Products from Database Engine
@@ -983,14 +983,19 @@ function setupEventListeners() {
 function checkAndDisplayAdminHeaderIcon() {
   const adminBtn = document.getElementById("adminHeaderBtn");
   const adminBadge = document.getElementById("adminHeaderBadge");
-  if (!adminBtn) return;
 
   const token = localStorage.getItem("kk_admin_token") || sessionStorage.getItem("kk_admin_token");
-  const isAuth = !!token || localStorage.getItem("kk_admin_authorized") === "true";
+  const isAuth = !!token || 
+                 localStorage.getItem("kk_admin_authorized") === "true" ||
+                 localStorage.getItem("kk_admin_device_linked") === "true";
 
   if (isAuth) {
-    adminBtn.style.display = "inline-flex";
-    document.body.classList.add("is-admin-device");
+    document.documentElement.classList.add("is-admin-device");
+    if (document.body) document.body.classList.add("is-admin-device", "is-admin-user");
+
+    if (adminBtn) {
+      adminBtn.style.setProperty("display", "inline-flex", "important");
+    }
 
     const unreadCount = window.KK_DB && typeof window.KK_DB.getUnreadOrdersCount === "function"
       ? window.KK_DB.getUnreadOrdersCount()
@@ -1001,15 +1006,26 @@ function checkAndDisplayAdminHeaderIcon() {
       adminBadge.style.display = unreadCount > 0 ? "flex" : "none";
     }
 
-    if (unreadCount > 0) {
-      adminBtn.classList.add("has-new-orders");
-    } else {
-      adminBtn.classList.remove("has-new-orders");
+    if (adminBtn) {
+      if (unreadCount > 0) {
+        adminBtn.classList.add("has-new-orders");
+      } else {
+        adminBtn.classList.remove("has-new-orders");
+      }
     }
   } else {
-    adminBtn.style.display = "none";
-    adminBtn.classList.remove("has-new-orders");
+    document.documentElement.classList.remove("is-admin-device");
+    if (document.body) document.body.classList.remove("is-admin-device", "is-admin-user");
+    if (adminBtn) {
+      adminBtn.style.setProperty("display", "none", "important");
+      adminBtn.classList.remove("has-new-orders");
+    }
   }
+}
+
+// Immediate execution if script loads when DOM is already populated
+if (document.readyState === "interactive" || document.readyState === "complete") {
+  checkAndDisplayAdminHeaderIcon();
 }
 
 // ----------------------------------------------------------------------------

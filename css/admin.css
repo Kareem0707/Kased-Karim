@@ -842,14 +842,24 @@
    ========================================================================== */
 #adminHeaderBtn,
 .mobile-admin-item {
-  display: none !important;
+  display: none;
 }
 
-body.is-admin-user #adminHeaderBtn {
-  display: flex !important;
+.is-admin-device #adminHeaderBtn,
+.is-admin-user #adminHeaderBtn,
+body.is-admin-user #adminHeaderBtn,
+body.is-admin-device #adminHeaderBtn,
+html.is-admin-device #adminHeaderBtn,
+html.is-admin-user #adminHeaderBtn {
+  display: inline-flex !important;
 }
 
-body.is-admin-user .mobile-admin-item {
+.is-admin-device .mobile-admin-item,
+.is-admin-user .mobile-admin-item,
+body.is-admin-user .mobile-admin-item,
+body.is-admin-device .mobile-admin-item,
+html.is-admin-device .mobile-admin-item,
+html.is-admin-user .mobile-admin-item {
   display: list-item !important;
 }
 

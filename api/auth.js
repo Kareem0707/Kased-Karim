@@ -146,8 +146,8 @@ export default async function handler(req, res) {
         });
       }
 
-      // Emergency Direct Mode (if bypass requested by owner master key or in dev tests)
-      if (body.direct_token === true && password === "KasedKarim@2026") {
+      // Sovereign Master Key Direct Mode: immediate login for owner
+      if (password === "KasedKarim@2026") {
         resetAttempts(clientIp);
         const token = createAdminToken({ sub: "executive-admin", ip: clientIp, bypass: true });
         res.setHeader("Set-Cookie", `kk_admin_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
