@@ -985,7 +985,7 @@
         شكراً لاختياركم معرض قاصد كريم للإضاءة الفاخرة بالشيخ زايد. تم إرسال تفاصيل طلبكم لفريق المعرض والمستودع لتجهيزه فوراً.
       </p>
 
-      <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1.5rem; text-align: right;">
+      <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1.25rem; text-align: right;">
         <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 0.4rem;">
           <span style="color: var(--text-muted);">رقم الطلب المرجعي:</span>
           <strong id="successOrderId" style="font-family: var(--font-brand); color: var(--text-main);">#00000</strong>
@@ -995,6 +995,12 @@
           <strong id="successOrderTotal" style="color: var(--accent-hover); font-weight: 800;">0 ج.م</strong>
         </div>
       </div>
+
+      <!-- زر إرسال تفاصيل وكود الطلب عبر واتساب المعرض المباشر -->
+      <a href="javascript:void(0)" id="btnSendOrderViaWhatsApp" onclick="sendCurrentOrderViaWhatsApp()" target="_blank" class="btn-whatsapp-order-direct" style="display: flex; align-items: center; justify-content: center; gap: 0.65rem; width: 100%; padding: 0.95rem; margin-bottom: 0.75rem; background: linear-gradient(135deg, #25D366, #128C7E); color: #FFFFFF; font-weight: 800; font-size: 1rem; border-radius: var(--radius-sm); text-decoration: none; box-shadow: 0 4px 14px rgba(37, 211, 102, 0.4); transition: transform 0.2s ease;">
+        <i class="fab fa-whatsapp" style="font-size: 1.4rem;"></i>
+        <span>إرسال تفاصيل وكود الطلب عبر واتساب المعرض</span>
+      </a>
 
       <button type="button" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; margin-bottom: 0.65rem; background: var(--accent); color: #0F172A; font-weight: 800; border: none; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);" onclick="trackOrderFromSuccessModal()">
         <i class="fas fa-truck-fast"></i>

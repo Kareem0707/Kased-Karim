@@ -681,33 +681,76 @@ function toggleCartDrawer(open) {
   }
 }
 
-// 7. Send Quotation via WhatsApp directly to Showroom
-function sendWhatsAppQuotation() {
+// 7. Send Quotation & Order via WhatsApp with Official Order Code
+async function sendWhatsAppQuotation() {
   if (STATE.cart.length === 0) {
     showToast("يرجى اختيار وحدات إضاءة أولاً لتأكيد طلبك");
     return;
   }
 
-  const totalAmount = STATE.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  
-  let msg = `*طلب وحدات إضاءة فاخرة - معرض Kased Karim (الشيخ زايد)*\n`;
-  msg += `----------------------------------------\n`;
-  msg += `مرحباً معرض قاصد كريم، أود الاستفسار وتأكيد حجز الوحدات التالية لموقعي بالشيخ زايد:\n\n`;
+  showToast("⏳ جاري حجز كود الطلب وتجهيز رسالة الواتساب...");
 
-  STATE.cart.forEach((item, index) => {
-    msg += `${index + 1}. *${item.name}* (${item.enName})\n`;
-    msg += `   • الكود: ${item.id}\n`;
-    msg += `   • الكمية: ${item.qty}\n`;
-    msg += `   • السعر: ${formatPrice(item.price * item.qty)} ج.م\n\n`;
-  });
+  try {
+    const savedName = localStorage.getItem("kk_customer_name") || "عميل واتساب المباشر";
+    const savedPhone = localStorage.getItem("kk_customer_phone") || "";
 
-  msg += `----------------------------------------\n`;
-  msg += `*إجمالي الطلب:* ${formatPrice(totalAmount)} جنيه مصري\n`;
-  msg += `يرجى تحديد موعد لمعاينة وتأكيد استلام الوحدات بالمعرض بالشيخ زايد.`;
+    const customerData = {
+      name: savedName,
+      phone: savedPhone,
+      city: "الشيخ زايد",
+      address: "الشيخ زايد - طلب عبر واتساب",
+      notes: "تم الطلب عبر زر واتساب السريع من سلة المشتريات"
+    };
 
-  const phone = SHOWROOM_INFO.whatsapp || "201006367690";
-  const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-  window.open(url, "_blank");
+    let newOrder = null;
+    if (window.KK_DB && typeof window.KK_DB.createOrder === "function") {
+      newOrder = await window.KK_DB.createOrder(customerData, STATE.cart);
+    }
+
+    if (newOrder && newOrder.id) {
+      // Save order on customer device for tracking
+      if (typeof window.saveCustomerRecentOrder === "function") {
+        window.saveCustomerRecentOrder(newOrder.id, savedPhone);
+      }
+
+      // Clear cart
+      STATE.cart = [];
+      if (typeof saveCart === "function") saveCart();
+      if (typeof toggleCartDrawer === "function") toggleCartDrawer(false);
+
+      // Open WhatsApp with complete order message & code
+      if (typeof window.sendOrderViaWhatsApp === "function") {
+        window.sendOrderViaWhatsApp(newOrder);
+      } else {
+        const phone = SHOWROOM_INFO.whatsapp || "201006367690";
+        const msg = `*طلب جديد من معرض قاصد كريم للإضاءة الفاخرة* 💎\nكود الطلب المعتمد: #${newOrder.id}\nإجمالي الطلب: ${formatPrice(newOrder.total)} ج.م`;
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
+      }
+
+      // Open Success modal so they see their code and can track it
+      if (typeof window.openOrderSuccessModal === "function") {
+        window.openOrderSuccessModal(newOrder);
+      }
+
+      showToast(`✅ تم حجز الطلب برقم #${newOrder.id} وتجهيز محادثة الواتساب`);
+    } else {
+      // Direct fallback if offline
+      const localId = "ORD-" + Math.floor(1000 + Math.random() * 9000);
+      const totalAmount = STATE.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      let msg = `*طلب وحدات إضاءة فاخرة - معرض Kased Karim (الشيخ زايد)*\n`;
+      msg += `🏷️ *كود الطلب المبدئي:* #${localId}\n`;
+      msg += `----------------------------------------\n`;
+      STATE.cart.forEach((item, index) => {
+        msg += `${index + 1}. *${item.name}* (كمية: ${item.qty}) - ${formatPrice(item.price * item.qty)} ج.م\n`;
+      });
+      msg += `----------------------------------------\n`;
+      msg += `*إجمالي الطلب:* ${formatPrice(totalAmount)} جنيه مصري\n`;
+      const phone = SHOWROOM_INFO.whatsapp || "201006367690";
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
+    }
+  } catch (err) {
+    showToast(`⚠️ خطأ أثناء تجهيز الطلب: ${err.message}`);
+  }
 }
 
 // 8. Add Product Assistant Modal (لوحة تسهيل إضافة وحدات جديدة)

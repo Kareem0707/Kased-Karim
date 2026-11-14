@@ -377,8 +377,75 @@
   };
 
   // --------------------------------------------------------------------------
-  // 4. ORDER SUCCESS CONFIRMATION MODAL
+  // 4. ORDER SUCCESS CONFIRMATION MODAL & WHATSAPP DISPATCH
   // --------------------------------------------------------------------------
+  window.generateOrderWhatsAppMessage = function (order) {
+    if (!order) return "";
+    const itemsList = (order.items || [])
+      .map((it, idx) => `• *${it.name || it.title || 'وحدة إضاءة'}* (عدد: ${it.qty || it.quantity || 1}) - ${formatPrice((it.price || 0) * (it.qty || it.quantity || 1))} ج.م`)
+      .join("\n");
+
+    const trackUrl = `${window.location.origin}/?track=${encodeURIComponent(order.id)}`;
+
+    let msg = `*طلب حجز جديد من معرض قاصد كريم للإضاءة الفاخرة* 💎\n`;
+    msg += `----------------------------------------\n`;
+    msg += `🏷️ *كود الطلب المعتمد:* #${order.id}\n`;
+    if (order.customer?.name) msg += `👤 *اسم العميل:* ${order.customer.name}\n`;
+    if (order.customer?.phone) msg += `📞 *رقم الهاتف:* ${order.customer.phone}\n`;
+    if (order.customer?.address) msg += `📍 *العنوان:* ${order.customer.address}\n`;
+    if (order.customer?.notes) msg += `📝 *ملاحظات:* ${order.customer.notes}\n`;
+    msg += `----------------------------------------\n`;
+    msg += `🛒 *وحدات الإضاءة المطلوبة:*\n${itemsList || "• وحدات مختارة من الكتالوج"}\n`;
+    msg += `----------------------------------------\n`;
+    msg += `💰 *إجمالي قيمة الطلب:* ${formatPrice(order.total || 0)} جنيه مصري\n`;
+    msg += `🔗 *رابط مسار وتتبع الطلب:* ${trackUrl}\n`;
+    msg += `----------------------------------------\n`;
+    msg += `يرجى تأكيد استلام الحجز وتحديد موعد المعاينة والتسليم بالمعرض بالشيخ زايد.`;
+
+    return msg;
+  };
+
+  window.sendOrderViaWhatsApp = function (order) {
+    if (!order) return;
+    const msg = window.generateOrderWhatsAppMessage(order);
+    const waNumber = (window.SHOWROOM_INFO && window.SHOWROOM_INFO.whatsapp) || "201006367690";
+    const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank");
+  };
+
+  window.sendCurrentOrderViaWhatsApp = function () {
+    const order = window.lastPlacedOrderObj;
+    if (order) {
+      window.sendOrderViaWhatsApp(order);
+    } else if (window.lastPlacedOrderId) {
+      const orders = window.KK_DB ? window.KK_DB.getOrders() : [];
+      const found = orders.find(o => o.id === window.lastPlacedOrderId);
+      if (found) {
+        window.sendOrderViaWhatsApp(found);
+      } else {
+        const waNumber = (window.SHOWROOM_INFO && window.SHOWROOM_INFO.whatsapp) || "201006367690";
+        const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(`مرحباً معرض قاصد كريم بالشيخ زايد، أود تأكيد واستلام طلبي رقم #${window.lastPlacedOrderId}.`)}`;
+        window.open(url, "_blank");
+      }
+    }
+  };
+
+  window.contactSupportAboutTrackedOrder = function (customQuery = null) {
+    const targetId = customQuery || window.currentTrackedOrderId || window.lastPlacedOrderId;
+    let order = null;
+    if (window.KK_DB && targetId) {
+      order = window.KK_DB.getOrders().find(o => o.id === targetId);
+    }
+    if (order) {
+      window.sendOrderViaWhatsApp(order);
+    } else {
+      const waNumber = (window.SHOWROOM_INFO && window.SHOWROOM_INFO.whatsapp) || "201006367690";
+      const msg = `مرحباً معرض قاصد كريم بالشيخ زايد، أود الاستفسار عن تفاصيل وحالة طلبي رقم #${targetId || 'طلب إضاءة'}. هل يمكنكم إفادتي بآخر المستجدات وموعد المعاينة والتوصيل؟`;
+      const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+      window.open(url, "_blank");
+    }
+  };
+
   window.openOrderSuccessModal = function (order) {
     const modal = document.getElementById("orderSuccessModal");
     const idEl = document.getElementById("successOrderId");
@@ -388,6 +455,15 @@
     if (totalEl) totalEl.textContent = `${formatPrice(order.total)} ج.م`;
 
     window.lastPlacedOrderId = order.id;
+    window.lastPlacedOrderObj = order;
+
+    // Update WhatsApp Button Link
+    const waBtn = document.getElementById("btnSendOrderViaWhatsApp");
+    if (waBtn) {
+      const waNumber = (window.SHOWROOM_INFO && window.SHOWROOM_INFO.whatsapp) || "201006367690";
+      const msg = window.generateOrderWhatsAppMessage(order);
+      waBtn.href = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+    }
 
     if (modal) {
       modal.classList.add("active");
