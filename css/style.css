@@ -2998,3 +2998,97 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
     font-size: 1.3rem;
   }
 }
+
+/* ==========================================================================
+   BILINGUAL ARABIC (RTL) & ENGLISH (LTR) ENHANCEMENTS (PRD Section 7 & 8)
+   ========================================================================== */
+html[dir="ltr"],
+body.is-en {
+  font-family: 'Cinzel', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  letter-spacing: 0.2px;
+}
+
+html[dir="ltr"] .cart-drawer {
+  left: auto;
+  right: 0;
+  border-right: none;
+  border-left: 1px solid var(--border-light);
+  transform: translateX(100%);
+}
+
+html[dir="ltr"] .cart-drawer-backdrop.active .cart-drawer {
+  transform: translateX(0);
+}
+
+html[dir="ltr"] .floating-circle-whatsapp {
+  left: auto;
+  right: 1.5rem;
+}
+
+html[dir="ltr"] .top-bar-lang-link i,
+html[dir="ltr"] .brand-title-ar {
+  font-family: 'Cairo', sans-serif;
+}
+
+html[dir="ltr"] .card-hover-actions {
+  left: auto;
+  right: 1rem;
+}
+
+html[dir="ltr"] .product-price-current .product-currency {
+  margin-right: 0;
+  margin-left: 0.25rem;
+}
+
+/* Stock Badges (PRD Section 6) */
+.stock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.stock-badge.in-stock {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.12);
+}
+.stock-badge.out-of-stock {
+  color: #DC2626;
+  background: rgba(220, 38, 38, 0.12);
+}
+
+/* Product Card Availability State */
+.product-card.is-out-of-stock .product-img {
+  filter: grayscale(40%) opacity(0.85);
+}
+
+/* Star Rating Selector */
+.star-rating-select i {
+  transition: transform 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+  user-select: none;
+}
+.star-rating-select i:hover {
+  transform: scale(1.2);
+}
+
+/* Customer Account Pill */
+.nav-account-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm);
+  color: #FFFFFF;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+.nav-account-btn:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: var(--accent);
+}

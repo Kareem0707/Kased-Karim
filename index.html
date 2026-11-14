@@ -320,9 +320,16 @@
        TOP UTILITY BAR (الشريط العلوي المينيمالي)
        ======================================================================== -->
   <div class="top-bar">
-    <div class="header-container top-bar-inner">
+    <div class="header-container top-bar-inner" style="display: flex; justify-content: space-between; align-items: center;">
       <div class="top-bar-right-info">
-        <span id="topBarPhone">معرض الشيخ زايد • 01006367690</span>
+        <span id="topBarPhone" data-i18n="showroomCity">معرض الشيخ زايد • 01006367690</span>
+      </div>
+      <div class="top-bar-left-actions" style="display: flex; align-items: center; gap: 0.85rem;">
+        <span class="top-bar-pill" style="font-size: 0.72rem; color: #F59E0B; background: rgba(245,158,11,0.12); padding: 2px 8px; border-radius: 4px; font-weight: 700;" data-i18n="locationBadge">الشيخ زايد - سنتر الطاهرة</span>
+        <button class="top-bar-lang-link" onclick="toggleLanguage()" style="background: none; border: none; color: #CBD5E1; font-size: 0.76rem; cursor: pointer; display: flex; align-items: center; gap: 0.35rem; font-weight: 700;">
+          <i class="fas fa-globe" style="color: var(--accent);"></i>
+          <span class="lang-switcher-text">English</span>
+        </button>
       </div>
     </div>
   </div>
@@ -336,27 +343,38 @@
       <a href="#" class="brand-link" title="قاصد كريم للإضاءة الفاخرة • الشيخ زايد">
         <div class="brand-text-col">
           <span class="brand-title-en">KASED KARIM</span>
-          <span class="brand-title-ar">قاصد كريم للإضاءة الفاخرة</span>
+          <span class="brand-title-ar" data-i18n="brandFullName">قاصد كريم للإضاءة الفاخرة</span>
         </div>
       </a>
 
       <!-- Center Navigation Menu -->
       <nav class="nav-center-wrap">
         <ul class="nav-menu">
-          <li><a href="#" class="nav-item-link active">الرئيسية</a></li>
+          <li><a href="#" class="nav-item-link active" data-i18n="navHome">الرئيسية</a></li>
           <li class="nav-item-dropdown">
             <button class="nav-item-link" id="navCollectionsBtn" onclick="toggleCollectionsSubBar(event)">
-              <span>مجموعات الإضاءة</span>
+              <span data-i18n="navCategories">مجموعات الإضاءة</span>
               <i class="fas fa-chevron-down nav-sub-arrow" id="navSubArrow"></i>
             </button>
           </li>
-          <li><a href="#showroom" class="nav-item-link">معرض الشيخ زايد</a></li>
-          <li><a href="#contact" class="nav-item-link">تواصل معنا</a></li>
+          <li><a href="#showroom" class="nav-item-link" data-i18n="navShowroom">معرض الشيخ زايد</a></li>
+          <li><a href="#contact" class="nav-item-link" data-i18n="navLocation">موقع المعرض</a></li>
         </ul>
       </nav>
 
       <!-- Minimalist Outline Action Buttons (As shown in Reference) -->
       <div class="header-actions">
+        <!-- Language Switcher Button (PRD Section 7) -->
+        <button class="action-circle-btn btn-lang-header" onclick="toggleLanguage()" title="تغيير اللغة / Switch Language (العربية / English)">
+          <i class="fas fa-globe"></i>
+          <span class="lang-current-tag" style="font-size: 0.65rem; font-weight: 800; line-height: 1;">EN</span>
+        </button>
+
+        <!-- Customer Account / Profile Button (PRD Section 3) -->
+        <button class="action-circle-btn btn-customer-account" id="customerAccountBtn" onclick="handleCustomerAccountClick()" title="حساب العميل والطلبات السابقة">
+          <i class="fas fa-user-circle"></i>
+        </button>
+
         <!-- Admin Dashboard Icon (Only for linked admin device, right next to WhatsApp) -->
         <a href="admin.html" class="action-circle-btn btn-admin-header" id="adminHeaderBtn" title="لوحة تحكم المعرض (جهاز إدارة معتمد)">
           <i class="fas fa-shield-halved"></i>
@@ -813,6 +831,54 @@
               <i class="fab fa-whatsapp" style="color: #25D366;"></i>
             </button>
           </div>
+
+          <!-- Stock & Availability Indicator (PRD Section 6) -->
+          <div id="modalStockStatus" style="margin-top: 0.85rem; font-size: 0.82rem; display: flex; align-items: center; gap: 0.5rem;"></div>
+
+          <!-- Customer Reviews Section (PRD Section 11) -->
+          <div class="modal-reviews-section" style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-light);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+              <h4 style="font-size: 0.95rem; font-weight: 800; color: var(--text-main); margin: 0;" data-i18n="reviewsSectionTitle">
+                <i class="fas fa-star" style="color: #F59E0B; margin-left: 0.35rem;"></i>
+                آراء وتقييمات العملاء
+              </h4>
+              <button type="button" class="btn-secondary" onclick="toggleReviewForm()" style="font-size: 0.75rem; padding: 0.3rem 0.65rem;" data-i18n="writeReviewBtn">
+                <i class="fas fa-pen"></i> أضف تقييمك
+              </button>
+            </div>
+
+            <!-- Review Form (Hidden by default) -->
+            <form id="productReviewForm" style="display: none; background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.85rem; margin-bottom: 1rem;" onsubmit="handleReviewSubmit(event)">
+              <div style="font-weight: 700; font-size: 0.82rem; margin-bottom: 0.5rem;" data-i18n="reviewModalTitle">كتابة تقييم لوحدة الإضاءة</div>
+              <div style="margin-bottom: 0.5rem;">
+                <label style="font-size: 0.75rem; color: var(--text-muted); display: block;" data-i18n="labelYourRating">تقييمك:</label>
+                <div class="star-rating-select" id="starRatingSelect" style="display: flex; gap: 0.25rem; color: #F59E0B; cursor: pointer; font-size: 1.1rem; margin-top: 0.25rem;">
+                  <i class="fas fa-star" data-val="1"></i>
+                  <i class="fas fa-star" data-val="2"></i>
+                  <i class="fas fa-star" data-val="3"></i>
+                  <i class="fas fa-star" data-val="4"></i>
+                  <i class="fas fa-star" data-val="5"></i>
+                </div>
+                <input type="hidden" id="reviewRatingInput" value="5">
+              </div>
+              <div style="margin-bottom: 0.5rem;">
+                <input type="text" id="reviewAuthorInput" class="form-input" style="font-size: 0.8rem; padding: 0.4rem 0.65rem;" placeholder="اسمك الكريم" required data-i18n-placeholder="labelYourName">
+              </div>
+              <div style="margin-bottom: 0.5rem;">
+                <textarea id="reviewCommentInput" class="form-textarea" style="font-size: 0.8rem; padding: 0.4rem 0.65rem;" rows="2" placeholder="اكتب رأيك وتجربتك بالتفصيل..." required minlength="5" data-i18n-placeholder="labelYourComment"></textarea>
+              </div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.5rem;" data-i18n="reviewPendingNotice">
+                ملاحظة: سيتم نشر التقييم بالمعرض بعد اعتماده من إدارة الجودة.
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button type="submit" class="btn-primary" style="font-size: 0.78rem; padding: 0.4rem 0.85rem;" data-i18n="btnSubmitReview">إرسال التقييم</button>
+                <button type="button" class="btn-secondary" style="font-size: 0.78rem; padding: 0.4rem 0.85rem;" onclick="toggleReviewForm(false)" data-i18n="btnCancel">إلغاء</button>
+              </div>
+            </form>
+
+            <!-- Reviews List Container -->
+            <div id="modalReviewsList" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -901,20 +967,31 @@
       <!-- Checkout Summary Mini -->
       <div class="checkout-summary-box">
         <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-main); margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
-          <span>ملخص الوحدات المختارة:</span>
-          <span id="checkoutTotalSum" style="color: var(--accent); font-weight: 800;">0 ج.م</span>
+          <span data-i18n="secSummary">ملخص الوحدات المختارة:</span>
+          <span id="checkoutSubtotalSum" style="color: var(--text-main); font-weight: 800;">0 ج.م</span>
         </div>
         <div id="checkoutSummaryList"></div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--text-muted); margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--border-light);">
+          <span data-i18n="cartDeliveryFee">رسوم الشحن والتوصيل:</span>
+          <span id="checkoutShippingFee" style="font-weight: 700; color: #10B981;">0 ج.م (مجاناً)</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.95rem; font-weight: 800; color: var(--accent); margin-top: 0.35rem;">
+          <span data-i18n="cartTotal">إجمالي الطلب المستحق:</span>
+          <span id="checkoutTotalSum">0 ج.م</span>
+        </div>
+        <div style="margin-top: 0.4rem; font-size: 0.75rem; color: #64748B; background: #F1F5F9; padding: 4px 8px; border-radius: 4px; text-align: center;" data-i18n="codUncollected">
+          💵 الدفع نقدياً عند الاستلام — لم يتم التحصيل بعد
+        </div>
       </div>
 
       <form id="checkoutOrderForm" novalidate onsubmit="handleCheckoutSubmit(event)">
         <div class="form-grid">
           <div class="form-group full-width">
             <label class="form-label" for="custNameInput">
-              <span>الاسم الكريم (الاسم الأول واسم العائلة)</span>
+              <span data-i18n="labelFullName">الاسم الكريم (الاسم الأول واسم العائلة)</span>
               <span style="color: #EF4444; font-weight: 800;">*</span>
             </label>
-            <input type="text" id="custNameInput" name="custName" class="form-input" placeholder="مثال: كريم محمود أو أحمد الشناوي" required autocomplete="name">
+            <input type="text" id="custNameInput" name="custName" class="form-input" placeholder="مثال: كريم محمود أو أحمد الشناوي" required autocomplete="name" data-i18n-placeholder="labelFullName">
             <div class="form-field-hint">
               <span>يجب كتابة أول اسمين على الأقل للعميل</span>
             </div>
@@ -926,10 +1003,10 @@
 
           <div class="form-group full-width">
             <label class="form-label" for="custPhoneInput">
-              <span>رقم الهاتف / واتساب لتأكيد الطلب</span>
+              <span data-i18n="labelPhone">رقم الهاتف / واتساب لتأكيد الطلب</span>
               <span style="color: #EF4444; font-weight: 800;">*</span>
             </label>
-            <input type="tel" id="custPhoneInput" name="custPhone" class="form-input" placeholder="010XXXXXXXX (11 رقماً كاملاً)" required maxlength="15" autocomplete="tel" dir="ltr" style="text-align: right;">
+            <input type="tel" id="custPhoneInput" name="custPhone" class="form-input" placeholder="010XXXXXXXX (11 رقماً كاملاً)" required maxlength="15" autocomplete="tel" dir="ltr" style="text-align: right;" data-i18n-placeholder="labelPhone">
             <div class="form-field-hint">
               <span>رقم هاتف محمول كامل (11 رقماً، يبدأ بـ 010 أو 011 أو 012 أو 015)</span>
             </div>
@@ -939,9 +1016,30 @@
             </div>
           </div>
 
+          <!-- Delivery Area Selector (PRD Section 4 & 5) -->
+          <div class="form-group full-width">
+            <label class="form-label" for="custDeliveryAreaSelect">
+              <span data-i18n="secDeliveryArea">منطقة التوصيل بالجمهورية</span>
+              <span style="color: #EF4444; font-weight: 800;">*</span>
+            </label>
+            <select id="custDeliveryAreaSelect" name="custDeliveryArea" class="form-input custom-select" onchange="handleDeliveryAreaChange(this.value)" required style="font-weight: 700;">
+              <option value="sheikh-zayed" selected>الشيخ زايد (توصيل مجاني خلال 1-2 يوم)</option>
+              <option value="october">السادس من أكتوبر (50 ج.م - 1-2 يوم عمل)</option>
+              <option value="new-cairo">القاهرة الجديدة والتجمع (75 ج.م - 2-3 أيام عمل)</option>
+              <option value="giza">الجيزة والدقي والمهندسين (60 ج.م - 2-3 أيام عمل)</option>
+              <option value="cairo">وسط البلد ومدينة نصر ومصر الجديدة (70 ج.م - 2-3 أيام عمل)</option>
+              <option value="alexandria">الإسكندرية والساحل الشمالي (120 ج.م - 3-5 أيام عمل)</option>
+              <option value="unsupported">محافظة أخرى (خارج نطاق التغطية الحالي)</option>
+            </select>
+            <div class="form-field-error" id="custAreaError" style="display: none;">
+              <i class="fas fa-circle-exclamation"></i>
+              <span>عفواً، التوصيل غير متاح حالياً لهذه المنطقة وفق لوائح التوزيع المعتمدة.</span>
+            </div>
+          </div>
+
           <div class="form-group full-width">
             <label class="form-label" for="custAddressInput">
-              <span>عنوان الفيلا / العقار بالتفصيل بالشيخ زايد</span>
+              <span data-i18n="secDetailedAddress">عنوان الفيلا / العقار بالتفصيل بالشيخ زايد</span>
               <span style="color: #EF4444; font-weight: 800;">*</span>
             </label>
             <input type="text" id="custAddressInput" name="custAddress" class="form-input" placeholder="مثال: كمبوند بيفرلي هيلز - مجاورة 3 - فيلا 42 بالشيخ زايد" required minlength="15">
@@ -956,7 +1054,7 @@
           </div>
 
           <div class="form-group full-width">
-            <label class="form-label" for="custNotesInput">ملاحظات خاصة (أوقات التوصيل، مواصفات الأسقف، الخ) - اختياري</label>
+            <label class="form-label" for="custNotesInput" data-i18n="secNotes">ملاحظات خاصة (أوقات التوصيل، مواصفات الأسقف، الخ) - اختياري</label>
             <textarea id="custNotesInput" name="custNotes" class="form-textarea" rows="2" placeholder="أي تفاصيل خاصة يفضل معرفتها قبل المعاينة أو التسليم..."></textarea>
           </div>
         </div>
@@ -964,11 +1062,119 @@
         <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
           <button type="submit" id="btnSubmitCheckout" class="btn-primary" style="flex: 1; justify-content: center; padding: 0.85rem; font-weight: 700;">
             <i class="fas fa-check-circle"></i>
-            <span>تأكيد وإرسال الطلب فوراً</span>
+            <span data-i18n="btnConfirmOrder">تأكيد وإرسال الطلب فوراً</span>
           </button>
-          <button type="button" class="btn-secondary" onclick="closeCheckoutModal()">إلغاء</button>
+          <button type="button" class="btn-secondary" onclick="closeCheckoutModal()" data-i18n="btnCancel">إلغاء</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       CUSTOMER AUTHENTICATION MODAL (تسجيل دخول / إنشاء حساب عميل - PRD Section 3)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="customerAuthModal" role="dialog" aria-modal="true" aria-labelledby="custAuthModalTitle">
+    <div class="modal-dialog" style="max-width: 440px; padding: 2rem 1.75rem;">
+      <button class="modal-close-btn" onclick="closeCustomerAuthModal()" title="إغلاق" aria-label="إغلاق النافذة">
+        <i class="fas fa-times"></i>
+      </button>
+
+      <div style="text-align: center; margin-bottom: 1.25rem;">
+        <div style="width: 50px; height: 50px; border-radius: var(--radius-full); background: rgba(245, 158, 11, 0.12); color: var(--accent); font-size: 1.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.75rem;">
+          <i class="fas fa-user-circle"></i>
+        </div>
+        <h3 id="custAuthModalTitle" style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.35rem;" data-i18n="authModalTitle">تسجيل الدخول / إنشاء حساب</h3>
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0;" data-i18n="authModalSubtitle">سجل بياناتك لمتابعة طلباتك، حفظ سلتك، وتسهيل حجزك</p>
+      </div>
+
+      <!-- Tabs Switcher -->
+      <div style="display: flex; border-bottom: 2px solid var(--border-light); margin-bottom: 1.25rem;">
+        <button type="button" id="tabBtnSignIn" onclick="switchCustomerAuthTab('signin')" style="flex: 1; padding: 0.6rem; border: none; background: none; font-weight: 800; font-size: 0.88rem; color: var(--accent); border-bottom: 2px solid var(--accent); cursor: pointer;" data-i18n="tabSignIn">
+          تسجيل الدخول
+        </button>
+        <button type="button" id="tabBtnRegister" onclick="switchCustomerAuthTab('register')" style="flex: 1; padding: 0.6rem; border: none; background: none; font-weight: 700; font-size: 0.88rem; color: var(--text-muted); border-bottom: 2px solid transparent; cursor: pointer;" data-i18n="tabRegister">
+          إنشاء حساب جديد
+        </button>
+      </div>
+
+      <!-- Sign In Form -->
+      <form id="customerSignInForm" onsubmit="handleCustomerSignIn(event)">
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="form-label" for="custLoginIdentifier" data-i18n="labelPhone">رقم الهاتف أو البريد الإلكتروني</label>
+          <input type="text" id="custLoginIdentifier" class="form-input" placeholder="010XXXXXXXX أو your@email.test" required autocomplete="username">
+        </div>
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label class="form-label" for="custLoginPassword" data-i18n="labelPassword">كلمة المرور</label>
+          <input type="password" id="custLoginPassword" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+        <button type="submit" id="btnCustomerSignInSubmit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem; font-weight: 700;" data-i18n="btnSignIn">
+          <span>دخول لحسابي</span>
+        </button>
+      </form>
+
+      <!-- Register Form -->
+      <form id="customerRegisterForm" style="display: none;" onsubmit="handleCustomerRegister(event)">
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="form-label" for="custRegName" data-i18n="labelFullName">الاسم بالكامل</label>
+          <input type="text" id="custRegName" class="form-input" placeholder="مثال: كريم محمود" required autocomplete="name">
+        </div>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="form-label" for="custRegPhone" data-i18n="labelPhone">رقم الهاتف المحمول</label>
+          <input type="tel" id="custRegPhone" class="form-input" placeholder="010XXXXXXXX (11 رقماً)" required dir="ltr" style="text-align: right;" autocomplete="tel">
+        </div>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="form-label" for="custRegEmail" data-i18n="labelEmail">البريد الإلكتروني (اختياري)</label>
+          <input type="email" id="custRegEmail" class="form-input" placeholder="example@kasedkarim.test" autocomplete="email">
+        </div>
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label class="form-label" for="custRegPassword" data-i18n="labelPassword">كلمة المرور (6 خانات على الأقل)</label>
+          <input type="password" id="custRegPassword" class="form-input" placeholder="••••••••" required minlength="6" autocomplete="new-password">
+        </div>
+        <button type="submit" id="btnCustomerRegSubmit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem; font-weight: 700;" data-i18n="btnRegister">
+          <span>إنشاء حساب جديد</span>
+        </button>
+      </form>
+
+      <div style="text-align: center; margin-top: 1rem; padding-top: 0.85rem; border-top: 1px dashed var(--border-light);">
+        <button type="button" onclick="continueCheckoutAsGuest()" style="background: none; border: none; color: var(--text-muted); font-size: 0.8rem; cursor: pointer; text-decoration: underline;" data-i18n="continueAsGuest">
+          المتابعة كزائر دون تسجيل دخول
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       CUSTOMER PROFILE & ORDER HISTORY MODAL (PRD Section 3 & 4)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="customerProfileModal" role="dialog" aria-modal="true" aria-labelledby="custProfileModalTitle">
+    <div class="modal-dialog checkout-modal-dialog" style="max-width: 680px; padding: 2rem;">
+      <button class="modal-close-btn" onclick="closeCustomerProfileModal()" title="إغلاق" aria-label="إغلاق النافذة">
+        <i class="fas fa-times"></i>
+      </button>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+          <span class="section-tag">CUSTOMER PORTAL</span>
+          <h2 id="custProfileModalTitle" style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem;" data-i18n="myAccountTitle">حساب العميل</h2>
+          <div id="customerProfileDetails" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;"></div>
+        </div>
+        <button type="button" class="btn-secondary" onclick="handleCustomerSignOut()" style="font-size: 0.8rem; padding: 0.45rem 0.85rem; color: #DC2626; border-color: rgba(220,38,38,0.35);" data-i18n="signOut">
+          <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+        </button>
+      </div>
+
+      <!-- Order History Section -->
+      <div>
+        <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;" data-i18n="myOrdersTitle">
+          <i class="fas fa-clock-rotate-left" style="color: var(--accent);"></i>
+          <span>سجل طلباتي السابقة</span>
+        </h3>
+        <div id="customerOrdersHistoryList" style="max-height: 320px; overflow-y: auto;">
+          <div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.88rem;" data-i18n="noOrdersYet">
+            جاري تحميل سجل طلباتك...
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1165,6 +1371,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
+  <script src="js/i18n.js?v=16.0"></script>
   <script src="js/data.js?v=16.0"></script>
   <script src="js/db.js?v=16.0"></script>
   <script src="js/app.js?v=16.0"></script>

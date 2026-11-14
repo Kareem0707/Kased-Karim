@@ -353,3 +353,103 @@ export async function send2FAEmail(otpCode, targetEmail = ADMIN_2FA_EMAIL) {
 
   return { dispatched: emailDispatched, email: targetEmail };
 }
+
+// -----------------------------------------------------------------------------
+// CUSTOMER AUTHENTICATION ENGINE (PRD Section 3 & 10)
+// -----------------------------------------------------------------------------
+const CUSTOMER_JWT_SECRET = process.env.CUSTOMER_JWT_SECRET || (JWT_SECRET + "_customer_portal_key_2026");
+
+export function hashCustomerPassword(password, salt = null) {
+  if (!password) return null;
+  const usedSalt = salt || crypto.randomBytes(16).toString("hex");
+  const derived = crypto.scryptSync(password, usedSalt, 64).toString("hex");
+  return { hash: derived, salt: usedSalt };
+}
+
+export function verifyCustomerPassword(inputPassword, storedHash, storedSalt) {
+  if (!inputPassword || !storedHash || !storedSalt) return false;
+  try {
+    const derived = crypto.scryptSync(inputPassword, storedSalt, 64).toString("hex");
+    const a = Buffer.from(derived, "hex");
+    const b = Buffer.from(storedHash, "hex");
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch (e) {
+    return false;
+  }
+}
+
+export function createCustomerToken(payload = {}, expiresInMs = 30 * 24 * 60 * 60 * 1000) {
+  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  const exp = Date.now() + expiresInMs;
+  const body = Buffer.from(JSON.stringify({
+    ...payload,
+    role: "customer",
+    exp,
+    iat: Date.now()
+  })).toString("base64url");
+
+  const signature = crypto
+    .createHmac("sha256", CUSTOMER_JWT_SECRET)
+    .update(`${header}.${body}`)
+    .digest("base64url");
+
+  return `${header}.${body}.${signature}`;
+}
+
+export function verifyCustomerToken(token) {
+  if (!token || typeof token !== "string") return null;
+  const parts = token.trim().replace(/^Bearer\s+/i, "").split(".");
+  if (parts.length !== 3) return null;
+
+  const [header, body, signature] = parts;
+  try {
+    const expectedSig = crypto
+      .createHmac("sha256", CUSTOMER_JWT_SECRET)
+      .update(`${header}.${body}`)
+      .digest("base64url");
+
+    const sigBuf = Buffer.from(signature);
+    const expectedBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+      return null;
+    }
+
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf-8"));
+    if (!payload.exp || payload.exp < Date.now()) {
+      return null;
+    }
+    if (payload.role !== "customer") {
+      return null;
+    }
+    return payload;
+  } catch (err) {
+    return null;
+  }
+}
+
+export function verifyCustomerRequest(req) {
+  if (!req) return null;
+  const authHeader = req.headers["authorization"] || req.headers["Authorization"];
+  if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+    const token = authHeader.slice(7).trim();
+    const verified = verifyCustomerToken(token);
+    if (verified) return verified;
+  }
+
+  const customHeader = req.headers["x-customer-token"];
+  if (customHeader) {
+    const verified = verifyCustomerToken(customHeader);
+    if (verified) return verified;
+  }
+
+  const cookieHeader = req.headers["cookie"];
+  if (cookieHeader) {
+    const match = cookieHeader.match(/kk_customer_token=([^;]+)/);
+    if (match && match[1]) {
+      const verified = verifyCustomerToken(match[1]);
+      if (verified) return verified;
+    }
+  }
+
+  return null;
+}

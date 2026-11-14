@@ -35,6 +35,7 @@ const STORAGE_KEYS = {
 // Initialize Application
 function initApp() {
   checkAndDisplayAdminHeaderIcon();
+  if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
   initLightingCeremony();
   loadProducts();
   loadCart();
@@ -448,35 +449,45 @@ function renderProducts() {
     return;
   }
 
-  grid.innerHTML = visibleItems.map(item => `
-    <article class="product-card" data-id="${escapeHtml(item.id)}">
+  const isEn = window.KK_I18N ? window.KK_I18N.getCurrentLanguage() === "en" : false;
+  const currencyStr = window.KK_I18N ? window.KK_I18N.t("currency") : "ج.م";
+
+  grid.innerHTML = visibleItems.map(item => {
+    const stock = item.stock !== undefined ? item.stock : 10;
+    const isAvailable = stock > 0;
+    const displayName = (isEn && item.enName) ? item.enName : item.name;
+    const displayCategory = (isEn && item.enCategory) ? item.enCategory : item.categoryName;
+
+    return `
+    <article class="product-card ${!isAvailable ? 'is-out-of-stock' : ''}" data-id="${escapeHtml(item.id)}">
       <div class="product-media">
-        <img class="product-img" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1200&q=80'">
+        <img class="product-img" src="${escapeHtml(item.image)}" alt="${escapeHtml(displayName)}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1200&q=80'">
         
         <div class="card-badges">
-          ${item.isExclusive ? '<span class="badge-exclusive"><i class="fas fa-crown"></i> حصري في زايد</span>' : ''}
-          ${item.isNew ? '<span class="badge-new">جديد 2026</span>' : ''}
+          ${item.isExclusive ? `<span class="badge-exclusive"><i class="fas fa-crown"></i> ${isEn ? 'Exclusive' : 'حصري في زايد'}</span>` : ''}
+          ${item.isNew ? `<span class="badge-new">${isEn ? 'New 2026' : 'جديد 2026'}</span>` : ''}
+          ${!isAvailable ? `<span class="badge-new" style="background: #EF4444;"><i class="fas fa-times-circle"></i> ${isEn ? 'Out of Stock' : 'غير متوفر'}</span>` : ''}
         </div>
 
         <div class="card-hover-actions">
           <button class="btn-card-quickview" onclick="openQuickView('${escapeHtml(item.id)}')">
             <i class="fas fa-expand"></i>
-            <span>المواصفات الفنية</span>
+            <span>${isEn ? 'Specifications' : 'المواصفات الفنية'}</span>
           </button>
         </div>
       </div>
 
       <div class="product-body">
         <div class="product-category-row">
-          <span class="product-cat-tag">${escapeHtml(item.categoryName)}</span>
+          <span class="product-cat-tag">${escapeHtml(displayCategory)}</span>
           <div class="product-rating">
             <i class="fas fa-star"></i>
             <span>${escapeHtml(item.rating || '5.0')}</span>
           </div>
         </div>
 
-        <h3 class="product-name" onclick="openQuickView('${escapeHtml(item.id)}')">${escapeHtml(item.name)}</h3>
-        <p class="product-en-name">${escapeHtml(item.enName)}</p>
+        <h3 class="product-name" onclick="openQuickView('${escapeHtml(item.id)}')">${escapeHtml(displayName)}</h3>
+        <p class="product-en-name">${escapeHtml(isEn ? item.name : item.enName)}</p>
 
         <div class="product-specs-pills">
           ${item.specs?.cri ? `<span class="spec-pill">${escapeHtml(item.specs.cri)}</span>` : ''}
@@ -488,18 +499,18 @@ function renderProducts() {
           <div class="product-price-col">
             <div class="product-price-current">
               ${formatPrice(item.price)}
-              <span class="product-currency">ج.م</span>
+              <span class="product-currency">${currencyStr}</span>
             </div>
-            ${item.originalPrice ? `<span class="product-price-old">${formatPrice(item.originalPrice)} ج.م</span>` : ''}
+            ${item.originalPrice ? `<span class="product-price-old">${formatPrice(item.originalPrice)} ${currencyStr}</span>` : ''}
           </div>
 
-          <button class="btn-card-quote" title="إضافة للسلة" onclick="addToCart('${escapeHtml(item.id)}', 1)">
+          <button class="btn-card-quote" title="${isAvailable ? (isEn ? 'Add to Cart' : 'إضافة للسلة') : (isEn ? 'Out of Stock' : 'غير متوفر')}" ${!isAvailable ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''} onclick="addToCart('${escapeHtml(item.id)}', 1)">
             <i class="fas fa-plus"></i>
           </button>
         </div>
       </div>
     </article>
-  `).join("");
+  `}).join("");
 }
 
 // 4.1 Load More Products Function (عرض المزيد من المنتجات)
@@ -543,18 +554,35 @@ function openQuickView(productId) {
   const descEl = document.getElementById("modalDesc");
   const specsTable = document.getElementById("modalSpecsTable");
   const qtyEl = document.getElementById("modalQtyVal");
+  const stockEl = document.getElementById("modalStockStatusBadge");
+
+  const isEn = window.KK_I18N ? window.KK_I18N.getCurrentLanguage() === "en" : false;
+  const currencyStr = window.KK_I18N ? window.KK_I18N.t("currency") : "ج.م";
+  const stock = item.stock !== undefined ? item.stock : 10;
+
+  if (stockEl) {
+    if (stock > 0) {
+      stockEl.innerHTML = `<i class="fas fa-check-circle"></i> <span>${isEn ? 'In Stock (' + stock + ' units)' : 'متوفر بالمعرض (' + stock + ' قطعة)'}</span>`;
+      stockEl.style.color = "#10B981";
+      stockEl.style.background = "rgba(16, 185, 129, 0.1)";
+    } else {
+      stockEl.innerHTML = `<i class="fas fa-times-circle"></i> <span>${isEn ? 'Out of Stock' : 'غير متوفر حالياً'}</span>`;
+      stockEl.style.color = "#EF4444";
+      stockEl.style.background = "rgba(239, 68, 68, 0.1)";
+    }
+  }
 
   if (qtyEl) qtyEl.textContent = "1";
 
   if (modalImg) modalImg.src = item.image;
-  if (catEl) catEl.textContent = item.categoryName;
-  if (titleEl) titleEl.textContent = item.name;
-  if (enTitleEl) enTitleEl.textContent = item.enName;
+  if (catEl) catEl.textContent = (isEn && item.enCategory) ? item.enCategory : item.categoryName;
+  if (titleEl) titleEl.textContent = (isEn && item.enName) ? item.enName : item.name;
+  if (enTitleEl) enTitleEl.textContent = isEn ? item.name : item.enName;
   if (priceEl) priceEl.textContent = formatPrice(item.price);
   if (oldPriceEl) {
-    oldPriceEl.textContent = item.originalPrice ? `${formatPrice(item.originalPrice)} ج.م` : "";
+    oldPriceEl.textContent = item.originalPrice ? `${formatPrice(item.originalPrice)} ${currencyStr}` : "";
   }
-  if (descEl) descEl.textContent = item.description;
+  if (descEl) descEl.textContent = (isEn && item.enDescription) ? item.enDescription : item.description;
 
   // Thumbs
   if (thumbsContainer) {
@@ -571,14 +599,22 @@ function openQuickView(productId) {
   if (specsTable) {
     const s = item.specs || {};
     specsTable.innerHTML = `
-      ${s.dimensions ? `<tr><td>الأبعاد والمقاسات</td><td>${escapeHtml(s.dimensions)}</td></tr>` : ''}
-      ${s.material ? `<tr><td>الخامات والتشطيب</td><td>${escapeHtml(s.material)}</td></tr>` : ''}
-      ${s.colorTemp ? `<tr><td>درجة حرارة الضوء</td><td>${escapeHtml(s.colorTemp)}</td></tr>` : ''}
-      ${s.wattage ? `<tr><td>الاستهلاك والقدرة</td><td>${escapeHtml(s.wattage)}</td></tr>` : ''}
-      ${s.cri ? `<tr><td>معامل وضوح الألوان</td><td>${escapeHtml(s.cri)}</td></tr>` : ''}
-      ${s.voltage ? `<tr><td>جهد التشغيل</td><td>${escapeHtml(s.voltage)}</td></tr>` : ''}
-      ${s.warranty ? `<tr><td>الضمان المعتمد</td><td>${escapeHtml(s.warranty)}</td></tr>` : ''}
+      ${s.dimensions ? `<tr><td>${isEn ? 'Dimensions' : 'الأبعاد والمقاسات'}</td><td>${escapeHtml(s.dimensions)}</td></tr>` : ''}
+      ${s.material ? `<tr><td>${isEn ? 'Materials & Finish' : 'الخامات والتشطيب'}</td><td>${escapeHtml(s.material)}</td></tr>` : ''}
+      ${s.colorTemp ? `<tr><td>${isEn ? 'Color Temperature' : 'درجة حرارة الضوء'}</td><td>${escapeHtml(s.colorTemp)}</td></tr>` : ''}
+      ${s.wattage ? `<tr><td>${isEn ? 'Power Consumption' : 'الاستهلاك والقدرة'}</td><td>${escapeHtml(s.wattage)}</td></tr>` : ''}
+      ${s.cri ? `<tr><td>${isEn ? 'CRI' : 'معامل وضوح الألوان'}</td><td>${escapeHtml(s.cri)}</td></tr>` : ''}
+      ${s.voltage ? `<tr><td>${isEn ? 'Operating Voltage' : 'جهد التشغيل'}</td><td>${escapeHtml(s.voltage)}</td></tr>` : ''}
+      ${s.warranty ? `<tr><td>${isEn ? 'Showroom Warranty' : 'الضمان المعتمد'}</td><td>${escapeHtml(s.warranty)}</td></tr>` : ''}
     `;
+  }
+
+  // PRD Section 2: Load Customer Reviews for this product
+  if (typeof loadProductReviews === "function") {
+    loadProductReviews(item.id);
+  }
+  if (typeof toggleReviewForm === "function") {
+    toggleReviewForm(false);
   }
 
   modal.classList.add("active");
@@ -603,7 +639,22 @@ function addToCart(productId, qty = 1) {
   const product = STATE.products.find(p => p.id === productId);
   if (!product) return;
 
+  // PRD Section 6: Prevent selling unavailable products & overselling
+  const stock = product.stock !== undefined ? product.stock : 10;
+  const isEn = window.KK_I18N ? window.KK_I18N.getCurrentLanguage() === "en" : false;
+
+  if (stock <= 0) {
+    showToast(isEn ? "Sorry, this lighting unit is currently out of stock." : "عفواً، هذه الوحدة غير متوفرة حالياً بالمعرض.");
+    return;
+  }
+
   const existingIndex = STATE.cart.findIndex(item => item.id === productId);
+  const currentInCart = existingIndex > -1 ? STATE.cart[existingIndex].qty : 0;
+  if (currentInCart + qty > stock) {
+    showToast(isEn ? `Sorry, only ${stock} units are currently available.` : `عفواً، أقصى كمية متوفرة بالمعرض هي ${stock} وحدة.`);
+    return;
+  }
+
   if (existingIndex > -1) {
     STATE.cart[existingIndex].qty += qty;
   } else {
@@ -619,7 +670,11 @@ function addToCart(productId, qty = 1) {
   }
 
   saveCart();
-  showToast(`تمت إضافة "${product.name}" إلى سلة طلباتك بنجاح.`);
+  const displayName = (isEn && product.enName) ? product.enName : product.name;
+  const successMsg = isEn 
+    ? `Added "${displayName}" to your quotation cart.` 
+    : `تمت إضافة "${displayName}" إلى سلة طلباتك بنجاح.`;
+  showToast(successMsg);
 }
 
 function removeFromCart(productId) {
@@ -1009,6 +1064,20 @@ function setupEventListeners() {
     checkAndDisplayAdminHeaderIcon();
   });
 
+  // Real-time Language Change Listener (PRD Section 7)
+  window.addEventListener("kk_language_changed", () => {
+    renderCategoryTabs();
+    renderSubBarCategories();
+    renderProducts();
+    if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
+    if (window.KK_I18N) window.KK_I18N.applyLanguageToDOM();
+  });
+
+  // Customer Authentication Change Listener (PRD Section 3)
+  window.addEventListener("kk_customer_auth_changed", () => {
+    if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
+  });
+
   // Secret Admin Device Link: 5 clicks on logo activates executive shield button
   let logoClickCount = 0;
   let logoTimer = null;
@@ -1344,6 +1413,444 @@ document.addEventListener("click", (e) => {
     }
   }
 });
+
+// ============================================================================
+// CUSTOMER AUTHENTICATION & PROFILE PORTAL (PRD Sections 3 & 4)
+// ============================================================================
+window.pendingAuthCallback = null;
+
+function handleCustomerAccountClick() {
+  const customer = window.KK_DB && typeof window.KK_DB.getCustomer === "function" 
+    ? window.KK_DB.getCustomer() 
+    : null;
+  if (customer) {
+    openCustomerProfileModal();
+  } else {
+    openCustomerAuthModal();
+  }
+}
+window.handleCustomerAccountClick = handleCustomerAccountClick;
+
+function openCustomerAuthModal(onSuccessCallback) {
+  window.pendingAuthCallback = onSuccessCallback || null;
+  const modal = document.getElementById("customerAuthModal");
+  if (modal) {
+    modal.classList.add("active");
+    document.body.style.overflow = "hidden";
+    switchCustomerAuthTab("signin");
+  }
+}
+window.openCustomerAuthModal = openCustomerAuthModal;
+
+function closeCustomerAuthModal() {
+  const modal = document.getElementById("customerAuthModal");
+  if (modal) {
+    modal.classList.remove("active");
+    document.body.style.overflow = "";
+  }
+}
+window.closeCustomerAuthModal = closeCustomerAuthModal;
+
+function switchCustomerAuthTab(tab) {
+  const signinForm = document.getElementById("customerSignInForm");
+  const regForm = document.getElementById("customerRegisterForm");
+  const signinBtn = document.getElementById("tabBtnSignIn");
+  const regBtn = document.getElementById("tabBtnRegister");
+
+  if (tab === "signin") {
+    if (signinForm) signinForm.style.display = "block";
+    if (regForm) regForm.style.display = "none";
+    if (signinBtn) {
+      signinBtn.style.color = "var(--accent)";
+      signinBtn.style.borderBottom = "2px solid var(--accent)";
+      signinBtn.style.fontWeight = "800";
+    }
+    if (regBtn) {
+      regBtn.style.color = "var(--text-muted)";
+      regBtn.style.borderBottom = "2px solid transparent";
+      regBtn.style.fontWeight = "700";
+    }
+  } else {
+    if (signinForm) signinForm.style.display = "none";
+    if (regForm) regForm.style.display = "block";
+    if (regBtn) {
+      regBtn.style.color = "var(--accent)";
+      regBtn.style.borderBottom = "2px solid var(--accent)";
+      regBtn.style.fontWeight = "800";
+    }
+    if (signinBtn) {
+      signinBtn.style.color = "var(--text-muted)";
+      signinBtn.style.borderBottom = "2px solid transparent";
+      signinBtn.style.fontWeight = "700";
+    }
+  }
+}
+window.switchCustomerAuthTab = switchCustomerAuthTab;
+
+async function handleCustomerSignIn(e) {
+  if (e) e.preventDefault();
+  const identEl = document.getElementById("custLoginIdentifier");
+  const passEl = document.getElementById("custLoginPassword");
+  const submitBtn = document.getElementById("btnCustomerSignInSubmit");
+
+  const identifier = identEl ? identEl.value.trim() : "";
+  const password = passEl ? passEl.value : "";
+
+  if (!identifier || !password) {
+    showToast("يرجى إدخال رقم الهاتف أو البريد وكلمة المرور");
+    return;
+  }
+
+  const origHtml = submitBtn ? submitBtn.innerHTML : "";
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>جارٍ تسجيل الدخول...</span>`;
+  }
+
+  try {
+    const res = await window.KK_DB.customerLogin(identifier, password);
+    showToast(`مرحباً بك مجدداً يا ${res.customer.name}!`);
+    closeCustomerAuthModal();
+    updateCustomerButtonUI();
+
+    if (window.pendingAuthCallback) {
+      const cb = window.pendingAuthCallback;
+      window.pendingAuthCallback = null;
+      cb();
+    }
+  } catch (err) {
+    showToast(`❌ ${err.message || "تعذر تسجيل الدخول"}`);
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = origHtml;
+    }
+  }
+}
+window.handleCustomerSignIn = handleCustomerSignIn;
+
+async function handleCustomerRegister(e) {
+  if (e) e.preventDefault();
+  const nameEl = document.getElementById("custRegName");
+  const phoneEl = document.getElementById("custRegPhone");
+  const emailEl = document.getElementById("custRegEmail");
+  const passEl = document.getElementById("custRegPassword");
+  const submitBtn = document.getElementById("btnCustomerRegSubmit");
+
+  const name = nameEl ? nameEl.value.trim() : "";
+  const phone = phoneEl ? phoneEl.value.trim() : "";
+  const email = emailEl ? emailEl.value.trim() : "";
+  const password = passEl ? passEl.value : "";
+
+  if (!name || !phone || !password) {
+    showToast("يرجى ملء جميع الحقول المطلوبة");
+    return;
+  }
+
+  const origHtml = submitBtn ? submitBtn.innerHTML : "";
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>جارٍ إنشاء الحساب...</span>`;
+  }
+
+  try {
+    const res = await window.KK_DB.customerRegister(name, phone, password, email);
+    showToast(`أهلاً بك يا ${res.customer.name}! تم إنشاء حسابك بنجاح.`);
+    closeCustomerAuthModal();
+    updateCustomerButtonUI();
+
+    if (window.pendingAuthCallback) {
+      const cb = window.pendingAuthCallback;
+      window.pendingAuthCallback = null;
+      cb();
+    }
+  } catch (err) {
+    showToast(`❌ ${err.message || "تعذر إنشاء الحساب"}`);
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = origHtml;
+    }
+  }
+}
+window.handleCustomerRegister = handleCustomerRegister;
+
+function handleCustomerSignOut() {
+  if (window.KK_DB && typeof window.KK_DB.customerLogout === "function") {
+    window.KK_DB.customerLogout();
+  }
+  closeCustomerProfileModal();
+  updateCustomerButtonUI();
+  showToast("تم تسجيل الخروج بنجاح.");
+}
+window.handleCustomerSignOut = handleCustomerSignOut;
+
+async function openCustomerProfileModal() {
+  const customer = window.KK_DB && typeof window.KK_DB.getCustomer === "function" 
+    ? window.KK_DB.getCustomer() 
+    : null;
+  if (!customer) {
+    openCustomerAuthModal();
+    return;
+  }
+
+  const modal = document.getElementById("customerProfileModal");
+  const detailsEl = document.getElementById("customerProfileDetails");
+  const listEl = document.getElementById("customerOrdersHistoryList");
+
+  if (detailsEl) {
+    detailsEl.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <span style="font-weight: 800; color: var(--text-main); font-size: 1.05rem;">${escapeHtml(customer.name)}</span>
+        <span style="color: var(--text-muted); font-size: 0.82rem;">• ${escapeHtml(customer.phone)}</span>
+        ${customer.email ? `<span style="color: var(--text-muted); font-size: 0.82rem;">• ${escapeHtml(customer.email)}</span>` : ''}
+      </div>
+    `;
+  }
+
+  if (modal) {
+    modal.classList.add("active");
+    document.body.style.overflow = "hidden";
+  }
+
+  if (listEl) {
+    listEl.innerHTML = `
+      <div style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.88rem;">
+        <i class="fas fa-spinner fa-spin" style="margin-left: 0.5rem;"></i> جاري تحميل سجل طلباتك...
+      </div>
+    `;
+    try {
+      const orders = await window.KK_DB.getCustomerOrders();
+      if (!orders || orders.length === 0) {
+        listEl.innerHTML = `
+          <div style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted); font-size: 0.88rem;">
+            <i class="fas fa-receipt" style="font-size: 2.2rem; color: #CBD5E1; display: block; margin-bottom: 0.75rem;"></i>
+            لم تسجل أي طلبات حتى الآن. استكشف المعرض وأضف وحدات الإضاءة إلى سلتك!
+          </div>
+        `;
+      } else {
+        const statusMap = {
+          received: { text: "تم الاستلام", color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+          confirmed: { text: "تم التأكيد", color: "#059669", bg: "rgba(5,150,105,0.12)" },
+          preparing: { text: "جاري التجهيز", color: "#D97706", bg: "rgba(217,119,6,0.12)" },
+          packed: { text: "تم التغليف", color: "#7C3AED", bg: "rgba(124,58,237,0.12)" },
+          shipped: { text: "خرج للتوصيل", color: "#2563EB", bg: "rgba(37,99,235,0.12)" },
+          delivered: { text: "تم التسليم", color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+          cancelled: { text: "ملغي", color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
+          failed: { text: "تعذر التسليم", color: "#DC2626", bg: "rgba(220,38,38,0.12)" }
+        };
+
+        listEl.innerHTML = orders.map(ord => {
+          const st = statusMap[ord.status] || { text: ord.status, color: "#6B7280", bg: "#F3F4F6" };
+          const items = Array.isArray(ord.items) ? ord.items : Object.values(ord.items || {});
+          const codNotice = ord.paymentStatus === "collected"
+            ? `<span style="font-size: 0.72rem; color: #10B981; font-weight: 700;"><i class="fas fa-check-circle"></i> تم سداد النقدية</span>`
+            : `<span style="font-size: 0.72rem; color: #F59E0B; font-weight: 700;"><i class="fas fa-hand-holding-dollar"></i> الدفع نقدياً عند الاستلام — لم يتم التحصيل بعد</span>`;
+
+          return `
+            <div style="background: #FFFFFF; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.85rem 1rem; margin-bottom: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span style="font-weight: 800; font-family: monospace; font-size: 0.88rem; color: var(--text-main);">#${escapeHtml(ord.id)}</span>
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(ord.dateFormatted || '')}</span>
+                </div>
+                <span style="font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 4px; color: ${st.color}; background: ${st.bg};">
+                  ${st.text}
+                </span>
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.45rem;">
+                ${items.map(it => `${escapeHtml(it.name || 'وحدة')} × ${it.qty || 1}`).join(" • ")}
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-light); padding-top: 0.45rem;">
+                <div>${codNotice}</div>
+                <div style="font-weight: 800; color: var(--accent); font-size: 0.92rem;">
+                  ${formatPrice(ord.total || 0)} ج.م
+                </div>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+    } catch (e) {
+      listEl.innerHTML = `<div style="text-align: center; padding: 2rem; color: #EF4444; font-size: 0.85rem;">تعذر تحميل سجل الطلبات</div>`;
+    }
+  }
+}
+window.openCustomerProfileModal = openCustomerProfileModal;
+
+function closeCustomerProfileModal() {
+  const modal = document.getElementById("customerProfileModal");
+  if (modal) {
+    modal.classList.remove("active");
+    document.body.style.overflow = "";
+  }
+}
+window.closeCustomerProfileModal = closeCustomerProfileModal;
+
+function updateCustomerButtonUI() {
+  const customer = window.KK_DB && typeof window.KK_DB.getCustomer === "function" 
+    ? window.KK_DB.getCustomer() 
+    : null;
+  const isEn = window.KK_I18N ? window.KK_I18N.getCurrentLanguage() === "en" : false;
+  const btn = document.getElementById("customerAccountBtn");
+  if (!btn) return;
+
+  if (customer) {
+    const firstName = customer.name ? customer.name.split(" ")[0] : (isEn ? "Account" : "حسابي");
+    btn.innerHTML = `<i class="fas fa-user-check" style="color: #10B981;"></i> <span style="font-size: 0.82rem; font-weight: 700;">${escapeHtml(firstName)}</span>`;
+    btn.setAttribute("title", customer.name);
+  } else {
+    btn.innerHTML = `<i class="fas fa-user"></i> <span style="font-size: 0.82rem; font-weight: 700;" data-i18n="navAccount">${isEn ? "Sign In" : "حسابي"}</span>`;
+    btn.setAttribute("title", isEn ? "Sign in / Register" : "تسجيل الدخول / إنشاء حساب");
+  }
+}
+window.updateCustomerButtonUI = updateCustomerButtonUI;
+
+// ============================================================================
+// PRODUCT REVIEWS & MODERATION (PRD Sections 2 & 3)
+// ============================================================================
+let currentReviewRating = 5;
+
+function initStarRatingSelect() {
+  const container = document.getElementById("starRatingSelect");
+  if (!container || container.dataset.hasListener) return;
+  container.dataset.hasListener = "true";
+
+  const stars = container.querySelectorAll("i");
+  stars.forEach(star => {
+    star.addEventListener("click", () => {
+      const val = parseInt(star.getAttribute("data-val") || "5", 10);
+      currentReviewRating = val;
+      stars.forEach(s => {
+        const sVal = parseInt(s.getAttribute("data-val") || "0", 10);
+        if (sVal <= val) {
+          s.classList.remove("far");
+          s.classList.add("fas");
+          s.style.color = "#F59E0B";
+        } else {
+          s.classList.remove("fas");
+          s.classList.add("far");
+          s.style.color = "#CBD5E1";
+        }
+      });
+    });
+  });
+}
+
+function toggleReviewForm(show) {
+  const form = document.getElementById("productReviewForm");
+  if (!form) return;
+  const isHidden = form.style.display === "none" || form.style.display === "";
+  const shouldShow = show !== undefined ? show : isHidden;
+  form.style.display = shouldShow ? "block" : "none";
+
+  if (shouldShow) {
+    initStarRatingSelect();
+    const customer = window.KK_DB && typeof window.KK_DB.getCustomer === "function" 
+      ? window.KK_DB.getCustomer() 
+      : null;
+    const authorInput = document.getElementById("reviewAuthorInput");
+    if (customer && authorInput && !authorInput.value) {
+      authorInput.value = customer.name || "";
+    }
+  }
+}
+window.toggleReviewForm = toggleReviewForm;
+
+async function loadProductReviews(productId) {
+  const container = document.getElementById("productReviewsList");
+  if (!container) return;
+
+  container.innerHTML = `
+    <div style="text-align: center; padding: 1.25rem; color: var(--text-muted); font-size: 0.8rem;">
+      <i class="fas fa-spinner fa-spin" style="margin-left: 0.35rem;"></i> جاري تحميل تقييمات العملاء...
+    </div>
+  `;
+
+  try {
+    const reviews = (window.KK_DB && typeof window.KK_DB.getProductReviews === "function")
+      ? await window.KK_DB.getProductReviews(productId)
+      : [];
+
+    if (!reviews || reviews.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 1.5rem 0.5rem; color: var(--text-muted); font-size: 0.82rem; background: #F8FAFC; border-radius: 4px; border: 1px dashed var(--border-light);">
+          <i class="far fa-star" style="font-size: 1.5rem; color: #CBD5E1; display: block; margin-bottom: 0.35rem;"></i>
+          لا توجد تقييمات معتمدة لهذه الوحدة حتى الآن. كن أول من يشاركنا رأيه!
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = reviews.map(rev => {
+      const stars = "★".repeat(rev.rating || 5) + "☆".repeat(Math.max(0, 5 - (rev.rating || 5)));
+      return `
+        <div style="padding: 0.75rem 0; border-bottom: 1px solid var(--border-light); font-size: 0.82rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+            <div style="font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 0.35rem;">
+              <i class="fas fa-circle-user" style="color: var(--accent);"></i>
+              ${escapeHtml(rev.author || 'عميل معتمد')}
+            </div>
+            <div style="color: #F59E0B; font-size: 0.85rem; letter-spacing: 1px;">
+              ${stars}
+            </div>
+          </div>
+          <p style="margin: 0; color: #475569; font-size: 0.8rem; line-height: 1.45;">
+            ${escapeHtml(rev.comment || '')}
+          </p>
+          <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">
+            ${escapeHtml(rev.dateFormatted || 'مراجعة معتمدة')}
+          </div>
+        </div>
+      `;
+    }).join("");
+  } catch (err) {
+    container.innerHTML = `<div style="text-align: center; padding: 1rem; color: #EF4444; font-size: 0.8rem;">تعذر تحميل التقييمات</div>`;
+  }
+}
+window.loadProductReviews = loadProductReviews;
+
+async function handleReviewSubmit(e) {
+  if (e) e.preventDefault();
+  const product = STATE.selectedProduct;
+  if (!product) {
+    showToast("يرجى اختيار وحدة إضاءة أولاً");
+    return;
+  }
+
+  const authorInput = document.getElementById("reviewAuthorInput");
+  const commentInput = document.getElementById("reviewCommentInput");
+  const submitBtn = document.getElementById("btnSubmitReview");
+
+  const author = authorInput ? authorInput.value.trim() : "";
+  const comment = commentInput ? commentInput.value.trim() : "";
+
+  if (!author || !comment) {
+    showToast("يرجى إدخال اسمك ورأيك في وحدة الإضاءة");
+    return;
+  }
+
+  const origHtml = submitBtn ? submitBtn.innerHTML : "";
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>جارٍ الإرسال...</span>`;
+  }
+
+  try {
+    await window.KK_DB.submitReview(product.id, product.name, author, currentReviewRating, comment);
+    showToast("✨ شكراً لتقييمك! تم إرسال تقييمك للمراجعة وسيظهر بعد الاعتماد.");
+    if (commentInput) commentInput.value = "";
+    toggleReviewForm(false);
+  } catch (err) {
+    showToast(`❌ ${err.message || "تعذر إرسال التقييم"}`);
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = origHtml;
+    }
+  }
+}
+window.handleReviewSubmit = handleReviewSubmit;
 
 // Global invocation on ready
 document.addEventListener("DOMContentLoaded", initApp);

@@ -61,10 +61,67 @@
     return [];
   }
 
+  window.handleDeliveryAreaChange = function (areaId) {
+    const areas = (window.KK_DB && typeof window.KK_DB.getDeliveryAreas === "function") 
+      ? window.KK_DB.getDeliveryAreas() 
+      : [];
+    const area = areas.find(a => a.id === areaId);
+    const areaError = document.getElementById("custAreaError");
+    const submitBtn = document.getElementById("btnSubmitCheckout");
+    const feeEl = document.getElementById("checkoutShippingFee");
+    const subtotalEl = document.getElementById("checkoutSubtotalSum");
+    const totalEl = document.getElementById("checkoutTotalSum");
+
+    const cartItems = getCartItems();
+    const subtotal = cartItems.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0);
+    if (subtotalEl) subtotalEl.textContent = `${formatPrice(subtotal)} ج.م`;
+
+    if (!area || area.active === false) {
+      if (areaError) areaError.style.display = "flex";
+      if (submitBtn) submitBtn.disabled = true;
+      if (feeEl) {
+        feeEl.textContent = "غير متاح";
+        feeEl.style.color = "#EF4444";
+      }
+      if (totalEl) totalEl.textContent = `${formatPrice(subtotal)} ج.م`;
+      return;
+    }
+
+    if (areaError) areaError.style.display = "none";
+    if (submitBtn) submitBtn.disabled = false;
+
+    // Delivery fee rule (PRD Section 4 & 5): Free in Sheikh Zayed or orders >= 5,000 EGP
+    let fee = Number(area.fee) || 0;
+    if (area.id === "sheikh-zayed" || subtotal >= 5000) {
+      fee = 0;
+    }
+
+    if (feeEl) {
+      feeEl.textContent = fee === 0 ? "0 ج.م (مجاناً)" : `${formatPrice(fee)} ج.م`;
+      feeEl.style.color = fee === 0 ? "#10B981" : "var(--text-main)";
+    }
+
+    const grandTotal = subtotal + fee;
+    if (totalEl) {
+      totalEl.textContent = `${formatPrice(grandTotal)} ج.م`;
+    }
+  };
+
   window.openCheckoutModal = function () {
     const cartItems = getCartItems();
     if (!cartItems || cartItems.length === 0) {
       showToast("سلة طلباتك فارغة! تفضل باختيار وحدات الإضاءة أولاً.");
+      return;
+    }
+
+    // PRD Section 4: Customer account check before checkout (Guest cart preserved)
+    const isCustomerLoggedIn = window.KK_DB && typeof window.KK_DB.getCustomer === "function" && window.KK_DB.getCustomer();
+    const isGuestApproved = sessionStorage.getItem("kk_guest_checkout") === "true";
+
+    if (!isCustomerLoggedIn && !isGuestApproved && typeof window.openCustomerAuthModal === "function") {
+      window.openCustomerAuthModal(() => {
+        window.openCheckoutModal();
+      });
       return;
     }
 
@@ -76,9 +133,11 @@
 
     const modal = document.getElementById("checkoutModal");
     const summaryList = document.getElementById("checkoutSummaryList") || document.getElementById("checkoutItemsSummaryList");
+    const subtotalEl = document.getElementById("checkoutSubtotalSum");
     const totalEl = document.getElementById("checkoutTotalSum") || document.getElementById("checkoutTotalSummary");
 
     const totalAmount = cartItems.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0);
+    if (subtotalEl) subtotalEl.textContent = `${formatPrice(totalAmount)} ج.م`;
     if (totalEl) totalEl.textContent = `${formatPrice(totalAmount)} ج.م`;
 
     if (summaryList) {
@@ -100,6 +159,40 @@
       `
         )
         .join("");
+    }
+
+    // Populate Delivery Areas Dropdown
+    const areaSelect = document.getElementById("custDeliveryAreaSelect");
+    if (areaSelect && window.KK_DB && typeof window.KK_DB.getDeliveryAreas === "function") {
+      const areas = window.KK_DB.getDeliveryAreas();
+      if (areas && areas.length > 0) {
+        const curVal = areaSelect.value || "sheikh-zayed";
+        areaSelect.innerHTML = areas.map(a => `
+          <option value="${window.escapeHtml(a.id)}" ${a.id === curVal ? 'selected' : ''}>
+            ${window.escapeHtml(a.name)} (${a.fee === 0 ? 'توصيل مجاني' : a.fee + ' ج.م'} - ${window.escapeHtml(a.days || '1-3 أيام')})
+          </option>
+        `).join("") + `<option value="unsupported">محافظة أخرى (خارج نطاق التغطية الحالي)</option>`;
+      }
+    }
+
+    // Auto-fill logged in customer data or saved details
+    const nameInput = document.getElementById("custNameInput") || document.getElementById("checkoutCustomerName");
+    const phoneInput = document.getElementById("custPhoneInput") || document.getElementById("checkoutCustomerPhone");
+    if (isCustomerLoggedIn) {
+      if (nameInput && !nameInput.value) nameInput.value = isCustomerLoggedIn.name || "";
+      if (phoneInput && !phoneInput.value) phoneInput.value = isCustomerLoggedIn.phone || "";
+    } else {
+      try {
+        const savedName = localStorage.getItem("kk_customer_name");
+        const savedPhone = localStorage.getItem("kk_customer_phone");
+        if (nameInput && !nameInput.value && savedName) nameInput.value = savedName;
+        if (phoneInput && !phoneInput.value && savedPhone) phoneInput.value = savedPhone;
+      } catch (e) {}
+    }
+
+    // Calculate initial fee & grand total
+    if (areaSelect) {
+      handleDeliveryAreaChange(areaSelect.value);
     }
 
     if (modal) {
@@ -366,12 +459,47 @@
       return;
     }
 
+    // PRD Section 4 & 5: Validate Delivery Area and calculate breakdown
+    const areaSelect = document.getElementById("custDeliveryAreaSelect");
+    const selectedAreaId = areaSelect ? areaSelect.value : "sheikh-zayed";
+    const areas = (window.KK_DB && typeof window.KK_DB.getDeliveryAreas === "function") 
+      ? window.KK_DB.getDeliveryAreas() 
+      : [];
+    const selectedArea = areas.find(a => a.id === selectedAreaId);
+
+    if (!selectedArea || selectedArea.active === false || selectedAreaId === "unsupported") {
+      const areaErr = document.getElementById("custAreaError");
+      if (areaErr) areaErr.style.display = "flex";
+      showToast("⚠️ عفواً، التوصيل غير متاح حالياً لهذه المنطقة وفق لوائح التوزيع المعتمدة.");
+      return;
+    }
+
+    const subtotal = cartItems.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0);
+    let shippingFee = Number(selectedArea.fee) || 0;
+    if (selectedArea.id === "sheikh-zayed" || subtotal >= 5000) {
+      shippingFee = 0;
+    }
+    const grandTotal = subtotal + shippingFee;
+
+    const currentCustomer = (window.KK_DB && typeof window.KK_DB.getCustomer === "function") 
+      ? window.KK_DB.getCustomer() 
+      : null;
+
     const customerData = {
       name: nameVal.cleanName,
       phone: phoneVal.cleanPhone,
-      city: "الشيخ زايد",
+      city: selectedArea.name || "الشيخ زايد",
+      deliveryArea: selectedArea.id,
+      deliveryAreaName: selectedArea.name,
+      shippingFee: shippingFee,
+      subtotal: subtotal,
+      total: grandTotal,
       address: addressVal.cleanAddress,
-      notes: rawNotes
+      notes: rawNotes,
+      customerId: currentCustomer ? currentCustomer.id : null,
+      customerEmail: currentCustomer ? currentCustomer.email : null,
+      paymentMethod: "cod",
+      paymentStatus: "uncollected"
     };
 
     const originalBtnHtml = submitBtn ? submitBtn.innerHTML : "";
@@ -872,6 +1000,14 @@
       loadAndRenderTrackOrder(window.currentTrackedOrderId, savedPhone);
       showToast("تم تحديث حالة الطلب");
     }
+  };
+
+  window.continueCheckoutAsGuest = function () {
+    sessionStorage.setItem("kk_guest_checkout", "true");
+    if (typeof window.closeCustomerAuthModal === "function") {
+      window.closeCustomerAuthModal();
+    }
+    window.openCheckoutModal();
   };
 
   // --------------------------------------------------------------------------

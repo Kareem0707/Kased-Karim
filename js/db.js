@@ -12,7 +12,12 @@ const DB_KEYS = {
   SETTINGS: "kased_karim_db_settings_v3",
   BACKUPS: "kased_karim_db_backups_v1",
   CLOUD_CONFIG: "kased_karim_cloud_config_v1",
-  CUSTOM_CLOUD_URL: "kk_custom_cloud_url"
+  CUSTOM_CLOUD_URL: "kk_custom_cloud_url",
+  DELIVERY_AREAS: "kased_karim_db_delivery_areas_v1",
+  REVIEWS: "kased_karim_db_reviews_v1",
+  CUSTOMER_TOKEN: "kk_customer_token",
+  CUSTOMER_USER: "kk_customer_user",
+  AUDIT_LOGS: "kased_karim_db_audit_logs_v1"
 };
 
 // Production Orders Cache (Zero Hardcoded Customer Data)
@@ -892,6 +897,13 @@ class KasedKarimDB {
           }
         }
       } catch(e) {}
+
+      // Ensure stock attributes (PRD Section 6)
+      list.forEach(p => {
+        if (p.stock === undefined) p.stock = 12;
+        p.inStock = p.stock > 0 && p.inStock !== false;
+      });
+
       return list;
     } catch (e) {
       console.error("DB Error getProducts:", e);
@@ -1107,6 +1119,8 @@ class KasedKarimDB {
     } catch (e) {}
 
     this.incrementSales(cartItems);
+    this.reserveStock(cartItems);
+    this.logActivity("order_created", `طلب جديد #${fullOrder.id} بقيمة ${fullOrder.total} ج.م`);
 
     const isAdmin = typeof document !== 'undefined' && (
       document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot")
@@ -1123,14 +1137,50 @@ class KasedKarimDB {
     const orders = this.getOrders();
     const order = orders.find(o => o.id === orderId);
     if (order) {
+      const oldStatus = order.status;
       order.status = newStatus;
-      if (newStatus !== "pending") {
+      if (newStatus !== "pending" && newStatus !== "received") {
         order.isRead = true;
       }
       localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
       
+      // Stock management (PRD Section 6): Release stock if cancelled or failed
+      if ((newStatus === "cancelled" || newStatus === "failed") && (oldStatus !== "cancelled" && oldStatus !== "failed")) {
+        this.releaseStock(order.items);
+      } else if ((oldStatus === "cancelled" || oldStatus === "failed") && (newStatus !== "cancelled" && newStatus !== "failed")) {
+        this.reserveStock(order.items);
+      }
+
       this.updateOrderStatusInCloud(orderId, newStatus);
       this.recalculateAllProductSales();
+      this.logActivity("order_status_updated", `تغيير حالة الطلب #${orderId} إلى: ${newStatus}`);
+      window.dispatchEvent(new CustomEvent("kk_orders_updated"));
+      return true;
+    }
+    return false;
+  }
+
+  updateOrderPaymentStatus(orderId, paymentStatus) {
+    const orders = this.getOrders();
+    const order = orders.find(o => o.id === orderId);
+    if (order) {
+      order.paymentStatus = paymentStatus;
+      order.paymentStatusText = paymentStatus === "collected" ? "تم التحصيل نقدياً بنجاح" : "الدفع نقدياً عند الاستلام — لم يتم التحصيل بعد";
+      order.paymentStatusTextEn = paymentStatus === "collected" ? "Cash Collected Successfully" : "Cash on delivery — not yet collected";
+      if (paymentStatus === "collected") {
+        order.paidAt = Date.now();
+      }
+      localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
+
+      // PATCH server
+      fetch("/api/orders", {
+        method: "PATCH",
+        cache: "no-store",
+        headers: this.getCloudHeaders(),
+        body: JSON.stringify({ id: orderId, paymentStatus })
+      }).catch(() => {});
+
+      this.logActivity("payment_status_updated", `تحديث حالة الدفع للطلب #${orderId} إلى: ${paymentStatus === "collected" ? "تم التحصيل" : "لم يتم التحصيل"}`);
       window.dispatchEvent(new CustomEvent("kk_orders_updated"));
       return true;
     }
@@ -1849,6 +1899,266 @@ class KasedKarimDB {
       categories: defaultCategories,
       settings: defaultSettings
     }, true);
+  }
+
+  // --------------------------------------------------------------------------
+  // CUSTOMER ACCOUNT MANAGEMENT (PRD Sections 2, 3, 4 & 10)
+  // --------------------------------------------------------------------------
+  getCustomer() {
+    try {
+      const data = localStorage.getItem(DB_KEYS.CUSTOMER_USER);
+      return data ? JSON.parse(data) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  getCustomerToken() {
+    try {
+      return localStorage.getItem(DB_KEYS.CUSTOMER_TOKEN) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async customerRegister(name, phone, email, password) {
+    const res = await fetch("/api/customer?action=register", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, phone, email, password })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "تعذر إنشاء الحساب");
+    }
+    if (data.token && data.customer) {
+      localStorage.setItem(DB_KEYS.CUSTOMER_TOKEN, data.token);
+      localStorage.setItem(DB_KEYS.CUSTOMER_USER, JSON.stringify(data.customer));
+      window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: data.customer }));
+    }
+    return data.customer;
+  }
+
+  async customerLogin(identifier, password) {
+    const res = await fetch("/api/customer?action=login", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, password })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "بيانات الدخول غير صحيحة");
+    }
+    if (data.token && data.customer) {
+      localStorage.setItem(DB_KEYS.CUSTOMER_TOKEN, data.token);
+      localStorage.setItem(DB_KEYS.CUSTOMER_USER, JSON.stringify(data.customer));
+      window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: data.customer }));
+    }
+    return data.customer;
+  }
+
+  customerLogout() {
+    localStorage.removeItem(DB_KEYS.CUSTOMER_TOKEN);
+    localStorage.removeItem(DB_KEYS.CUSTOMER_USER);
+    window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: null }));
+  }
+
+  async getCustomerOrders() {
+    const token = this.getCustomerToken();
+    if (!token) return [];
+    try {
+      const res = await fetch("/api/customer?action=orders", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.orders || [];
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  // --------------------------------------------------------------------------
+  // PRODUCT REVIEWS & MODERATION (PRD Section 11)
+  // --------------------------------------------------------------------------
+  async getProductReviews(productId) {
+    try {
+      const res = await fetch(`/api/reviews?productId=${encodeURIComponent(productId)}`, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.reviews)) {
+          return data.reviews;
+        }
+      }
+    } catch (e) {}
+    const fallback = (typeof REVIEWS !== "undefined" ? REVIEWS : []).filter(r => r.productId === productId && r.status === "approved");
+    return fallback;
+  }
+
+  async submitReview(productId, productName, author, rating, comment) {
+    const res = await fetch("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productId, productName, author, rating, comment })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "تعذر إرسال التقييم");
+    }
+    this.logActivity("review_submitted", `تقييم جديد للمنتج: ${productName} بواسطة ${author}`);
+    return data.review;
+  }
+
+  async getAllReviewsForAdmin() {
+    const headers = this.getCloudHeaders();
+    try {
+      const res = await fetch("/api/reviews?all=1", { headers, cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        return data.reviews || [];
+      }
+    } catch (e) {}
+    return typeof REVIEWS !== "undefined" ? REVIEWS : [];
+  }
+
+  async moderateReview(reviewId, status) {
+    const headers = this.getCloudHeaders();
+    const res = await fetch("/api/reviews", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ id: reviewId, status })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "تعذر تعديل التقييم");
+    }
+    this.logActivity("review_moderated", `تعديل حالة التقييم #${reviewId} إلى ${status}`);
+    window.dispatchEvent(new CustomEvent("kk_reviews_updated"));
+    return true;
+  }
+
+  async deleteReview(reviewId) {
+    const headers = this.getCloudHeaders();
+    const res = await fetch(`/api/reviews?id=${encodeURIComponent(reviewId)}`, {
+      method: "DELETE",
+      headers
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "تعذر حذف التقييم");
+    }
+    this.logActivity("review_deleted", `حذف التقييم #${reviewId}`);
+    window.dispatchEvent(new CustomEvent("kk_reviews_updated"));
+    return true;
+  }
+
+  // --------------------------------------------------------------------------
+  // DELIVERY AREAS & STOCK RESERVATION (PRD Sections 5 & 6)
+  // --------------------------------------------------------------------------
+  getDeliveryAreas() {
+    try {
+      const saved = localStorage.getItem(DB_KEYS.DELIVERY_AREAS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return typeof DELIVERY_AREAS !== "undefined" ? DELIVERY_AREAS : [];
+  }
+
+  updateDeliveryAreas(areas) {
+    localStorage.setItem(DB_KEYS.DELIVERY_AREAS, JSON.stringify(areas));
+    this.logActivity("delivery_areas_updated", "تحديث مناطق وأسعار التوصيل");
+    window.dispatchEvent(new CustomEvent("kk_delivery_areas_updated"));
+  }
+
+  reserveStock(items) {
+    if (!Array.isArray(items) || items.length === 0) return;
+    const products = this.getProducts();
+    let changed = false;
+    items.forEach(item => {
+      const prod = products.find(p => p.id === item.id);
+      if (prod) {
+        const currentStock = parseInt(prod.stock !== undefined ? prod.stock : 10, 10);
+        const qty = parseInt(item.qty || 1, 10);
+        prod.stock = Math.max(0, currentStock - qty);
+        prod.inStock = prod.stock > 0;
+        changed = true;
+      }
+    });
+    if (changed) {
+      localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
+      window.dispatchEvent(new CustomEvent("kk_products_updated"));
+    }
+  }
+
+  releaseStock(items) {
+    if (!Array.isArray(items) || items.length === 0) return;
+    const products = this.getProducts();
+    let changed = false;
+    items.forEach(item => {
+      const prod = products.find(p => p.id === item.id);
+      if (prod) {
+        const currentStock = parseInt(prod.stock !== undefined ? prod.stock : 0, 10);
+        const qty = parseInt(item.qty || 1, 10);
+        prod.stock = currentStock + qty;
+        prod.inStock = prod.stock > 0;
+        changed = true;
+      }
+    });
+    if (changed) {
+      localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
+      window.dispatchEvent(new CustomEvent("kk_products_updated"));
+    }
+  }
+
+  updateProductStock(productId, newStock) {
+    const products = this.getProducts();
+    const prod = products.find(p => p.id === productId);
+    if (prod) {
+      prod.stock = Math.max(0, parseInt(newStock, 10) || 0);
+      prod.inStock = prod.stock > 0;
+      localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
+      this.sendProductToCloud(prod);
+      this.logActivity("stock_updated", `تعديل مخزون ${prod.name} إلى ${prod.stock} وحدة`);
+      window.dispatchEvent(new CustomEvent("kk_products_updated"));
+      return true;
+    }
+    return false;
+  }
+
+  // --------------------------------------------------------------------------
+  // ADMINISTRATIVE AUDIT & ACTIVITY LOG (PRD Section 3)
+  // --------------------------------------------------------------------------
+  logActivity(action, details) {
+    try {
+      const logs = this.getAuditLogs();
+      const newEntry = {
+        id: "LOG-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 6),
+        action,
+        details,
+        timestamp: Date.now(),
+        dateFormatted: new Date().toLocaleDateString("ar-EG", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        })
+      };
+      logs.unshift(newEntry);
+      localStorage.setItem(DB_KEYS.AUDIT_LOGS, JSON.stringify(logs.slice(0, 100)));
+      window.dispatchEvent(new CustomEvent("kk_audit_logs_updated"));
+    } catch (e) {}
+  }
+
+  getAuditLogs() {
+    try {
+      const data = localStorage.getItem(DB_KEYS.AUDIT_LOGS);
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      return [];
+    }
+  }
   }
 }
 

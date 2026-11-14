@@ -806,9 +806,64 @@ const INITIAL_SHOWROOM_INFO = {
 
 let SHOWROOM_INFO = { ...INITIAL_SHOWROOM_INFO };
 
+// مناطق التوصيل المعتمدة ورسوم الشحن (PRD Section 5)
+const INITIAL_DELIVERY_AREAS = [
+  { id: "sheikh-zayed", nameAr: "الشيخ زايد", nameEn: "Sheikh Zayed", fee: 0, days: "1 - 2 أيام عمل", daysEn: "1 - 2 Business Days", active: true },
+  { id: "october", nameAr: "السادس من أكتوبر", nameEn: "6th of October", fee: 50, days: "1 - 2 أيام عمل", daysEn: "1 - 2 Business Days", active: true },
+  { id: "new-cairo", nameAr: "القاهرة الجديدة والتجمع", nameEn: "New Cairo & Tagamoa", fee: 75, days: "2 - 3 أيام عمل", daysEn: "2 - 3 Business Days", active: true },
+  { id: "giza", nameAr: "الجيزة والدقي والمهندسين", nameEn: "Giza, Dokki & Mohandessin", fee: 60, days: "2 - 3 أيام عمل", daysEn: "2 - 3 Business Days", active: true },
+  { id: "cairo", nameAr: "وسط البلد ومدينة نصر ومصر الجديدة", nameEn: "Cairo, Nasr City & Heliopolis", fee: 70, days: "2 - 3 أيام عمل", daysEn: "2 - 3 Business Days", active: true },
+  { id: "alexandria", nameAr: "الإسكندرية والساحل الشمالي", nameEn: "Alexandria & North Coast", fee: 120, days: "3 - 5 أيام عمل", daysEn: "3 - 5 Business Days", active: true }
+];
+
+let DELIVERY_AREAS = [...INITIAL_DELIVERY_AREAS];
+
+// تقييمات المنتجات المعتمدة الأولية (بيانات تجريبية مصرح بها وفق PRD Section 10 & 11)
+const INITIAL_REVIEWS = [
+  {
+    id: "REV-101",
+    productId: "kk-001",
+    productName: "دلاية كريستال كاسكيد الإمبراطورية",
+    author: "م. كريم الشافعي",
+    rating: 5,
+    comment: "قطعة فنية استثنائية فوق بهو الفيلا، جودة الكريستال ونقاء الإضاءة مبهرة والتوصيل بالشيخ زايد تم باحترافية تامة.",
+    status: "approved",
+    timestamp: 1794650000000,
+    dateFormatted: "١٢ نوفمبر ٢٠٢٦"
+  },
+  {
+    id: "REV-102",
+    productId: "kk-008",
+    productName: "أباجورة ميكانو الفاخرة للصالونات والمكاتب",
+    author: "د. طارق الشناوي",
+    rating: 5,
+    comment: "خامات النحاس المسبوك أصلية وثقيلة، تضفي هيبة وفخامة على المكتب، خدمة ما بعد البيع ممتازة.",
+    status: "approved",
+    timestamp: 1794660000000,
+    dateFormatted: "١٣ نوفمبر ٢٠٢٦"
+  },
+  {
+    id: "REV-103",
+    productId: "kk-004",
+    productName: "أبليك جداري أونيكس رخامي مضيء",
+    author: "أحمد كمال",
+    rating: 5,
+    comment: "توزيع الضوء هادئ جداً والرخام الطبيعي مضلع بدقة عالية.",
+    status: "approved",
+    timestamp: 1794670000000,
+    dateFormatted: "١٤ نوفمبر ٢٠٢٦"
+  }
+];
+
+let REVIEWS = [...INITIAL_REVIEWS];
+
 if (typeof window !== "undefined") {
   window.INITIAL_CATEGORIES = INITIAL_CATEGORIES;
   window.CATEGORIES = CATEGORIES;
   window.INITIAL_SHOWROOM_INFO = INITIAL_SHOWROOM_INFO;
   window.SHOWROOM_INFO = SHOWROOM_INFO;
+  window.INITIAL_DELIVERY_AREAS = INITIAL_DELIVERY_AREAS;
+  window.DELIVERY_AREAS = DELIVERY_AREAS;
+  window.INITIAL_REVIEWS = INITIAL_REVIEWS;
+  window.REVIEWS = REVIEWS;
 }

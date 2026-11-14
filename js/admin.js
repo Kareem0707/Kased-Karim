@@ -729,7 +729,11 @@ function switchAdminTab(tabKey, element) {
   if (tabKey === "orders") renderAdminOrders();
   if (tabKey === "inventory") renderAdminInventory();
   if (tabKey === "addProduct") populateAdminCategorySelect();
+  if (tabKey === "bulkImport" && typeof clearBulkCsvForm === "function") clearBulkCsvForm();
+  if (tabKey === "deliveryAreas" && typeof renderAdminDeliveryAreas === "function") renderAdminDeliveryAreas();
+  if (tabKey === "reviews" && typeof renderAdminReviews === "function") renderAdminReviews();
   if (tabKey === "categories") renderAdminCategories();
+  if (tabKey === "audit" && typeof renderAdminAuditLogs === "function") renderAdminAuditLogs();
   if (tabKey === "settings") loadAdminSettingsValues();
   if (tabKey === "backup") renderAdminBackupView();
 }
@@ -846,14 +850,19 @@ function renderAdminOrders(statusFilter = null) {
   }
 
   container.innerHTML = orders.map(order => {
-    const isNew = order.status === "pending";
+    const isNew = order.status === "received" || order.status === "pending";
     const statusLabels = {
-      pending: "قيد المراجعة والاستلام",
+      received: "تم الاستلام والتوثيق",
+      pending: "تم الاستلام والتوثيق",
       confirmed: "تم التأكيد والمعاينة الفنية",
+      preparing: "جاري التجهيز والتجميع بالمستودع",
       processing: "جاري التجهيز والتجميع بالمستودع",
+      packed: "تم التغليف والتأمين",
       shipped: "خرج للشحن والتوصيل",
-      completed: "مكتمل وتم التسليم بنجاح",
-      cancelled: "طلب ملغي"
+      delivered: "تم التسليم بنجاح",
+      completed: "تم التسليم بنجاح",
+      cancelled: "طلب ملغي",
+      failed: "تعذر التسليم"
     };
     const statusText = statusLabels[order.status] || "قيد المعالجة";
 
@@ -863,6 +872,18 @@ function renderAdminOrders(statusFilter = null) {
     const customerPhone = customer.phone || "";
     const customerAddress = customer.address || "الشيخ زايد";
     const customerNotes = customer.notes || "";
+    const deliveryAreaName = order.deliveryAreaName || customer.deliveryAreaName || customer.city || "الشيخ زايد";
+    const shippingFee = order.shippingFee !== undefined ? order.shippingFee : (order.shipping !== undefined ? order.shipping : null);
+
+    // COD Payment Status (PRD Section 5)
+    const isPaid = order.paymentStatus === "collected";
+    const paymentStatusBadge = isPaid
+      ? `<span class="cod-collected-badge" style="background: rgba(16,185,129,0.12); color: #059669; font-weight: 800; font-size: 0.75rem; padding: 4px 10px; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fas fa-check-circle"></i> تم تحصيل النقدية بالكامل</span>`
+      : `<span class="cod-uncollected-badge" style="background: rgba(245,158,11,0.12); color: #D97706; font-weight: 800; font-size: 0.75rem; padding: 4px 10px; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.35rem;"><i class="fas fa-hand-holding-dollar"></i> الدفع نقدياً عند الاستلام — لم يتم التحصيل بعد</span>`;
+
+    const paymentToggleBtn = isPaid
+      ? `<button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem; color: #DC2626;" onclick="toggleOrderPayment('${escapeHtml(order.id)}', 'uncollected')"><i class="fas fa-undo"></i> إلغاء تسجيل السداد</button>`
+      : `<button type="button" class="btn-primary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; background: #10B981; border: none; font-weight: 800;" onclick="toggleOrderPayment('${escapeHtml(order.id)}', 'collected')"><i class="fas fa-check"></i> تسجيل استلام النقدية</button>`;
 
     // Safe items array extraction
     const items = Array.isArray(order.items) 
@@ -881,17 +902,20 @@ function renderAdminOrders(statusFilter = null) {
             <span class="order-id-tag">#${escapeHtml(order.id)}</span>
             <span class="order-date-text"><i class="fas fa-clock"></i> ${escapeHtml(formattedDate)}</span>
             ${isNew ? '<span class="new-live-tag"><i class="fas fa-bolt"></i> وارد الآن</span>' : ''}
+            <div>${paymentStatusBadge}</div>
           </div>
 
           <div style="display: flex; align-items: center; gap: 0.75rem;">
             <span class="order-status-pill ${escapeHtml(order.status)}">${escapeHtml(statusText)}</span>
             <select class="custom-select" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; font-weight: 700;" onchange="changeOrderStatus('${escapeHtml(order.id)}', this.value)">
-              <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>⏳ قيد الانتظار والمراجعة</option>
-              <option value="confirmed" ${order.status === 'confirmed' ? 'selected' : ''}>📋 تم التأكيد والمعاينة</option>
-              <option value="processing" ${order.status === 'processing' ? 'selected' : ''}>⚙️ جاري التجهيز والتجميع</option>
-              <option value="shipped" ${order.status === 'shipped' ? 'selected' : ''}>🚚 خرج للشحن والتوصيل</option>
-              <option value="completed" ${order.status === 'completed' ? 'selected' : ''}>✅ مكتمل وتم التسليم</option>
-              <option value="cancelled" ${order.status === 'cancelled' ? 'selected' : ''}>❌ ملغي</option>
+              <option value="received" ${order.status === 'received' || order.status === 'pending' ? 'selected' : ''}>⏳ تم الاستلام والتوثيق (Received)</option>
+              <option value="confirmed" ${order.status === 'confirmed' ? 'selected' : ''}>📋 تم التأكيد والمعاينة (Confirmed)</option>
+              <option value="preparing" ${order.status === 'preparing' || order.status === 'processing' ? 'selected' : ''}>⚙️ جاري التجهيز (Preparing)</option>
+              <option value="packed" ${order.status === 'packed' ? 'selected' : ''}>📦 تم التغليف (Packed)</option>
+              <option value="shipped" ${order.status === 'shipped' ? 'selected' : ''}>🚚 خرج للتوصيل (Out for delivery)</option>
+              <option value="delivered" ${order.status === 'delivered' || order.status === 'completed' ? 'selected' : ''}>✅ تم التسليم (Delivered)</option>
+              <option value="cancelled" ${order.status === 'cancelled' ? 'selected' : ''}>❌ ملغي (Cancelled)</option>
+              <option value="failed" ${order.status === 'failed' ? 'selected' : ''}>⚠️ تعذر التسليم (Delivery failed)</option>
             </select>
           </div>
         </div>
@@ -911,7 +935,13 @@ function renderAdminOrders(statusFilter = null) {
             ` : '<span style="color: var(--text-muted); font-size: 0.85rem;">غير مسجل</span>'}
           </div>
           <div class="customer-info-item">
-            <strong>موقع الفيلا / العنوان بالشيخ زايد:</strong>
+            <strong>منطقة التوصيل:</strong>
+            <span style="font-weight: 700; color: var(--text-main);">
+              ${escapeHtml(deliveryAreaName)} ${shippingFee !== null ? `<span style="font-size: 0.78rem; color: #10B981;">(رسوم الشحن: ${shippingFee === 0 ? 'مجاناً' : shippingFee + ' ج.م'})</span>` : ''}
+            </span>
+          </div>
+          <div class="customer-info-item">
+            <strong>العنوان بالتفصيل:</strong>
             <span>${escapeHtml(customerAddress)}</span>
           </div>
           ${customerNotes ? `
@@ -963,8 +993,11 @@ function renderAdminOrders(statusFilter = null) {
 
         <!-- Order Footer Actions -->
         <div class="order-footer-actions">
-          <div class="order-total-sum">
-            إجمالي الطلب: <span style="color: var(--accent-hover);">${formatPrice(order.total)} جنيه مصري</span>
+          <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <div class="order-total-sum">
+              إجمالي الطلب: <span style="color: var(--accent-hover);">${formatPrice(order.total)} جنيه مصري</span>
+            </div>
+            <div>${paymentToggleBtn}</div>
           </div>
 
           <div class="order-action-buttons">
@@ -987,12 +1020,17 @@ function changeOrderStatus(orderId, newStatus) {
   if (window.KK_DB) {
     window.KK_DB.updateOrderStatus(orderId, newStatus);
     const statusLabels = {
-      pending: "قيد الانتظار والمراجعة",
+      received: "تم الاستلام والتوثيق",
+      pending: "تم الاستلام والتوثيق",
       confirmed: "تم التأكيد والمعاينة الفنية",
-      processing: "جاري التجهيز والتجميع بالمستودع",
+      preparing: "جاري التجهيز والتجميع",
+      processing: "جاري التجهيز والتجميع",
+      packed: "تم التغليف والتأمين",
       shipped: "خرج للشحن والتوصيل للفيلا",
-      completed: "مكتمل وتم التسليم بنجاح",
-      cancelled: "تم إلغاء الطلب"
+      delivered: "تم التسليم بنجاح",
+      completed: "تم التسليم بنجاح",
+      cancelled: "تم إلغاء الطلب واسترجاع المخزون",
+      failed: "تعذر التسليم واسترجاع المخزون"
     };
     showToast(`✅ تم تحديث حالة الطلب #${orderId} إلى: ${statusLabels[newStatus] || newStatus}`);
   }
@@ -3274,5 +3312,506 @@ async function triggerFullCloudSync() {
   }
 }
 window.triggerFullCloudSync = triggerFullCloudSync;
+
+// ----------------------------------------------------------------------------
+// COD PAYMENT STATUS TOGGLE (PRD Section 5)
+// ----------------------------------------------------------------------------
+function toggleOrderPayment(orderId, newPaymentStatus) {
+  if (!window.KK_DB) return;
+  window.KK_DB.updateOrderPaymentStatus(orderId, newPaymentStatus);
+  const msg = newPaymentStatus === "collected" 
+    ? `✅ تم تسجيل تحصيل النقدية بنجاح للطلب #${orderId}`
+    : `ℹ️ تم إلغاء تسجيل السداد للطلب #${orderId}`;
+  showToast(msg);
+  renderAdminOrders();
+  renderAdminOverview();
+}
+window.toggleOrderPayment = toggleOrderPayment;
+
+// ----------------------------------------------------------------------------
+// DELIVERY AREAS & FEES MANAGER (PRD Sections 4 & 5)
+// ----------------------------------------------------------------------------
+function renderAdminDeliveryAreas() {
+  const tbody = document.getElementById("adminDeliveryAreasTableBody");
+  if (!tbody || !window.KK_DB) return;
+
+  const areas = window.KK_DB.getDeliveryAreas();
+  tbody.innerHTML = areas.map(area => `
+    <tr data-area-id="${escapeHtml(area.id)}">
+      <td>
+        <strong style="color: var(--text-main);">${escapeHtml(area.name)}</strong>
+      </td>
+      <td style="font-family: var(--font-brand); color: var(--text-muted);">${escapeHtml(area.enName || '')}</td>
+      <td>
+        <div style="display: flex; align-items: center; gap: 0.35rem;">
+          <input type="number" class="form-input area-fee-input" value="${Number(area.fee) || 0}" style="width: 100px; padding: 0.3rem 0.5rem; font-weight: 700; text-align: center;" min="0">
+          <span style="font-size: 0.8rem; color: var(--text-muted);">ج.م</span>
+        </div>
+      </td>
+      <td>
+        <input type="text" class="form-input area-days-input" value="${escapeHtml(area.days || '1-3 أيام')}" style="width: 150px; padding: 0.3rem 0.5rem; font-size: 0.82rem;">
+      </td>
+      <td>
+        <label style="display: inline-flex; align-items: center; gap: 0.45rem; cursor: pointer;">
+          <input type="checkbox" class="area-active-checkbox" ${area.active !== false ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: var(--accent);">
+          <span style="font-size: 0.82rem; font-weight: 700;">${area.active !== false ? 'مدعومة' : 'غير مدعومة'}</span>
+        </label>
+      </td>
+    </tr>
+  `).join("");
+}
+window.renderAdminDeliveryAreas = renderAdminDeliveryAreas;
+
+function saveDeliveryAreasChanges() {
+  const tbody = document.getElementById("adminDeliveryAreasTableBody");
+  if (!tbody || !window.KK_DB) return;
+
+  const rows = tbody.querySelectorAll("tr[data-area-id]");
+  const currentAreas = window.KK_DB.getDeliveryAreas();
+  const updatedAreas = [];
+
+  rows.forEach(row => {
+    const id = row.getAttribute("data-area-id");
+    const existing = currentAreas.find(a => a.id === id) || { id };
+    const feeInput = row.querySelector(".area-fee-input");
+    const daysInput = row.querySelector(".area-days-input");
+    const activeCb = row.querySelector(".area-active-checkbox");
+
+    updatedAreas.push({
+      ...existing,
+      fee: feeInput ? Math.max(0, parseInt(feeInput.value, 10) || 0) : existing.fee,
+      days: daysInput ? daysInput.value.trim() : existing.days,
+      active: activeCb ? activeCb.checked : true
+    });
+  });
+
+  window.KK_DB.updateDeliveryAreas(updatedAreas);
+  showToast("✅ تم حفظ وتحديث لوائح مناطق ورسوم الشحن بنجاح");
+  renderAdminDeliveryAreas();
+}
+window.saveDeliveryAreasChanges = saveDeliveryAreasChanges;
+
+// ----------------------------------------------------------------------------
+// REVIEWS MODERATION (PRD Sections 2 & 3)
+// ----------------------------------------------------------------------------
+let currentAdminReviewsFilter = "all";
+
+async function renderAdminReviews(statusFilter = null) {
+  if (statusFilter !== null) currentAdminReviewsFilter = statusFilter;
+  const container = document.getElementById("adminReviewsListContainer");
+  if (!container || !window.KK_DB) return;
+
+  container.innerHTML = `
+    <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+      <i class="fas fa-spinner fa-spin" style="margin-left: 0.5rem;"></i> جاري تحميل التقييمات...
+    </div>
+  `;
+
+  // Update filter buttons UI
+  document.querySelectorAll("[data-rev-filter]").forEach(btn => {
+    if (btn.getAttribute("data-rev-filter") === currentAdminReviewsFilter) {
+      btn.classList.add("is-active-filter");
+      btn.style.background = "#0F172A";
+      btn.style.color = "#FFFFFF";
+      btn.style.fontWeight = "800";
+    } else {
+      btn.classList.remove("is-active-filter");
+      btn.style.background = "";
+      btn.style.color = "";
+      btn.style.fontWeight = "500";
+    }
+  });
+
+  try {
+    let reviews = await window.KK_DB.getAllReviewsForAdmin();
+    if (currentAdminReviewsFilter !== "all") {
+      reviews = reviews.filter(r => r.status === currentAdminReviewsFilter);
+    }
+
+    if (!reviews || reviews.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 3rem 1rem; background: #F8FAFC; border-radius: var(--radius-sm); border: 1px dashed var(--border-light); color: var(--text-muted);">
+          <i class="far fa-star" style="font-size: 2rem; color: #CBD5E1; display: block; margin-bottom: 0.5rem;"></i>
+          لا توجد تقييمات في هذا القسم حالياً
+        </div>
+      `;
+      return;
+    }
+
+    const statusBadge = {
+      pending: `<span style="font-size: 0.75rem; font-weight: 800; padding: 3px 8px; border-radius: 4px; background: rgba(245,158,11,0.15); color: #D97706;"><i class="fas fa-clock"></i> قيد المراجعة</span>`,
+      approved: `<span style="font-size: 0.75rem; font-weight: 800; padding: 3px 8px; border-radius: 4px; background: rgba(16,185,129,0.15); color: #059669;"><i class="fas fa-check-circle"></i> معتمد ومنشور</span>`,
+      rejected: `<span style="font-size: 0.75rem; font-weight: 800; padding: 3px 8px; border-radius: 4px; background: rgba(239,68,68,0.15); color: #DC2626;"><i class="fas fa-ban"></i> محجوب</span>`
+    };
+
+    container.innerHTML = reviews.map(rev => {
+      const stars = "★".repeat(rev.rating || 5) + "☆".repeat(Math.max(0, 5 - (rev.rating || 5)));
+      return `
+        <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div style="max-width: 650px;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.35rem; flex-wrap: wrap;">
+              <strong style="color: var(--text-main); font-size: 0.95rem;">${escapeHtml(rev.author || 'عميل')}</strong>
+              <span style="font-size: 0.8rem; color: var(--text-muted);">لوحدة: <strong>${escapeHtml(rev.productName || rev.productId)}</strong></span>
+              <span style="color: #F59E0B; font-size: 0.9rem; letter-spacing: 1px;">${stars}</span>
+              ${statusBadge[rev.status] || ''}
+            </div>
+            <p style="margin: 0; color: #334155; font-size: 0.88rem; line-height: 1.5;">${escapeHtml(rev.comment || '')}</p>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem;">
+              <span>${escapeHtml(rev.dateFormatted || '')}</span> • <span style="font-family: monospace;">#${escapeHtml(rev.id)}</span>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.45rem; align-items: center;">
+            ${rev.status !== 'approved' ? `
+              <button type="button" class="btn-primary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; background: #10B981; border: none; font-weight: 700;" onclick="moderateReviewAction('${escapeHtml(rev.id)}', 'approved')">
+                <i class="fas fa-check"></i> <span>اعتماد ونشر</span>
+              </button>
+            ` : ''}
+            ${rev.status !== 'rejected' ? `
+              <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; color: #D97706;" onclick="moderateReviewAction('${escapeHtml(rev.id)}', 'rejected')">
+                <i class="fas fa-eye-slash"></i> <span>حجب</span>
+              </button>
+            ` : ''}
+            <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem; color: #DC2626;" onclick="deleteAdminReview('${escapeHtml(rev.id)}')">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  } catch (err) {
+    container.innerHTML = `<div style="text-align: center; padding: 2rem; color: #DC2626;">تعذر تحميل التقييمات</div>`;
+  }
+}
+window.renderAdminReviews = renderAdminReviews;
+
+async function moderateReviewAction(reviewId, newStatus) {
+  if (!window.KK_DB) return;
+  try {
+    await window.KK_DB.moderateReview(reviewId, newStatus);
+    showToast(`✅ تم تحديث حالة التقييم إلى ${newStatus === 'approved' ? 'معتمد' : 'محجوب'}`);
+    renderAdminReviews();
+  } catch (err) {
+    showToast(`❌ ${err.message}`);
+  }
+}
+window.moderateReviewAction = moderateReviewAction;
+
+async function deleteAdminReview(reviewId) {
+  if (!confirm("هل أنت متأكد من حذف هذا التقييم نهائياً؟")) return;
+  if (!window.KK_DB) return;
+  try {
+    await window.KK_DB.deleteReview(reviewId);
+    showToast("🗑️ تم حذف التقييم");
+    renderAdminReviews();
+  } catch (err) {
+    showToast(`❌ ${err.message}`);
+  }
+}
+window.deleteAdminReview = deleteAdminReview;
+
+// ----------------------------------------------------------------------------
+// AUDIT & ACTIVITY HISTORY (PRD Section 3)
+// ----------------------------------------------------------------------------
+function renderAdminAuditLogs() {
+  const tbody = document.getElementById("adminAuditLogsTableBody");
+  if (!tbody || !window.KK_DB) return;
+
+  const logs = window.KK_DB.getAuditLogs();
+  if (!logs || logs.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+          لا توجد أنشطة مسجلة في السجل حتى الآن.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const actionLabels = {
+    order_created: "إنشاء طلب جديد",
+    order_status_updated: "تحديث حالة طلب",
+    order_payment_updated: "تحديث تحصيل النقدية",
+    order_deleted: "حذف طلب",
+    product_created: "إضافة وحدة إضاءة",
+    product_updated: "تعديل وحدة إضاءة",
+    product_deleted: "حذف وحدة إضاءة",
+    stock_updated: "تعديل المخزون",
+    delivery_areas_updated: "تحديث لوائح التوصيل",
+    review_submitted: "استلام تقييم عميل",
+    review_moderated: "مراجعة تقييم",
+    review_deleted: "حذف تقييم",
+    customer_registered: "تسجيل عميل جديد",
+    bulk_csv_import: "استيراد مجمع عبر CSV"
+  };
+
+  tbody.innerHTML = logs.map(entry => `
+    <tr>
+      <td style="font-size: 0.8rem; color: var(--text-muted); white-space: nowrap;">
+        <i class="fas fa-clock" style="margin-left: 0.25rem;"></i> ${escapeHtml(entry.dateFormatted || '')}
+      </td>
+      <td>
+        <span style="font-weight: 700; color: var(--text-main); font-size: 0.82rem;">
+          ${actionLabels[entry.action] || escapeHtml(entry.action)}
+        </span>
+      </td>
+      <td style="font-size: 0.85rem; color: #334155;">
+        ${escapeHtml(entry.details || '')}
+      </td>
+      <td>
+        <span style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(entry.id)}</span>
+      </td>
+    </tr>
+  `).join("");
+}
+window.renderAdminAuditLogs = renderAdminAuditLogs;
+
+// ----------------------------------------------------------------------------
+// BULK CSV PRODUCT IMPORT & VALIDATION (PRD Section 6)
+// ----------------------------------------------------------------------------
+let validatedBulkCsvRows = [];
+
+function downloadSampleCsvTemplate() {
+  const headers = "id,name,enName,price,originalPrice,category,stock,image,description";
+  const row1 = "chand-test-101,\"ثريا فينيسيا الكريستالية\",\"Venice Imperial Chandelier\",28500,32000,chandeliers,8,\"https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?w=800\",\"ثريا كريستال عصفور فاخرة مطلية بالذهب عيار 24\"";
+  const row2 = "wall-test-102,\"أبليك أونيكس جداري مضيء\",\"Onyx Marble Wall Sconce\",12800,14500,wall-lights,15,\"https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?w=800\",\"رخام أونيكس طبيعي مضيء بإضاءة دافئة 3000 كلفن\"";
+  const csvContent = `${headers}\n${row1}\n${row2}\n`;
+
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", "kased_karim_products_sample.test.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+window.downloadSampleCsvTemplate = downloadSampleCsvTemplate;
+
+function handleCsvFileSelected(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const txtArea = document.getElementById("bulkCsvTextInput");
+    if (txtArea) txtArea.value = text;
+    showToast(`📁 تم تحميل ملف (${file.name}) بنجاح. انقر على فحص الصفوف للتحقق.`);
+    validateBulkCsvData();
+  };
+  reader.readAsText(file, "UTF-8");
+}
+window.handleCsvFileSelected = handleCsvFileSelected;
+
+function clearBulkCsvForm() {
+  const txtArea = document.getElementById("bulkCsvTextInput");
+  if (txtArea) txtArea.value = "";
+  const reportBox = document.getElementById("bulkCsvReportBox");
+  if (reportBox) {
+    reportBox.style.display = "none";
+    reportBox.innerHTML = "";
+  }
+  validatedBulkCsvRows = [];
+}
+window.clearBulkCsvForm = clearBulkCsvForm;
+
+function parseCsvLine(text) {
+  const result = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      if (inQuotes && text[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (c === ',' && !inQuotes) {
+      result.push(cur.trim());
+      cur = "";
+    } else {
+      cur += c;
+    }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function validateBulkCsvData() {
+  const txtArea = document.getElementById("bulkCsvTextInput");
+  const reportBox = document.getElementById("bulkCsvReportBox");
+  if (!txtArea || !reportBox) return;
+
+  const content = txtArea.value.trim();
+  if (!content) {
+    showToast("⚠️ يرجى لصق بيانات الـ CSV أو اختيار ملف أولاً");
+    return;
+  }
+
+  const lines = content.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) {
+    reportBox.style.display = "block";
+    reportBox.style.background = "#FEF2F2";
+    reportBox.style.border = "1px solid #FECACA";
+    reportBox.innerHTML = `
+      <div style="color: #DC2626; font-weight: 800;">❌ الملف لا يحتوي على بيانات كافية (يجب توفر سطر العناوين وسطر بيانات واحد على الأقل).</div>
+    `;
+    return;
+  }
+
+  const rawHeaders = parseCsvLine(lines[0]).map(h => h.replace(/^["']|["']$/g, "").trim().toLowerCase());
+  const requiredCols = ["id", "name", "price", "category"];
+  const missingCols = requiredCols.filter(col => !rawHeaders.includes(col));
+
+  if (missingCols.length > 0) {
+    reportBox.style.display = "block";
+    reportBox.style.background = "#FEF2F2";
+    reportBox.style.border = "1px solid #FECACA";
+    reportBox.innerHTML = `
+      <div style="color: #DC2626; font-weight: 800;">❌ أعمدة إلزامية مفقودة في السطر الأول: ${missingCols.join(", ")}</div>
+    `;
+    return;
+  }
+
+  const validRows = [];
+  const invalidRows = [];
+
+  for (let idx = 1; idx < lines.length; idx++) {
+    const rowValues = parseCsvLine(lines[idx]);
+    const rowObj = {};
+    rawHeaders.forEach((header, hIdx) => {
+      rowObj[header] = rowValues[hIdx] !== undefined ? rowValues[hIdx] : "";
+    });
+
+    const rowNum = idx + 1;
+    const errors = [];
+
+    if (!rowObj.id) errors.push("كود المنتج (id) فارغ");
+    if (!rowObj.name) errors.push("اسم المنتج (name) فارغ");
+
+    const priceNum = parseFloat(rowObj.price);
+    if (isNaN(priceNum) || priceNum <= 0) {
+      errors.push(`السعر غير صالح (${rowObj.price})`);
+    }
+
+    if (!rowObj.category) {
+      errors.push("التصنيف (category) فارغ");
+    }
+
+    const stockNum = parseInt(rowObj.stock !== undefined && rowObj.stock !== "" ? rowObj.stock : "10", 10);
+    if (isNaN(stockNum) || stockNum < 0) {
+      errors.push(`المخزون غير صالح (${rowObj.stock})`);
+    }
+
+    if (errors.length > 0) {
+      invalidRows.push({ rowNum, name: rowObj.name || "(بدون اسم)", errors });
+    } else {
+      validRows.push({
+        id: rowObj.id,
+        name: rowObj.name,
+        enName: rowObj.enname || rowObj.name,
+        price: priceNum,
+        originalPrice: parseFloat(rowObj.originalprice) || 0,
+        category: rowObj.category,
+        categoryName: rowObj.categoryname || rowObj.category,
+        stock: stockNum,
+        inStock: stockNum > 0,
+        image: rowObj.image || "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?w=800",
+        description: rowObj.description || ""
+      });
+    }
+  }
+
+  validatedBulkCsvRows = validRows;
+  reportBox.style.display = "block";
+
+  if (invalidRows.length > 0) {
+    reportBox.style.background = "#FFFBEB";
+    reportBox.style.border = "1px solid #FDE68A";
+    reportBox.innerHTML = `
+      <div style="margin-bottom: 0.85rem;">
+        <strong style="color: #92400E; font-size: 0.95rem;">
+          ⚠️ تم الفحص: وُجد ${validRows.length} صف صالح، و ${invalidRows.length} صف غير صالح يجب تصحيحها:
+        </strong>
+      </div>
+      <table class="admin-table" style="font-size: 0.82rem; margin-bottom: 1rem;">
+        <thead>
+          <tr>
+            <th>رقم السطر</th>
+            <th>اسم المنتج</th>
+            <th>سبب الخطأ البرمجي</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${invalidRows.map(inv => `
+            <tr>
+              <td style="font-weight: 800; color: #DC2626;">سطر ${inv.rowNum}</td>
+              <td>${escapeHtml(inv.name)}</td>
+              <td style="color: #DC2626;">${inv.errors.join(" • ")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+      ${validRows.length > 0 ? `
+        <button type="button" class="btn-primary" style="background: #10B981; border: none; font-weight: 800;" onclick="executeBulkCsvImport()">
+          <i class="fas fa-check-circle"></i> <span>متابعة واستيراد الصفوف الصالحة فقط (${validRows.length} منتج)</span>
+        </button>
+      ` : ''}
+    `;
+  } else {
+    reportBox.style.background = "#F0FDF4";
+    reportBox.style.border = "1px solid #BBF7D0";
+    reportBox.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <strong style="color: #166534; font-size: 1rem; display: block;">
+            ✅ تم الفحص بنجاح: جميع الصفوف (${validRows.length} منتج) صحيحة 100% وخالية من أي أخطاء!
+          </strong>
+          <span style="font-size: 0.82rem; color: #15803D;">جاهز للاستيراد الفوري وحفظه محلياً وسحابياً.</span>
+        </div>
+        <button type="button" class="btn-primary" style="background: #10B981; border: none; font-weight: 800; padding: 0.65rem 1.25rem;" onclick="executeBulkCsvImport()">
+          <i class="fas fa-check-circle"></i> <span>تأكيد واستيراد (${validRows.length} منتج) الآن</span>
+        </button>
+      </div>
+    `;
+  }
+}
+window.validateBulkCsvData = validateBulkCsvData;
+
+async function executeBulkCsvImport() {
+  if (!validatedBulkCsvRows || validatedBulkCsvRows.length === 0) {
+    showToast("⚠️ لا توجد صفوف صالحة للاستيراد");
+    return;
+  }
+  if (!window.KK_DB) return;
+
+  const count = validatedBulkCsvRows.length;
+  showToast(`⏳ جاري استيراد وحفظ ${count} منتج محلياً وسحابياً...`);
+
+  let added = 0;
+  let updated = 0;
+
+  for (const prod of validatedBulkCsvRows) {
+    const existing = window.KK_DB.getProductById(prod.id);
+    if (existing) {
+      window.KK_DB.updateProduct(prod.id, prod);
+      updated++;
+    } else {
+      window.KK_DB.createProduct(prod);
+      added++;
+    }
+  }
+
+  window.KK_DB.logActivity("bulk_csv_import", `استيراد مجمع عبر CSV: ${added} منتج جديد، و ${updated} منتج محدث`);
+  showToast(`🎉 تم الاستيراد بنجاح! (${added} منتج جديد، ${updated} منتج تم تحديثه)`);
+  clearBulkCsvForm();
+  renderAdminInventory();
+  renderAdminOverview();
+}
+window.executeBulkCsvImport = executeBulkCsvImport;
 
 

@@ -262,6 +262,19 @@ async function deleteOrderFromCloud(req, orderId) {
   return { success: false, provider: "none" };
 }
 
+// Supported Delivery Areas and Fees (PRD Section 5)
+const SUPPORTED_DELIVERY_AREAS = {
+  "sheikh-zayed": { nameAr: "الشيخ زايد", nameEn: "Sheikh Zayed", fee: 0, days: "1 - 2 أيام عمل" },
+  "october": { nameAr: "السادس من أكتوبر", nameEn: "6th of October", fee: 50, days: "1 - 2 أيام عمل" },
+  "new-cairo": { nameAr: "القاهرة الجديدة والتجمع", nameEn: "New Cairo & Tagamoa", fee: 75, days: "2 - 3 أيام عمل" },
+  "giza": { nameAr: "الجيزة والدقي والمهندسين", nameEn: "Giza, Dokki & Mohandessin", fee: 60, days: "2 - 3 أيام عمل" },
+  "cairo": { nameAr: "وسط البلد ومدينة نصر ومصر الجديدة", nameEn: "Cairo, Nasr City & Heliopolis", fee: 70, days: "2 - 3 أيام عمل" },
+  "alexandria": { nameAr: "الإسكندرية والساحل الشمالي", nameEn: "Alexandria & North Coast", fee: 120, days: "3 - 5 أيام عمل" }
+};
+
+// Recent orders cache to prevent accidental duplicate submission (PRD Section 4)
+const recentOrdersSubmissionCache = new Map();
+
 // Generate Cryptographically Secure High-Entropy Order Reference
 function generateSecureOrderId() {
   const numPart = crypto.randomInt(1000, 9999);
@@ -371,6 +384,27 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: "يرجى كتابة العنوان بالتفصيل (المنطقة / الشارع / رقم العقار)" });
       }
 
+      // 3.5 Delivery Area Validation & Fee Calculation (PRD Section 4 & 5)
+      const declaredArea = (order.deliveryArea || order.customer.deliveryArea || order.customer.city || "").toLowerCase().trim();
+      let selectedArea = SUPPORTED_DELIVERY_AREAS[declaredArea];
+      if (!selectedArea) {
+        // Try finding by Arabic or English name
+        const match = Object.entries(SUPPORTED_DELIVERY_AREAS).find(([k, v]) => 
+          declaredArea.includes(k) || 
+          (order.customer.address && order.customer.address.includes(v.nameAr)) || 
+          (order.customer.city && order.customer.city.includes(v.nameAr))
+        );
+        selectedArea = match ? match[1] : (isQuickWhatsApp ? SUPPORTED_DELIVERY_AREAS["sheikh-zayed"] : null);
+      }
+
+      // Explicitly reject unsupported areas (PRD Section 5: Orders outside supported delivery areas must not be accepted)
+      if (declaredArea === "unsupported" || (!selectedArea && !isQuickWhatsApp)) {
+        return res.status(400).json({
+          success: false,
+          error: "عفواً، منطقة التوصيل غير مدعومة حالياً. خدمات التوصيل لمعرض قاصد كريم تغطي الشيخ زايد، 6 أكتوبر، القاهرة الكبرى، الجيزة، والإسكندرية والساحل الشمالي."
+        });
+      }
+
       // 4. Strict Server-Side Validation: Items
       if (!Array.isArray(order.items) || order.items.length === 0) {
         return res.status(400).json({ success: false, error: "سلة المشتريات فارغة" });
@@ -401,6 +435,21 @@ export default async function handler(req, res) {
         });
       }
 
+      const shippingFee = (calculatedSubtotal >= 5000 || !selectedArea) ? 0 : selectedArea.fee;
+      const deliveryEstimate = selectedArea ? selectedArea.days : "2 - 4 أيام عمل";
+
+      // 3.6 Duplicate Order Submission Guard (PRD Section 4)
+      const duplicateKey = `${phone}_${calculatedSubtotal}`;
+      const lastSubmission = recentOrdersSubmissionCache.get(duplicateKey);
+      if (lastSubmission && (Date.now() - lastSubmission.time < 12000)) {
+        return res.status(429).json({
+          success: false,
+          duplicateDetected: true,
+          error: "تم استلام هذا الطلب بالفعل مسبقاً لمنع التكرار غير المقصود",
+          order: lastSubmission.order
+        });
+      }
+
       // 6. Generate High-Entropy Cryptographic ID
       const highEntropyId = generateSecureOrderId();
       const now = Date.now();
@@ -420,20 +469,32 @@ export default async function handler(req, res) {
         timestamp: now,
         dateFormatted,
         timeFormatted,
-        status: "pending",
+        status: "received", // PRD Section 5 Standardized Status
+        statusHistory: [
+          { status: "received", timestamp: now, note: "تم استلام الطلب وحجزه سحابياً" }
+        ],
         isRead: false,
+        customerId: order.customerId || (order.customer && order.customer.id) || null,
         customer: {
+          id: order.customerId || null,
           name: name,
           phone: phone,
+          city: selectedArea ? selectedArea.nameAr : (order.customer.city || "الشيخ زايد"),
+          deliveryArea: declaredArea || (selectedArea ? selectedArea.id : "sheikh-zayed"),
+          deliveryAreaName: selectedArea ? selectedArea.nameAr : "الشيخ زايد",
+          deliveryAreaNameEn: selectedArea ? selectedArea.nameEn : "Sheikh Zayed",
           address: address,
           notes: (order.customer.notes || "").trim().replace(/[<>]/g, "").slice(0, 500)
         },
         items: sanitizedItems,
         subtotal: calculatedSubtotal,
-        shipping: calculatedSubtotal >= 5000 ? 0 : 75,
-        total: calculatedSubtotal >= 5000 ? calculatedSubtotal : (calculatedSubtotal + 75),
-        paymentMethod: order.paymentMethod || "cod",
-        deliveryEstimate: "2 - 4 أيام عمل"
+        shipping: shippingFee,
+        total: calculatedSubtotal + shippingFee,
+        paymentMethod: "cod",
+        paymentStatus: "uncollected", // PRD Section 5: Cash on delivery — not yet collected
+        paymentStatusText: "الدفع نقدياً عند الاستلام — لم يتم التحصيل بعد",
+        paymentStatusTextEn: "Cash on delivery — not yet collected",
+        deliveryEstimate: deliveryEstimate
       };
 
       // 7. Ensure Cloud Persistence BEFORE Responding to Client!
@@ -444,6 +505,9 @@ export default async function handler(req, res) {
           error: "تعذر تسجيل الطلب على الخادم في الوقت الحالي. يرجى المحاولة مرة أخرى أو التواصل معنا عبر واتساب."
         });
       }
+
+      // Record in duplicate submission cache
+      recentOrdersSubmissionCache.set(duplicateKey, { time: now, order: finalizedOrder });
 
       // 8. Return Full Confirmed Order (Enables Instant Cart/WhatsApp Summary & Multi-Device Sync)
       return res.status(201).json({
@@ -489,18 +553,28 @@ export default async function handler(req, res) {
       if (typeof body === "string") {
         try { body = JSON.parse(body); } catch (e) {}
       }
-      const { id, status, isRead, updatedAt } = body || {};
+      const { id, status, isRead, paymentStatus, updatedAt } = body || {};
       if (!id) return res.status(400).json({ error: "Missing order ID" });
 
       const patchTime = updatedAt || Date.now();
       const firebaseUrl = getFirebaseUrl(req);
 
+      const patchData = { updatedAt: patchTime };
+      if (status !== undefined) patchData.status = status;
+      if (isRead !== undefined) patchData.isRead = isRead;
+      if (paymentStatus !== undefined) {
+        patchData.paymentStatus = paymentStatus;
+        patchData.paymentStatusText = paymentStatus === "collected" ? "تم التحصيل نقدياً بنجاح" : "الدفع نقدياً عند الاستلام — لم يتم التحصيل بعد";
+        patchData.paymentStatusTextEn = paymentStatus === "collected" ? "Cash Collected Successfully" : "Cash on delivery — not yet collected";
+        if (paymentStatus === "collected") {
+          patchData.paidAt = patchTime;
+          patchData.collectedBy = admin.sub || "admin";
+        }
+      }
+
       if (firebaseUrl) {
         try {
           const safeId = encodeURIComponent(id);
-          const patchData = { updatedAt: patchTime };
-          if (status !== undefined) patchData.status = status;
-          if (isRead !== undefined) patchData.isRead = isRead;
           await fetch(`${firebaseUrl}/orders/${safeId}.json`, {
             method: "PATCH",
             cache: "no-store",
