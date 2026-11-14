@@ -163,11 +163,6 @@ async function handleAdminPinSubmit(e) {
         if (step1) step1.style.display = "none";
         if (step2) step2.style.display = "block";
 
-        const maskedEmailEl = document.getElementById("adminMaskedEmailDisplay");
-        if (maskedEmailEl && data.emailMasked) {
-          maskedEmailEl.textContent = data.emailMasked;
-        }
-
         // Initialize and focus empty 6-digit OTP boxes
         initOtpInputs();
         startOtpCountdownTimer(600); // 10 minutes
@@ -175,7 +170,7 @@ async function handleAdminPinSubmit(e) {
         const boxes = document.querySelectorAll(".otp-digit-box");
         boxes.forEach(box => { box.value = ""; });
         if (boxes[0]) boxes[0].focus();
-        showToast("📧 تم إرسال كود التحقق السداسي إلى بريدك الإلكتروني بنجاح");
+        showToast("📧 تم إرسال كود التحقق السداسي إلى بريد الإدارة المعتمد بنجاح");
         return;
       }
 

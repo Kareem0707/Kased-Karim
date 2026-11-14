@@ -164,15 +164,10 @@ export default async function handler(req, res) {
       await save2FAOTP(otpCode, ADMIN_2FA_EMAIL);
       const emailResult = await send2FAEmail(otpCode, ADMIN_2FA_EMAIL);
 
-      // Mask email for privacy display: ka****@gmail.com
-      const maskedEmail = ADMIN_2FA_EMAIL.replace(/^(..)(.*)(@.*)$/, (_, a, b, c) => a + "*".repeat(Math.max(b.length, 3)) + c);
-
       return res.status(200).json({
         success: true,
         step: "otp_required",
-        email: ADMIN_2FA_EMAIL,
-        emailMasked: maskedEmail,
-        message: `تم إرسال رمز أمان سداسي إلى بريدك الإلكتروني (${maskedEmail}). يرجى كتابة الرمز للمتابعة.`,
+        message: "تم إرسال كود التحقق الأمني السداسي إلى البريد المعتمد للإدارة الرئيسية.",
         emailDispatched: emailResult.dispatched
       });
     }
