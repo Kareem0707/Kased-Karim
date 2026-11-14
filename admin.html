@@ -24,16 +24,13 @@
   <link rel="stylesheet" href="css/style.css?v=11.0">
   <link rel="stylesheet" href="css/components.css?v=11.0">
   <link rel="stylesheet" href="css/admin.css?v=11.0">
-
-  <!-- Security Shield & Anti-Analysis -->
-  <script src="js/security-shield.js?v=12.0"></script>
 </head>
 <body class="admin-page-body">
 
   <!-- ====================================================================
        EXECUTIVE 2-FACTOR AUTHENTICATION (2FA) GATEWAY (بوابة الإدارة المشفرة)
        ==================================================================== -->
-  <div id="adminAuthGate" class="admin-auth-overlay" role="dialog" aria-modal="true" aria-labelledby="adminAuthTitle" style="display: none;">
+  <div id="adminAuthGate" class="admin-auth-overlay" role="dialog" aria-modal="true" aria-labelledby="adminAuthTitle" style="display: flex;">
     <div class="admin-auth-card">
       
       <!-- STEP 1: MASTER PASSWORD VERIFICATION -->
@@ -127,7 +124,7 @@
     </div>
   </div>
 
-  <div id="adminPageRoot">
+  <div id="adminPageRoot" style="display: none;">
     <!-- Executive Top Header -->
     <header class="admin-page-header">
       <div class="admin-page-header-inner">
@@ -1196,7 +1193,6 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/security-shield.js?v=13.0"></script>
   <script src="js/data.js?v=13.0"></script>
   <script src="js/db.js?v=13.0"></script>
   <script src="js/admin.js?v=13.0"></script>

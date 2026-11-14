@@ -53,12 +53,28 @@ async function checkAdminSecurityGate() {
   const rootEl = document.getElementById("adminPageRoot");
   if (!gateEl || !rootEl) return;
 
-  const token = sessionStorage.getItem(ADMIN_TOKEN_KEY) || localStorage.getItem(ADMIN_TOKEN_KEY);
+  // Check URL params for force lock or relock (e.g. ?lock=1 or ?logout=1)
+  const urlParams = new URLSearchParams(window.location.search);
+  const isForceRelock = urlParams.has("logout") || urlParams.has("lock") || urlParams.has("relock");
+  if (isForceRelock) {
+    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  // Enforce session-level authentication: require valid token in sessionStorage
+  const token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
 
   if (!token) {
+    document.body.classList.remove("is-admin-user", "is-admin-authenticated");
     gateEl.style.display = "flex";
     rootEl.style.display = "none";
-    document.body.classList.remove("is-admin-user");
+    const step1 = document.getElementById("adminAuthStep1");
+    const step2 = document.getElementById("adminAuthStep2");
+    if (step1) step1.style.display = "block";
+    if (step2) step2.style.display = "none";
+    const pinInput = document.getElementById("adminPinInput");
+    if (pinInput) setTimeout(() => pinInput.focus(), 150);
     return;
   }
 
@@ -70,9 +86,9 @@ async function checkAdminSecurityGate() {
     const data = await res.json();
 
     if (res.ok && data.authenticated) {
+      document.body.classList.add("is-admin-user", "is-admin-authenticated");
       gateEl.style.display = "none";
       rootEl.style.display = "block";
-      document.body.classList.add("is-admin-user");
 
       if (window.KK_DB) {
         window.KK_DB.syncFromCloud(false);
@@ -81,18 +97,25 @@ async function checkAdminSecurityGate() {
       renderAdminOverview();
       renderAdminOrders();
       renderAdminInventory();
+      populateAdminCategorySelect();
     } else {
-      // Invalid or expired token
+      // Invalid or expired token: show gate
       sessionStorage.removeItem(ADMIN_TOKEN_KEY);
       localStorage.removeItem(ADMIN_TOKEN_KEY);
+      document.body.classList.remove("is-admin-user", "is-admin-authenticated");
       gateEl.style.display = "flex";
       rootEl.style.display = "none";
-      document.body.classList.remove("is-admin-user");
+      const step1 = document.getElementById("adminAuthStep1");
+      const step2 = document.getElementById("adminAuthStep2");
+      if (step1) step1.style.display = "block";
+      if (step2) step2.style.display = "none";
     }
   } catch (err) {
-    // Network offline fallback with stored token
-    gateEl.style.display = "none";
-    rootEl.style.display = "block";
+    // On verification failure, stay securely locked behind the gate
+    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    document.body.classList.remove("is-admin-user", "is-admin-authenticated");
+    gateEl.style.display = "flex";
+    rootEl.style.display = "none";
   }
 }
 
@@ -259,7 +282,7 @@ function completeAdminAuthSuccess(token) {
   const rootEl = document.getElementById("adminPageRoot");
   if (gateEl) gateEl.style.display = "none";
   if (rootEl) rootEl.style.display = "block";
-  document.body.classList.add("is-admin-user");
+  document.body.classList.add("is-admin-user", "is-admin-authenticated");
 
   showToast("✅ مرحباً بكم في لوحة تحكم معرض قاصد كريم (جلسة مشفرة)");
 
@@ -427,6 +450,7 @@ function logoutAdmin() {
   sessionStorage.removeItem(ADMIN_TOKEN_KEY);
   localStorage.removeItem(ADMIN_TOKEN_KEY);
   localStorage.removeItem("kk_admin_authorized");
+  document.body.classList.remove("is-admin-user", "is-admin-authenticated");
   showToast("تم تسجيل خروج الإدارة بنجاح");
   setTimeout(() => {
     window.location.reload();
@@ -441,7 +465,6 @@ document.addEventListener("DOMContentLoaded", () => {
 function initAdminSystem() {
   const isAdminPage = !!document.getElementById("adminPageRoot");
 
-  checkAdminAccessVisibility();
   if (isAdminPage) {
     checkAdminSecurityGate();
   }
@@ -450,41 +473,21 @@ function initAdminSystem() {
   updateCustomerTrackingBadge();
   setupAdminListeners();
 
-  // If on dedicated admin page, immediately render and force-sync from cloud
-  if (isAdminPage) {
-    renderAdminOverview();
-    renderAdminOrders();
-    renderAdminInventory();
-    populateAdminCategorySelect();
-    checkDailyBackupSchedule();
-
-    if (window.KK_DB) {
-      window.KK_DB.forceSyncNow().then(() => {
-        renderAdminOverview();
-        renderAdminOrders();
-        renderAdminInventory();
-        populateAdminCategorySelect();
-        updateAdminHeaderBadge();
-      });
-    }
-  }
-
   // Listen to DB events
   window.addEventListener("kk_new_order_placed", (e) => {
     updateAdminHeaderBadge();
     const order = e.detail;
-    const isAdmin = document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot");
+    const isAuth = document.body.classList.contains("is-admin-authenticated");
 
-    // Live alert & sound ONLY for admin users
-    if (isAdmin) {
+    // Live alert & sound ONLY for authenticated admin users
+    if (isAuth) {
       showToast(`🔔 تنبيه إداري: تم استلام طلب جديد برقم #${order.id} بقيمة ${formatPrice(order.total)} ج.م`);
       if (window.KK_DB) window.KK_DB.playLuxuryChime();
       showAdminLiveOrderAlert(order);
-    }
-
-    if (isAdminPage) {
-      renderAdminOrders();
-      renderAdminOverview();
+      if (isAdminPage) {
+        renderAdminOrders();
+        renderAdminOverview();
+      }
     }
   });
 
@@ -500,7 +503,7 @@ function initAdminSystem() {
       }
     }
 
-    if (isAdminPage || document.getElementById("adminDashboardModal")?.classList.contains("active")) {
+    if (document.body.classList.contains("is-admin-authenticated")) {
       renderAdminOrders();
       renderAdminOverview();
     }

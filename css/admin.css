@@ -856,6 +856,19 @@ body.is-admin-user .mobile-admin-item {
 /* ==========================================================================
    ADMIN PIN SECURITY GATE (بوابة الدخول السرية الخاصة بالمديرين)
    ========================================================================== */
+#adminAuthGate {
+  display: flex !important;
+}
+#adminPageRoot {
+  display: none !important;
+}
+body.is-admin-authenticated #adminAuthGate {
+  display: none !important;
+}
+body.is-admin-authenticated #adminPageRoot {
+  display: block !important;
+}
+
 .admin-auth-overlay {
   position: fixed;
   inset: 0;
