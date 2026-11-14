@@ -168,21 +168,14 @@ async function handleAdminPinSubmit(e) {
           maskedEmailEl.textContent = data.emailMasked;
         }
 
-        // Initialize and focus 6-digit OTP boxes
+        // Initialize and focus empty 6-digit OTP boxes
         initOtpInputs();
         startOtpCountdownTimer(600); // 10 minutes
 
-        if (data.devOtp) {
-          // Pre-populate digit boxes for instant 1-click test verification
-          const boxes = document.querySelectorAll(".otp-digit-box");
-          const otpStr = String(data.devOtp);
-          boxes.forEach((box, i) => {
-            if (otpStr[i]) box.value = otpStr[i];
-          });
-          showToast(`📧 رمز أمان الجيميل للاختبار المباشر: ${data.devOtp}`);
-        } else {
-          showToast("📧 تم إرسال كود التحقق السداسي إلى بريدك الإلكتروني بنجاح");
-        }
+        const boxes = document.querySelectorAll(".otp-digit-box");
+        boxes.forEach(box => { box.value = ""; });
+        if (boxes[0]) boxes[0].focus();
+        showToast("📧 تم إرسال كود التحقق السداسي إلى بريدك الإلكتروني بنجاح");
         return;
       }
 

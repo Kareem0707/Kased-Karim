@@ -325,5 +325,23 @@ export async function send2FAEmail(otpCode, targetEmail = ADMIN_2FA_EMAIL) {
     } catch (e) {}
   }
 
+  // Option D: Web3Forms Dispatcher
+  const web3FormsKey = process.env.WEB3FORMS_KEY;
+  if (!emailDispatched && web3FormsKey) {
+    try {
+      const res = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_key: web3FormsKey,
+          subject: `🔐 رمز التحقق السري لدخول لوحة تحكم قاصد كريم: ${otpCode}`,
+          from_name: "معرض قاصد كريم للإضاءة",
+          message: `تم رصد محاولة تسجيل دخول إلى لوحة الإدارة التنفيذية.\nرمز التحقق السداسي الخاص بك هو: ${otpCode}\n\nصلاحية هذا الرمز 10 دقائق للاستخدام مرة واحدة.`
+        })
+      });
+      if (res.ok) emailDispatched = true;
+    } catch (e) {}
+  }
+
   return { dispatched: emailDispatched, email: targetEmail };
 }
