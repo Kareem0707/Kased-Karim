@@ -786,11 +786,49 @@ function renderAdminOverview() {
 // ----------------------------------------------------------------------------
 // 4. RENDER ORDERS WITH COMPLETE DETAILS & PRODUCT IMAGES
 // ----------------------------------------------------------------------------
-function renderAdminOrders(statusFilter = "all") {
+function updateOrdersFilterButtonsUI(activeStatus) {
+  const buttons = document.querySelectorAll("[data-order-filter]");
+  buttons.forEach(btn => {
+    const filter = btn.getAttribute("data-order-filter");
+    if (filter === activeStatus) {
+      btn.classList.add("is-active-filter");
+      btn.style.background = "#0F172A";
+      btn.style.color = "#FFFFFF";
+      btn.style.borderColor = "#0F172A";
+      btn.style.fontWeight = "800";
+    } else {
+      btn.classList.remove("is-active-filter");
+      if (filter === "cancelled") {
+        btn.style.background = "#FFFFFF";
+        btn.style.color = "#DC2626";
+        btn.style.borderColor = "rgba(220, 38, 38, 0.35)";
+        btn.style.fontWeight = "600";
+      } else {
+        btn.style.background = "#FFFFFF";
+        btn.style.color = "var(--text-main)";
+        btn.style.borderColor = "var(--border-light)";
+        btn.style.fontWeight = "600";
+      }
+    }
+  });
+}
+
+function renderAdminOrders(statusFilter = null) {
   if (!window.KK_DB) return;
+  if (statusFilter !== null) {
+    window.currentAdminOrdersFilter = statusFilter;
+  } else {
+    statusFilter = window.currentAdminOrdersFilter || "all";
+  }
+
+  updateOrdersFilterButtonsUI(statusFilter);
+
   let orders = window.KK_DB.getOrders();
   const container = document.getElementById("adminOrdersListContainer");
   if (!container) return;
+
+  // Strict Chronological Sort: Newest orders ALWAYS first
+  orders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
   if (statusFilter !== "all") {
     orders = orders.filter(o => o.status === statusFilter);
@@ -819,13 +857,29 @@ function renderAdminOrders(statusFilter = "all") {
     };
     const statusText = statusLabels[order.status] || "قيد المعالجة";
 
+    // Safe customer data extraction
+    const customer = (order.customer && typeof order.customer === "object") ? order.customer : {};
+    const customerName = customer.name || "عميل الكتالوج الفاخر";
+    const customerPhone = customer.phone || "";
+    const customerAddress = customer.address || "الشيخ زايد";
+    const customerNotes = customer.notes || "";
+
+    // Safe items array extraction
+    const items = Array.isArray(order.items) 
+      ? order.items 
+      : (order.items && typeof order.items === "object" ? Object.values(order.items) : []);
+
+    const formattedDate = order.dateFormatted 
+      ? (order.timeFormatted ? `${order.dateFormatted} - ${order.timeFormatted}` : order.dateFormatted)
+      : (order.timestamp ? new Date(order.timestamp).toLocaleString("ar-EG", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "اليوم");
+
     return `
       <div class="order-card-detailed ${isNew ? 'is-new-order' : ''}">
         <!-- Order Header -->
         <div class="order-header-row">
           <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
             <span class="order-id-tag">#${escapeHtml(order.id)}</span>
-            <span class="order-date-text"><i class="fas fa-clock"></i> ${escapeHtml(order.dateFormatted)}</span>
+            <span class="order-date-text"><i class="fas fa-clock"></i> ${escapeHtml(formattedDate)}</span>
             ${isNew ? '<span class="new-live-tag"><i class="fas fa-bolt"></i> وارد الآن</span>' : ''}
           </div>
 
@@ -846,22 +900,24 @@ function renderAdminOrders(statusFilter = "all") {
         <div class="order-customer-box">
           <div class="customer-info-item">
             <strong>اسم العميل:</strong>
-            <span style="font-weight: 800; color: #0F172A;">${escapeHtml(order.customer?.name || 'عميل')}</span>
+            <span style="font-weight: 800; color: #0F172A;">${escapeHtml(customerName)}</span>
           </div>
           <div class="customer-info-item">
             <strong>رقم الهاتف / الواتساب:</strong>
-            <a href="tel:${escapeHtml(order.customer?.phone || '')}" style="color: var(--accent-hover); font-weight: 800; text-decoration: none; dir: ltr;" dir="ltr">
-              <i class="fas fa-phone-alt" style="font-size: 0.75rem;"></i> ${escapeHtml(order.customer?.phone || '')}
-            </a>
+            ${customerPhone ? `
+              <a href="tel:${escapeHtml(customerPhone)}" style="color: var(--accent-hover); font-weight: 800; text-decoration: none; dir: ltr;" dir="ltr">
+                <i class="fas fa-phone-alt" style="font-size: 0.75rem;"></i> ${escapeHtml(customerPhone)}
+              </a>
+            ` : '<span style="color: var(--text-muted); font-size: 0.85rem;">غير مسجل</span>'}
           </div>
           <div class="customer-info-item">
             <strong>موقع الفيلا / العنوان بالشيخ زايد:</strong>
-            <span>${escapeHtml(order.customer?.address || '')}</span>
+            <span>${escapeHtml(customerAddress)}</span>
           </div>
-          ${order.customer?.notes ? `
+          ${customerNotes ? `
             <div class="customer-info-item" style="grid-column: 1 / -1;">
               <strong>ملاحظات العميل:</strong>
-              <span style="font-weight: 500; color: #475569;">${escapeHtml(order.customer.notes)}</span>
+              <span style="font-weight: 500; color: #475569;">${escapeHtml(customerNotes)}</span>
             </div>
           ` : ''}
         </div>
@@ -878,23 +934,30 @@ function renderAdminOrders(statusFilter = "all") {
             </tr>
           </thead>
           <tbody>
-            ${(order.items || []).map(item => `
+            ${items.length > 0 ? items.map(item => `
               <tr>
                 <td>
                   <div class="item-cell-with-img">
-                    <img class="item-table-img" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
+                    <img class="item-table-img" src="${escapeHtml(item.image || '')}" alt="${escapeHtml(item.name || 'وحدة إضاءة')}" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
                     <div>
-                      <div style="font-weight: 700; color: var(--text-main);">${escapeHtml(item.name)}</div>
+                      <div style="font-weight: 700; color: var(--text-main);">${escapeHtml(item.name || 'وحدة إضاءة فاخرة')}</div>
                       <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-brand);">${escapeHtml(item.enName || '')}</div>
                     </div>
                   </div>
                 </td>
                 <td style="color: var(--text-muted);">${escapeHtml(item.categoryName || 'إضاءة فاخرة')}</td>
-                <td style="font-weight: 700;">${item.qty} وحدة</td>
-                <td>${formatPrice(item.price)} ج.م</td>
-                <td><strong style="color: var(--text-main);">${formatPrice(item.price * item.qty)} ج.م</strong></td>
+                <td style="font-weight: 700;">${item.qty || 1} وحدة</td>
+                <td>${formatPrice(item.price || 0)} ج.م</td>
+                <td><strong style="color: var(--text-main);">${formatPrice((item.price || 0) * (item.qty || 1))} ج.م</strong></td>
               </tr>
-            `).join("")}
+            `).join("") : `
+              <tr>
+                <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1.25rem;">
+                  <i class="fas fa-boxes-stacked" style="margin-left: 0.45rem; color: var(--accent);"></i>
+                  وحدات إضاءة تم اختيارها من الكتالوج بقيمة إجمالية ${formatPrice(order.total)} جنيه مصري
+                </td>
+              </tr>
+            `}
           </tbody>
         </table>
 
@@ -976,15 +1039,32 @@ function contactCustomerViaWhatsApp(orderId) {
   const order = window.KK_DB.getOrders().find(o => o.id === orderId);
   if (!order) return;
 
-  let msg = `مرحباً ${order.customer.name}، بخصوص طلبكم الكريم رقم #${order.id} من معرض قاصد كريم للإضاءة الفاخرة بالشيخ زايد:\n\n`;
-  order.items.forEach((item, idx) => {
-    msg += `${idx + 1}. ${item.name} (${item.qty} وحدة) - ${formatPrice(item.price * item.qty)} ج.م\n`;
-  });
-  msg += `\nإجمالي الطلب: ${formatPrice(order.total)} جنيه مصري.\n`;
-  msg += `العنوان المسجل: ${order.customer.address}\n\n`;
+  const customer = (order.customer && typeof order.customer === "object") ? order.customer : {};
+  const customerName = customer.name || "العميل الكريم";
+  const customerAddress = customer.address || "الشيخ زايد";
+  const items = Array.isArray(order.items) 
+    ? order.items 
+    : (order.items && typeof order.items === "object" ? Object.values(order.items) : []);
+
+  let msg = `مرحباً ${customerName}، بخصوص طلبكم الكريم رقم #${order.id} من معرض قاصد كريم للإضاءة الفاخرة بالشيخ زايد:\n\n`;
+  if (items.length > 0) {
+    items.forEach((item, idx) => {
+      msg += `${idx + 1}. ${item.name || 'وحدة إضاءة'} (${item.qty || 1} وحدة) - ${formatPrice((item.price || 0) * (item.qty || 1))} ج.م\n`;
+    });
+  } else {
+    msg += `وحدات إضاءة تم اختيارها من الكتالوج.\n`;
+  }
+  msg += `\nإجمالي الطلب: ${formatPrice(order.total || 0)} جنيه مصري.\n`;
+  if (customerAddress) {
+    msg += `العنوان المسجل: ${customerAddress}\n\n`;
+  }
   msg += `نحن جاهزون لتأكيد موعد المعاينة والتسليم، هل الموعد مناسب لسيادتكم؟`;
 
-  let phone = order.customer.phone.replace(/[^0-9]/g, "");
+  let phone = (customer.phone || "").replace(/[^0-9]/g, "");
+  if (!phone) {
+    showToast("⚠️ رقم هاتف العميل غير متوفر في بيانات هذا الطلب");
+    return;
+  }
   if (phone.startsWith("0")) phone = "2" + phone;
   const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   window.open(url, "_blank");

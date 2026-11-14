@@ -421,7 +421,15 @@
   // --------------------------------------------------------------------------
   window.generateOrderWhatsAppMessage = function (order) {
     if (!order) return "";
-    const itemsList = (order.items || [])
+    const customer = (order.customer && typeof order.customer === "object") 
+      ? order.customer 
+      : (typeof order.customer === "string" ? { name: order.customer } : {});
+
+    const items = Array.isArray(order.items) 
+      ? order.items 
+      : (order.items && typeof order.items === "object" ? Object.values(order.items) : []);
+
+    const itemsList = items
       .map((it, idx) => `• *${it.name || it.title || 'وحدة إضاءة'}* (عدد: ${it.qty || it.quantity || 1}) - ${formatPrice((it.price || 0) * (it.qty || it.quantity || 1))} ج.م`)
       .join("\n");
 
@@ -430,10 +438,10 @@
     let msg = `*طلب حجز جديد من معرض قاصد كريم للإضاءة الفاخرة* 💎\n`;
     msg += `----------------------------------------\n`;
     msg += `🏷️ *كود الطلب المعتمد:* #${order.id}\n`;
-    if (order.customer?.name) msg += `👤 *اسم العميل:* ${order.customer.name}\n`;
-    if (order.customer?.phone) msg += `📞 *رقم الهاتف:* ${order.customer.phone}\n`;
-    if (order.customer?.address) msg += `📍 *العنوان:* ${order.customer.address}\n`;
-    if (order.customer?.notes) msg += `📝 *ملاحظات:* ${order.customer.notes}\n`;
+    if (customer.name) msg += `👤 *اسم العميل:* ${customer.name}\n`;
+    if (customer.phone) msg += `📞 *رقم الهاتف:* ${customer.phone}\n`;
+    if (customer.address) msg += `📍 *العنوان:* ${customer.address}\n`;
+    if (customer.notes) msg += `📝 *ملاحظات:* ${customer.notes}\n`;
     msg += `----------------------------------------\n`;
     msg += `🛒 *وحدات الإضاءة المطلوبة:*\n${itemsList || "• وحدات مختارة من الكتالوج"}\n`;
     msg += `----------------------------------------\n`;

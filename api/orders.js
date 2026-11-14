@@ -314,7 +314,7 @@ export default async function handler(req, res) {
         return res.status(404).json({ success: false, error: "Order not found" });
       }
 
-      // Filter out any lingering sample/demo orders
+      // Filter out any lingering sample/demo orders and strictly sort descending (newest first)
       const cleanOrders = orders.filter(o => 
         o && o.id && 
         typeof o.id === "string" &&
@@ -322,6 +322,7 @@ export default async function handler(req, res) {
         o.id !== "ORD-5412" && 
         !o.id.startsWith("DEMO-")
       );
+      cleanOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
       return res.status(200).json({
         success: true,
@@ -444,18 +445,11 @@ export default async function handler(req, res) {
         });
       }
 
-      // 8. Return Sanitized Confirmation (Do not echo full sensitive PII back to response)
+      // 8. Return Full Confirmed Order (Enables Instant Cart/WhatsApp Summary & Multi-Device Sync)
       return res.status(201).json({
         success: true,
         message: "تم استلام طلبك وحجزه بنجاح تام في معارض قاصد كريم!",
-        order: {
-          id: finalizedOrder.id,
-          timestamp: finalizedOrder.timestamp,
-          dateFormatted: finalizedOrder.dateFormatted,
-          total: finalizedOrder.total,
-          status: finalizedOrder.status,
-          itemsCount: finalizedOrder.items.length
-        }
+        order: finalizedOrder
       });
     }
 

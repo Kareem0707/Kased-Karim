@@ -532,6 +532,19 @@ class KasedKarimDB {
           return true;
         });
 
+        // Normalize items and customer for all cloud orders
+        cleanCloudOrders.forEach(o => {
+          if (o && o.items && !Array.isArray(o.items) && typeof o.items === "object") {
+            o.items = Object.values(o.items);
+          }
+          if (o && typeof o.customer === "string") {
+            try { o.customer = JSON.parse(o.customer); } catch(e) { o.customer = { name: o.customer }; }
+          }
+        });
+
+        // STRICT CHRONOLOGICAL SORT: Newest orders first
+        cleanCloudOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
         const trulyNewOrders = [];
 
         cleanCloudOrders.forEach(cloudOrder => {
@@ -997,13 +1010,35 @@ class KasedKarimDB {
   getOrders() {
     try {
       const data = localStorage.getItem(DB_KEYS.ORDERS);
-      const parsed = data ? JSON.parse(data) : [];
-      return parsed.filter(o => 
+      let parsed = data ? JSON.parse(data) : [];
+      if (!Array.isArray(parsed)) {
+        if (typeof parsed === "object" && parsed !== null) {
+          parsed = Object.values(parsed).filter(Boolean);
+        } else {
+          parsed = [];
+        }
+      }
+      const filtered = parsed.filter(o => 
+        o && o.id &&
         o.id !== "ORD-8941" && 
         o.id !== "ORD-8820" && 
         o.customer?.name !== "كككك" && 
         o.customer?.name !== "منك"
       );
+
+      // Normalize items & customer structure for all orders
+      filtered.forEach(o => {
+        if (o && o.items && !Array.isArray(o.items) && typeof o.items === "object") {
+          o.items = Object.values(o.items);
+        }
+        if (o && typeof o.customer === "string") {
+          try { o.customer = JSON.parse(o.customer); } catch(e) { o.customer = { name: o.customer }; }
+        }
+      });
+
+      // STRICT CHRONOLOGICAL SORT: Newest orders ALWAYS at index 0 (top of list)
+      filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      return filtered;
     } catch (e) {
       console.error("DB Error getOrders:", e);
       return [];
@@ -1047,14 +1082,28 @@ class KasedKarimDB {
       throw new Error(data.error || "تعذر إرسال الطلب إلى الخادم السحابي");
     }
 
-    const confirmedOrder = data.order;
+    const confirmedOrder = data.order || {};
 
-    // Cache locally on this device
+    // Merge payload defensively so all customer info & product items are 100% guaranteed
+    const fullOrder = {
+      ...payload,
+      ...confirmedOrder,
+      customer: {
+        ...payload.customer,
+        ...(confirmedOrder.customer || {})
+      },
+      items: (confirmedOrder.items && confirmedOrder.items.length > 0)
+        ? confirmedOrder.items
+        : payload.items
+    };
+
+    // Cache locally on this device (at top of list)
     try {
       const orders = this.getOrders();
-      orders.unshift(confirmedOrder);
-      this.knownOrderIds.add(confirmedOrder.id);
-      localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
+      const filtered = orders.filter(o => o.id !== fullOrder.id);
+      filtered.unshift(fullOrder);
+      this.knownOrderIds.add(fullOrder.id);
+      localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(filtered));
     } catch (e) {}
 
     this.incrementSales(cartItems);
@@ -1066,8 +1115,8 @@ class KasedKarimDB {
       this.playLuxuryChime();
     }
 
-    window.dispatchEvent(new CustomEvent("kk_new_order_placed", { detail: confirmedOrder }));
-    return confirmedOrder;
+    window.dispatchEvent(new CustomEvent("kk_new_order_placed", { detail: fullOrder }));
+    return fullOrder;
   }
 
   updateOrderStatus(orderId, newStatus) {
