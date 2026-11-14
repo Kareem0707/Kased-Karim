@@ -1,6 +1,8 @@
 // Vercel Serverless Function: /api/products
-// Handles High-Performance Multi-Device Products Catalog Persistence
-// Supports Firebase Realtime Database (Google Cloud) & Vercel KV / Upstash Redis
+// Handles High-Performance Multi-Device Products Catalog Persistence & Real-Time Sync
+// Protected with Server-Side Authorization for Mutations (POST, PUT, DELETE)
+
+import { verifyAdminRequest } from "./_auth.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -11,11 +13,25 @@ function getFirebaseUrl(req) {
   if (envUrl && envUrl.trim()) {
     return envUrl.trim().replace(/\/$/, "");
   }
-  const headerUrl = req && (req.headers["x-cloud-db-url"] || req.headers["x-firebase-url"]);
-  if (headerUrl && typeof headerUrl === "string" && headerUrl.startsWith("http")) {
-    return headerUrl.trim().replace(/\/$/, "");
-  }
   return "https://kased-karim-default-rtdb.firebaseio.com";
+}
+
+// Update Global Sync Metadata
+async function bumpSyncMetadata(firebaseUrl, actionType = "product_update") {
+  if (!firebaseUrl) return;
+  try {
+    const now = Date.now();
+    await fetch(`${firebaseUrl}/sync_meta.json`, {
+      method: "PUT",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        version: now,
+        timestamp: now,
+        action: actionType
+      })
+    });
+  } catch (e) {}
 }
 
 // 1. Fetch Products from Cloud
@@ -77,11 +93,65 @@ async function fetchProductsFromCloud(req) {
   return { products: [], provider: "none" };
 }
 
-// 2. Save Product to Cloud
+// 2. Batch Save/Overwrite All Products to Cloud
+async function saveBatchProductsToCloud(req, productList) {
+  const firebaseUrl = getFirebaseUrl(req);
+  let saved = false;
+  let provider = "none";
+
+  if (firebaseUrl) {
+    try {
+      const prodMap = {};
+      productList.forEach(p => {
+        if (p && p.id) {
+          prodMap[p.id] = p;
+        }
+      });
+
+      const res = await fetch(`${firebaseUrl}/products.json`, {
+        method: "PUT",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prodMap)
+      });
+      if (res.ok) {
+        saved = true;
+        provider = "firebase-rtdb";
+      }
+    } catch (err) {
+      console.warn("Firebase batch products error:", err.message);
+    }
+  }
+
+  const kvUrl = process.env.KV_REST_API_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN;
+  if (kvUrl && kvToken) {
+    try {
+      await fetch(`${kvUrl}/set/kased_karim_products`, {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Authorization": `Bearer ${kvToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(productList)
+      });
+      saved = true;
+      provider = "vercel-kv";
+    } catch (err) {}
+  }
+
+  if (saved) {
+    await bumpSyncMetadata(firebaseUrl, "batch_catalog_overwrite");
+  }
+
+  return { success: saved, provider };
+}
+
+// 3. Save Single Product to Cloud
 async function saveProductToCloud(req, product) {
   const firebaseUrl = getFirebaseUrl(req);
 
-  // A. Firebase Realtime Database (Direct Keyed Save)
   if (firebaseUrl) {
     try {
       const safeId = encodeURIComponent(product.id);
@@ -92,6 +162,7 @@ async function saveProductToCloud(req, product) {
         body: JSON.stringify(product)
       });
       if (res.ok) {
+        await bumpSyncMetadata(firebaseUrl, "product_save");
         return { success: true, provider: "firebase-rtdb" };
       }
     } catch (err) {
@@ -99,7 +170,6 @@ async function saveProductToCloud(req, product) {
     }
   }
 
-  // B. Vercel KV / Upstash Redis
   const kvUrl = process.env.KV_REST_API_URL;
   const kvToken = process.env.KV_REST_API_TOKEN;
   if (kvUrl && kvToken) {
@@ -131,7 +201,7 @@ async function saveProductToCloud(req, product) {
   return { success: false, provider: "none" };
 }
 
-// 3. Delete Product from Cloud
+// 4. Delete Product from Cloud
 async function deleteProductFromCloud(req, productId) {
   const firebaseUrl = getFirebaseUrl(req);
 
@@ -142,6 +212,7 @@ async function deleteProductFromCloud(req, productId) {
         method: "DELETE",
         cache: "no-store"
       });
+      await bumpSyncMetadata(firebaseUrl, "product_delete");
       return { success: true, provider: "firebase-rtdb" };
     } catch (err) {
       console.warn("Firebase delete error:", err.message);
@@ -173,7 +244,6 @@ async function deleteProductFromCloud(req, productId) {
 }
 
 export default async function handler(req, res) {
-  // Ultra-Strict Anti-Caching Headers for instant real-time sync across devices
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
   res.setHeader("CDN-Cache-Control", "no-store");
   res.setHeader("Vercel-CDN-Cache-Control", "no-store");
@@ -183,14 +253,14 @@ export default async function handler(req, res) {
 
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Cache-Control, Pragma, x-cloud-db-url, x-firebase-url");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-token, Cache-Control, Pragma");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
   try {
-    // 1. GET: Fetch products across all devices
+    // 1. GET: Fetch products across all devices (Public Storefront Read)
     if (req.method === "GET") {
       const { products, provider } = await fetchProductsFromCloud(req);
       return res.status(200).json({
@@ -201,19 +271,42 @@ export default async function handler(req, res) {
       });
     }
 
-    // 2. POST / PUT: Add or update product
+    // 2. POST / PUT: Add, update or batch-overwrite products (ADMIN-ONLY ACCESS REQUIREMENT)
     if (req.method === "POST" || req.method === "PUT") {
-      let product = req.body;
-      if (typeof product === "string") {
-        try { product = JSON.parse(product); } catch (e) {}
+      const admin = verifyAdminRequest(req);
+      if (!admin) {
+        return res.status(401).json({ success: false, error: "غير مصرح بالوصول. يلزم صلاحيات الإدارة لإضافة أو تعديل المنتجات." });
       }
 
+      let payload = req.body;
+      if (typeof payload === "string") {
+        try { payload = JSON.parse(payload); } catch (e) {}
+      }
+
+      if (!payload) {
+        return res.status(400).json({ error: "بيانات الطلب فارغة" });
+      }
+
+      // CASE A: BATCH CATALOG REPLACEMENT / RESTORE OVERWRITE
+      if (Array.isArray(payload) || (payload.products && Array.isArray(payload.products))) {
+        const productList = Array.isArray(payload) ? payload : payload.products;
+        const batchResult = await saveBatchProductsToCloud(req, productList);
+        return res.status(200).json({
+          success: batchResult.success,
+          batch: true,
+          count: productList.length,
+          provider: batchResult.provider
+        });
+      }
+
+      // CASE B: SINGLE PRODUCT SAVE / UPDATE
+      const product = payload;
       if (!product || !product.name) {
         return res.status(400).json({ error: "بيانات المنتج غير مكتملة" });
       }
 
       if (!product.id) {
-        product.id = "kk-" + Date.now().toString().slice(-5);
+        product.id = "kk-" + Date.now().toString().slice(-6);
       }
 
       const saveResult = await saveProductToCloud(req, product);
@@ -225,8 +318,13 @@ export default async function handler(req, res) {
       });
     }
 
-    // 3. DELETE: Remove product from catalog
+    // 3. DELETE: Remove product from catalog (ADMIN-ONLY ACCESS REQUIREMENT)
     if (req.method === "DELETE") {
+      const admin = verifyAdminRequest(req);
+      if (!admin) {
+        return res.status(401).json({ success: false, error: "غير مصرح بالوصول. يلزم صلاحيات الإدارة لحذف المنتجات." });
+      }
+
       const { id } = req.query || {};
       if (!id) return res.status(400).json({ error: "Missing product ID" });
 

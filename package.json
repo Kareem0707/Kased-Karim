@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Kased Karim Luxury Lighting Showroom - Sheikh Zayed",
   "main": "index.html",
+  "type": "module",
   "scripts": {
     "start": "npx serve ."
   },

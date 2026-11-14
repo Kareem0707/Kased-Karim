@@ -32,101 +32,138 @@ window.showToast = window.showToast || function(message) {
   }, 3500);
 };
 
-// ----------------------------------------------------------------------------
-// 0. ADMIN SECURITY GATE & ACCESS PRIVACY (إخفاء الإدارة عن العامة وبوابة الدخول)
-// ----------------------------------------------------------------------------
-const ADMIN_SECURITY = {
-  SECRET_KEYS: ["kased77", "2026", "2025", "kased"],
-  STORAGE_KEY: "kk_admin_authorized"
+// Safe HTML Escaping Utility for XSS Prevention in Admin Interface
+window.escapeHtml = window.escapeHtml || function(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 };
 
-function checkAdminAccessVisibility() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const key = urlParams.get("key");
-  const adminParam = urlParams.get("admin");
+// ----------------------------------------------------------------------------
+// 0. SERVER-SIDE ADMIN SECURITY GATE & SESSION VAULT
+// ----------------------------------------------------------------------------
+const ADMIN_TOKEN_KEY = "kk_admin_token";
 
-  const hasParamAuth = (key && ADMIN_SECURITY.SECRET_KEYS.includes(key)) ||
-                       adminParam === "kased" || adminParam === "true" || adminParam === "1";
-
-  const isLocallyAuth = localStorage.getItem(ADMIN_SECURITY.STORAGE_KEY) === "true";
-  const adminBtn = document.getElementById("adminHeaderBtn");
-
-  if (hasParamAuth || isLocallyAuth) {
-    document.body.classList.add("is-admin-user");
-    localStorage.setItem(ADMIN_SECURITY.STORAGE_KEY, "true");
-    if (adminBtn) {
-      adminBtn.style.display = "inline-flex";
-    }
-    if (hasParamAuth && !isLocallyAuth && typeof showToast === "function") {
-      setTimeout(() => {
-        showToast("🛡️ تم حفظ وربط هذا الجهاز كجهاز إدارة معتمد للمعرض بنجاح ✓");
-      }, 500);
-      try {
-        const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-        window.history.replaceState({ path: cleanUrl }, "", cleanUrl);
-      } catch (err) {}
-    }
-  } else {
-    document.body.classList.remove("is-admin-user");
-    if (adminBtn) {
-      adminBtn.style.display = "none";
-    }
-  }
-}
-
-function checkAdminSecurityGate() {
+async function checkAdminSecurityGate() {
   const gateEl = document.getElementById("adminAuthGate");
   const rootEl = document.getElementById("adminPageRoot");
   if (!gateEl || !rootEl) return;
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const key = urlParams.get("key");
-  const adminParam = urlParams.get("admin");
+  const token = sessionStorage.getItem(ADMIN_TOKEN_KEY) || localStorage.getItem(ADMIN_TOKEN_KEY);
 
-  if ((key && ADMIN_SECURITY.SECRET_KEYS.includes(key)) || adminParam === "kased" || adminParam === "true") {
-    localStorage.setItem(ADMIN_SECURITY.STORAGE_KEY, "true");
-  }
-
-  const isAuthorized = localStorage.getItem(ADMIN_SECURITY.STORAGE_KEY) === "true";
-
-  if (isAuthorized) {
-    gateEl.style.display = "none";
-    rootEl.style.display = "block";
-    document.body.classList.add("is-admin-user");
-  } else {
+  if (!token) {
     gateEl.style.display = "flex";
     rootEl.style.display = "none";
+    document.body.classList.remove("is-admin-user");
+    return;
+  }
+
+  // Verify token with server-side authentication endpoint
+  try {
+    const res = await fetch("/api/auth", {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    const data = await res.json();
+
+    if (res.ok && data.authenticated) {
+      gateEl.style.display = "none";
+      rootEl.style.display = "block";
+      document.body.classList.add("is-admin-user");
+
+      if (window.KK_DB) {
+        window.KK_DB.syncFromCloud(false);
+      }
+      updateAdminHeaderBadge();
+      renderAdminOverview();
+      renderAdminOrders();
+      renderAdminInventory();
+    } else {
+      // Invalid or expired token
+      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
+      gateEl.style.display = "flex";
+      rootEl.style.display = "none";
+      document.body.classList.remove("is-admin-user");
+    }
+  } catch (err) {
+    // Network offline fallback with stored token
+    gateEl.style.display = "none";
+    rootEl.style.display = "block";
   }
 }
 
-function handleAdminPinSubmit(e) {
-  e.preventDefault();
+async function handleAdminPinSubmit(e) {
+  if (e) e.preventDefault();
   const pinInput = document.getElementById("adminPinInput");
   const errorEl = document.getElementById("adminPinError");
   const gateEl = document.getElementById("adminAuthGate");
   const rootEl = document.getElementById("adminPageRoot");
+  const submitBtn = document.querySelector("#adminPinForm button[type='submit']");
 
   if (!pinInput) return;
   const val = pinInput.value.trim();
+  if (!val) {
+    if (errorEl) {
+      errorEl.textContent = "يرجى كتابة رمز الدخول";
+      errorEl.style.display = "flex";
+    }
+    return;
+  }
 
-  if (ADMIN_SECURITY.SECRET_KEYS.includes(val) || val === "2025" || val === "kased77") {
-    localStorage.setItem(ADMIN_SECURITY.STORAGE_KEY, "true");
-    if (errorEl) errorEl.style.display = "none";
-    if (gateEl) gateEl.style.display = "none";
-    if (rootEl) rootEl.style.display = "block";
-    document.body.classList.add("is-admin-user");
-    showToast("✅ مرحباً بكم في لوحة تحكم معرض قاصد كريم");
+  const originalBtnHtml = submitBtn ? submitBtn.innerHTML : "";
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>جارٍ التحقق الأمني...</span>`;
+  }
 
-    if (window.KK_DB) window.KK_DB.markAllOrdersAsRead();
-    updateAdminHeaderBadge();
-    renderAdminOverview();
-    renderAdminOrders();
-    renderAdminInventory();
-  } else {
-    if (errorEl) errorEl.style.display = "flex";
-    pinInput.value = "";
-    pinInput.focus();
-    showToast("⚠️ رمز الدخول غير صحيح");
+  try {
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: val })
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.success && data.token) {
+      sessionStorage.setItem(ADMIN_TOKEN_KEY, data.token);
+      localStorage.setItem(ADMIN_TOKEN_KEY, data.token);
+
+      if (errorEl) errorEl.style.display = "none";
+      if (gateEl) gateEl.style.display = "none";
+      if (rootEl) rootEl.style.display = "block";
+      document.body.classList.add("is-admin-user");
+
+      showToast("✅ مرحباً بكم في لوحة تحكم معرض قاصد كريم");
+
+      if (window.KK_DB) {
+        window.KK_DB.markAllOrdersAsRead();
+        window.KK_DB.syncFromCloud(false);
+      }
+      updateAdminHeaderBadge();
+      renderAdminOverview();
+      renderAdminOrders();
+      renderAdminInventory();
+    } else {
+      if (errorEl) {
+        errorEl.textContent = data.error || "رمز الدخول غير صحيح";
+        errorEl.style.display = "flex";
+      }
+      pinInput.value = "";
+      pinInput.focus();
+      showToast(data.error || "⚠️ رمز الدخول غير صحيح");
+    }
+  } catch (err) {
+    showToast("⚠️ تعذر الاتصال بخادم المصادقة السحابي");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHtml;
+    }
   }
 }
 
@@ -152,27 +189,27 @@ function togglePinVisibility() {
 
 function copyAdminSecretLink() {
   const host = window.location.origin;
-  const path = window.location.pathname.includes("admin.html") ? "/admin.html" : "/admin";
-  const secretLink = `${host}${path}?key=kased77`;
+  const adminUrl = `${host}/admin.html`;
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(secretLink).then(() => {
-      showToast("📋 تم نسخ رابط الإدارة المخصص بنجاح! يمكنك إرساله للمديرين الآن");
+    navigator.clipboard.writeText(adminUrl).then(() => {
+      showToast("📋 تم نسخ رابط لوحة التحكم بنجاح");
     }).catch(() => {
-      prompt("رابط الإدارة المخصص لمشاركته مع المديرين:", secretLink);
+      prompt("رابط لوحة التحكم:", adminUrl);
     });
   } else {
-    prompt("رابط الإدارة المخصص لمشاركته مع المديرين:", secretLink);
+    prompt("رابط لوحة التحكم:", adminUrl);
   }
 }
 
 function logoutAdmin() {
-  localStorage.removeItem(ADMIN_SECURITY.STORAGE_KEY);
-  sessionStorage.removeItem(ADMIN_SECURITY.STORAGE_KEY);
-  showToast("تم تسجيل خروج الإدارة");
+  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem("kk_admin_authorized");
+  showToast("تم تسجيل خروج الإدارة بنجاح");
   setTimeout(() => {
-    window.location.href = "index.html";
-  }, 500);
+    window.location.reload();
+  }, 400);
 }
 
 // Initialize Admin and Checkout systems on page load
@@ -321,20 +358,30 @@ function initAdminSystem() {
   }
 }
 
-function promptAdminDeviceLink() {
-  const pin = prompt("🔐 إعدادات الإدارة: أدخل رمز المرور السري لربط هذا الجهاز وحفظه كجهاز إدارة معتمد:");
+async function promptAdminDeviceLink() {
+  const pin = prompt("🔐 إعدادات الإدارة: أدخل رمز المرور السري لتسجيل دخول الإدارة:");
   if (!pin) return;
-  const trimmed = pin.trim();
-  if (ADMIN_SECURITY.SECRET_KEYS.includes(trimmed) || trimmed === "2025" || trimmed === "kased77") {
-    localStorage.setItem(ADMIN_SECURITY.STORAGE_KEY, "true");
-    document.body.classList.add("is-admin-user");
-    const adminBtn = document.getElementById("adminHeaderBtn");
-    if (adminBtn) adminBtn.style.display = "inline-flex";
-    if (typeof showToast === "function") {
-      showToast("🛡️ تم تفعيل وربط هذا الجهاز كجهاز إدارة معتمد بنجاح ✓");
+  try {
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pin.trim() })
+    });
+    const data = await res.json();
+    if (res.ok && data.success && data.token) {
+      sessionStorage.setItem(ADMIN_TOKEN_KEY, data.token);
+      localStorage.setItem(ADMIN_TOKEN_KEY, data.token);
+      document.body.classList.add("is-admin-user");
+      const adminBtn = document.getElementById("adminHeaderBtn");
+      if (adminBtn) adminBtn.style.display = "inline-flex";
+      if (typeof showToast === "function") {
+        showToast("🛡️ تم تفعيل وربط هذا الجهاز كجهاز إدارة معتمد بنجاح ✓");
+      }
+    } else {
+      alert("❌ رمز المرور غير صحيح");
     }
-  } else {
-    alert("❌ رمز المرور غير صحيح");
+  } catch (e) {
+    alert("⚠️ تعذر الاتصال بمركز التحقق السحابي");
   }
 }
 
@@ -554,14 +601,14 @@ function renderAdminOrders(statusFilter = "all") {
         <!-- Order Header -->
         <div class="order-header-row">
           <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-            <span class="order-id-tag">#${order.id}</span>
-            <span class="order-date-text"><i class="fas fa-clock"></i> ${order.dateFormatted}</span>
+            <span class="order-id-tag">#${escapeHtml(order.id)}</span>
+            <span class="order-date-text"><i class="fas fa-clock"></i> ${escapeHtml(order.dateFormatted)}</span>
             ${isNew ? '<span class="new-live-tag"><i class="fas fa-bolt"></i> وارد الآن</span>' : ''}
           </div>
 
           <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <span class="order-status-pill ${order.status}">${statusText}</span>
-            <select class="custom-select" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; font-weight: 700;" onchange="changeOrderStatus('${order.id}', this.value)">
+            <span class="order-status-pill ${escapeHtml(order.status)}">${escapeHtml(statusText)}</span>
+            <select class="custom-select" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; font-weight: 700;" onchange="changeOrderStatus('${escapeHtml(order.id)}', this.value)">
               <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>⏳ قيد الانتظار والمراجعة</option>
               <option value="confirmed" ${order.status === 'confirmed' ? 'selected' : ''}>📋 تم التأكيد والمعاينة</option>
               <option value="processing" ${order.status === 'processing' ? 'selected' : ''}>⚙️ جاري التجهيز والتجميع</option>
@@ -576,22 +623,22 @@ function renderAdminOrders(statusFilter = "all") {
         <div class="order-customer-box">
           <div class="customer-info-item">
             <strong>اسم العميل:</strong>
-            <span style="font-weight: 800; color: #0F172A;">${order.customer.name}</span>
+            <span style="font-weight: 800; color: #0F172A;">${escapeHtml(order.customer?.name || 'عميل')}</span>
           </div>
           <div class="customer-info-item">
             <strong>رقم الهاتف / الواتساب:</strong>
-            <a href="tel:${order.customer.phone}" style="color: var(--accent-hover); font-weight: 800; text-decoration: none; dir: ltr;" dir="ltr">
-              <i class="fas fa-phone-alt" style="font-size: 0.75rem;"></i> ${order.customer.phone}
+            <a href="tel:${escapeHtml(order.customer?.phone || '')}" style="color: var(--accent-hover); font-weight: 800; text-decoration: none; dir: ltr;" dir="ltr">
+              <i class="fas fa-phone-alt" style="font-size: 0.75rem;"></i> ${escapeHtml(order.customer?.phone || '')}
             </a>
           </div>
           <div class="customer-info-item">
             <strong>موقع الفيلا / العنوان بالشيخ زايد:</strong>
-            <span>${order.customer.address}</span>
+            <span>${escapeHtml(order.customer?.address || '')}</span>
           </div>
-          ${order.customer.notes ? `
+          ${order.customer?.notes ? `
             <div class="customer-info-item" style="grid-column: 1 / -1;">
               <strong>ملاحظات العميل:</strong>
-              <span style="font-weight: 500; color: #475569;">${order.customer.notes}</span>
+              <span style="font-weight: 500; color: #475569;">${escapeHtml(order.customer.notes)}</span>
             </div>
           ` : ''}
         </div>
@@ -608,18 +655,18 @@ function renderAdminOrders(statusFilter = "all") {
             </tr>
           </thead>
           <tbody>
-            ${order.items.map(item => `
+            ${(order.items || []).map(item => `
               <tr>
                 <td>
                   <div class="item-cell-with-img">
-                    <img class="item-table-img" src="${item.image}" alt="${item.name}" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
+                    <img class="item-table-img" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
                     <div>
-                      <div style="font-weight: 700; color: var(--text-main);">${item.name}</div>
-                      <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-brand);">${item.enName || ''}</div>
+                      <div style="font-weight: 700; color: var(--text-main);">${escapeHtml(item.name)}</div>
+                      <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-brand);">${escapeHtml(item.enName || '')}</div>
                     </div>
                   </div>
                 </td>
-                <td style="color: var(--text-muted);">${item.categoryName || 'إضاءة فاخرة'}</td>
+                <td style="color: var(--text-muted);">${escapeHtml(item.categoryName || 'إضاءة فاخرة')}</td>
                 <td style="font-weight: 700;">${item.qty} وحدة</td>
                 <td>${formatPrice(item.price)} ج.م</td>
                 <td><strong style="color: var(--text-main);">${formatPrice(item.price * item.qty)} ج.م</strong></td>
@@ -721,7 +768,7 @@ function contactCustomerViaWhatsApp(orderId) {
 }
 
 // ----------------------------------------------------------------------------
-// 5. RENDER INVENTORY & DELETE PRODUCTS
+// 5. RENDER INVENTORY & DELETE / EDIT PRODUCTS
 // ----------------------------------------------------------------------------
 function renderAdminInventory() {
   if (!window.KK_DB) return;
@@ -736,11 +783,11 @@ function renderAdminInventory() {
     return `
       <tr>
         <td style="width: 60px;">
-          <img class="seller-thumb" src="${item.image}" alt="${item.name}" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
+          <img class="seller-thumb" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
         </td>
         <td>
-          <div style="font-weight: 700; color: var(--text-main);">${item.name}</div>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">${item.categoryName} • ضمان ${item.warranty || '5 سنوات'}</div>
+          <div style="font-weight: 700; color: var(--text-main);">${escapeHtml(item.name)}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(item.categoryName)} • ضمان ${escapeHtml(item.warranty || '5 سنوات')}</div>
         </td>
         <td><span style="font-weight: 700;">${formatPrice(item.price)} ج.م</span></td>
         <td>
@@ -748,21 +795,221 @@ function renderAdminInventory() {
           <span class="sales-badge" style="margin-top: 0.2rem; display: inline-block;">${unitsSold} وحدة مباعة</span>
         </td>
         <td>
-          <button class="cart-item-remove-btn" style="color: #EF4444;" onclick="deleteProduct('${item.id}')" title="حذف المنتج من المتجر">
-            <i class="fas fa-trash-alt"></i> حذف
-          </button>
+          <div style="display: flex; gap: 0.45rem; align-items: center; justify-content: flex-end;">
+            <button type="button" class="action-btn-sm" style="color: #2563EB; background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.25); border-radius: 6px; padding: 0.35rem 0.65rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;" onclick="openEditProductModal('${escapeHtml(item.id)}')" title="تعديل كافة تفاصيل القطعة">
+              <i class="fas fa-pen-to-square"></i> تعديل
+            </button>
+            <button type="button" class="cart-item-remove-btn" style="color: #EF4444;" onclick="deleteProduct('${escapeHtml(item.id)}')" title="حذف المنتج من المتجر">
+              <i class="fas fa-trash-alt"></i> حذف
+            </button>
+          </div>
         </td>
       </tr>
     `;
   }).join("");
 }
 
-function deleteProduct(productId) {
-  if (!confirm("هل أنت متأكد من حذف هذه القطعة من المتجر والكتالوج نهائياً؟")) return;
+async function deleteProduct(productId) {
+  if (!confirm("هل أنت متأكد من حذف هذه القطعة من المتجر والكتالوج نهائياً ومزامنة الحذف على جميع الأجهزة؟")) return;
   if (window.KK_DB) {
-    window.KK_DB.deleteProduct(productId);
-    showToast("تم حذف القطعة من المتجر بنجاح");
+    showToast("⏳ جاري حذف القطعة ومزامنة المتجر سحابياً...");
+    await window.KK_DB.deleteProduct(productId);
+    showToast("✅ تم حذف القطعة وتحديث وحدات المعرض بنجاح!");
+    renderAdminOverview();
+    renderAdminInventory();
+    renderAdminBackupView();
   }
+}
+
+// ----------------------------------------------------------------------------
+// 5.1 EDIT PRODUCT CONTROLLERS & MODAL HANDLERS
+// ----------------------------------------------------------------------------
+function openEditProductModal(productId) {
+  if (!window.KK_DB) return;
+  const product = window.KK_DB.getProductById(productId);
+  if (!product) {
+    showToast("⚠️ لم يتم العثور على المنتج المطلوب");
+    return;
+  }
+
+  const modal = document.getElementById("adminEditProductModal");
+  if (!modal) return;
+
+  // Populate Categories Select
+  const catSelect = document.getElementById("editProductCategory");
+  if (catSelect) {
+    const cats = window.KK_DB.getCategories().filter(c => c.id !== "all");
+    catSelect.innerHTML = cats.map(c => `
+      <option value="${escapeHtml(c.id)}" ${c.id === product.category ? "selected" : ""}>
+        ${escapeHtml(c.name)}
+      </option>
+    `).join("");
+  }
+
+  // Populate Basic Fields
+  document.getElementById("editProductId").value = product.id;
+  document.getElementById("editProductName").value = product.name || "";
+  document.getElementById("editProductEnName").value = product.enName || "";
+  document.getElementById("editProductStyle").value = product.style || "";
+  document.getElementById("editProductPrice").value = product.price || 0;
+  document.getElementById("editProductOriginalPrice").value = product.originalPrice || "";
+  document.getElementById("editProductWarranty").value = product.warranty || "5 سنوات";
+  document.getElementById("editProductDescription").value = product.description || "";
+
+  // Badges
+  document.getElementById("editProductIsNew").checked = !!product.isNew;
+  document.getElementById("editProductIsExclusive").checked = !!product.isExclusive;
+  document.getElementById("editProductIsBestSeller").checked = !!product.isBestSeller;
+
+  // Specifications
+  const specs = product.specs || {};
+  document.getElementById("editProductDimensions").value = specs.dimensions || "";
+  document.getElementById("editProductMaterial").value = specs.material || "";
+  document.getElementById("editProductColorTemp").value = specs.colorTemp || "";
+  document.getElementById("editProductWattage").value = specs.wattage || "";
+
+  // Images
+  const imgUrl = product.image || "";
+  const secImgUrl = product.secondaryImage || "";
+  document.getElementById("editProductImageUrl").value = imgUrl;
+  document.getElementById("editProductSecondaryImageUrl").value = secImgUrl;
+
+  const previewEl = document.getElementById("editProductImagePreview");
+  const placeholderEl = document.getElementById("editProductImagePlaceholder");
+  if (previewEl && placeholderEl) {
+    if (imgUrl) {
+      previewEl.src = imgUrl;
+      previewEl.style.display = "block";
+      placeholderEl.style.display = "none";
+    } else {
+      previewEl.style.display = "none";
+      placeholderEl.style.display = "block";
+    }
+  }
+
+  const secPreviewEl = document.getElementById("editProductSecondaryImagePreview");
+  const secPlaceholderEl = document.getElementById("editProductSecondaryImagePlaceholder");
+  if (secPreviewEl && secPlaceholderEl) {
+    if (secImgUrl) {
+      secPreviewEl.src = secImgUrl;
+      secPreviewEl.style.display = "block";
+      secPlaceholderEl.style.display = "none";
+    } else {
+      secPreviewEl.style.display = "none";
+      secPlaceholderEl.style.display = "block";
+    }
+  }
+
+  modal.classList.add("active");
+  document.body.style.overflow = "hidden";
+}
+
+function closeEditProductModal() {
+  const modal = document.getElementById("adminEditProductModal");
+  if (modal) modal.classList.remove("active");
+  document.body.style.overflow = "";
+}
+
+async function handleEditProductSubmit(e) {
+  if (e) e.preventDefault();
+  const form = document.getElementById("adminEditProductForm");
+  if (!form || !window.KK_DB) return;
+
+  const id = document.getElementById("editProductId").value;
+  const name = document.getElementById("editProductName").value.trim();
+  const catSelect = document.getElementById("editProductCategory");
+  const category = catSelect.value;
+  const categoryName = catSelect.options[catSelect.selectedIndex]?.text?.trim() || "";
+  const price = parseFloat(document.getElementById("editProductPrice").value) || 0;
+  const originalPriceVal = document.getElementById("editProductOriginalPrice").value.trim();
+  const originalPrice = originalPriceVal ? parseFloat(originalPriceVal) : null;
+  const warranty = document.getElementById("editProductWarranty").value.trim() || "5 سنوات ضمان معتمد";
+  const image = document.getElementById("editProductImageUrl").value.trim() || "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=800&q=80";
+  const secondaryImage = document.getElementById("editProductSecondaryImageUrl").value.trim();
+  const description = document.getElementById("editProductDescription").value.trim();
+  const enName = document.getElementById("editProductEnName").value.trim();
+  const style = document.getElementById("editProductStyle").value.trim();
+
+  if (!name) {
+    showToast("⚠️ يرجى إدخال اسم القطعة");
+    return;
+  }
+
+  const updatedData = {
+    name,
+    enName,
+    category,
+    categoryName,
+    style,
+    price,
+    originalPrice,
+    warranty,
+    image,
+    secondaryImage,
+    description,
+    isNew: document.getElementById("editProductIsNew").checked,
+    isExclusive: document.getElementById("editProductIsExclusive").checked,
+    isBestSeller: document.getElementById("editProductIsBestSeller").checked,
+    specs: {
+      dimensions: document.getElementById("editProductDimensions").value.trim(),
+      material: document.getElementById("editProductMaterial").value.trim(),
+      colorTemp: document.getElementById("editProductColorTemp").value.trim(),
+      wattage: document.getElementById("editProductWattage").value.trim()
+    }
+  };
+
+  showToast("⏳ جاري حفظ وتطبيق تعديلات المنتج ومزامنتها سحابياً...");
+
+  const res = await window.KK_DB.updateProduct(id, updatedData);
+  if (res && res.success) {
+    showToast("✅ تم حفظ وتطبيق تعديلات المنتج ومزامنتها سحابياً بنجاح!");
+    closeEditProductModal();
+    renderAdminOverview();
+    renderAdminInventory();
+    renderAdminBackupView();
+  } else {
+    showToast(`⚠️ ${res.error || "تعذر حفظ التعديلات"}`);
+  }
+}
+
+async function handleEditImageUpload(file, isSecondary = false) {
+  if (!file) return;
+  try {
+    showToast("⏳ جاري ضغط ومعالجة الصورة...");
+    const base64 = await compressImageFile(file, 900, 900, 0.78);
+    if (isSecondary) {
+      document.getElementById("editProductSecondaryImageUrl").value = base64;
+      const previewEl = document.getElementById("editProductSecondaryImagePreview");
+      const placeholderEl = document.getElementById("editProductSecondaryImagePlaceholder");
+      if (previewEl && placeholderEl) {
+        previewEl.src = base64;
+        previewEl.style.display = "block";
+        placeholderEl.style.display = "none";
+      }
+    } else {
+      document.getElementById("editProductImageUrl").value = base64;
+      const previewEl = document.getElementById("editProductImagePreview");
+      const placeholderEl = document.getElementById("editProductImagePlaceholder");
+      if (previewEl && placeholderEl) {
+        previewEl.src = base64;
+        previewEl.style.display = "block";
+        placeholderEl.style.display = "none";
+      }
+    }
+    showToast("✅ تم تحميل وضغط الصورة بنجاح");
+  } catch (err) {
+    showToast("⚠️ تعذر معالجة الصورة، تأكد من صيغتها");
+  }
+}
+
+function resetEditSecondaryImage(e) {
+  if (e) e.stopPropagation();
+  const input = document.getElementById("editProductSecondaryImageUrl");
+  const preview = document.getElementById("editProductSecondaryImagePreview");
+  const placeholder = document.getElementById("editProductSecondaryImagePlaceholder");
+  if (input) input.value = "";
+  if (preview) { preview.src = ""; preview.style.display = "none"; }
+  if (placeholder) placeholder.style.display = "block";
 }
 
 function exportCatalogData() {
@@ -2139,7 +2386,7 @@ function renderAdminCategories() {
   tbody.innerHTML = rows.join("");
 }
 
-function handleAdminAddCategory(e) {
+async function handleAdminAddCategory(e) {
   e.preventDefault();
   const nameInput = document.getElementById("newCategoryName");
   const parentSelect = document.getElementById("newCategoryParent");
@@ -2153,9 +2400,10 @@ function handleAdminAddCategory(e) {
   }
 
   if (window.KK_DB) {
-    const res = window.KK_DB.addCategory({ name, parentId });
+    showToast("⏳ جاري إضافة القسم ومزامنته سحابياً...");
+    const res = await window.KK_DB.addCategory({ name, parentId });
     if (res.success) {
-      showToast(`✅ تم إضافة قسم "${name}" بنجاح للكتالوج والمعرض`);
+      showToast(`✅ تم إضافة قسم "${name}" بنجاح ومزامنته عبر جميع الأجهزة`);
       if (nameInput) nameInput.value = "";
       renderAdminCategories();
       populateAdminCategorySelect();
@@ -2165,7 +2413,7 @@ function handleAdminAddCategory(e) {
   }
 }
 
-function editCategoryPrompt(catId) {
+async function editCategoryPrompt(catId) {
   if (!window.KK_DB) return;
   const categories = window.KK_DB.getCategories();
   const cat = categories.find(c => c.id === catId);
@@ -2179,9 +2427,10 @@ function editCategoryPrompt(catId) {
     return;
   }
 
-  const res = window.KK_DB.updateCategory(catId, { name: cleanName });
+  showToast("⏳ جاري تحديث القسم سحابياً...");
+  const res = await window.KK_DB.updateCategory(catId, { name: cleanName });
   if (res.success) {
-    showToast(`✅ تم تحديث قسم "${cleanName}" بنجاح`);
+    showToast(`✅ تم تحديث قسم "${cleanName}" بنجاح ومزامنته عبر كافة الأجهزة`);
     renderAdminCategories();
     populateAdminCategorySelect();
   } else {
@@ -2189,7 +2438,7 @@ function editCategoryPrompt(catId) {
   }
 }
 
-function deleteCategoryConfirm(catId) {
+async function deleteCategoryConfirm(catId) {
   if (!window.KK_DB) return;
   const categories = window.KK_DB.getCategories();
   const cat = categories.find(c => c.id === catId);
@@ -2205,9 +2454,10 @@ function deleteCategoryConfirm(catId) {
 
   if (!confirm(msg)) return;
 
-  const res = window.KK_DB.deleteCategory(catId);
+  showToast("⏳ جاري حذف القسم وتحديث السحابة...");
+  const res = await window.KK_DB.deleteCategory(catId);
   if (res.success) {
-    showToast(`🗑️ تم حذف قسم "${cat.name}" بنجاح (تم حفظ نقطة استرجاع تلقائية)`);
+    showToast(`🗑️ تم حذف قسم "${cat.name}" بنجاح (تم حفظ نقطة استرجاع تلقائية ومزامنة الأجهزة)`);
     renderAdminCategories();
     populateAdminCategorySelect();
   } else {
@@ -2293,11 +2543,15 @@ function handleAdminSettingsSubmit(e) {
 // ============================================================================
 window.pendingFileBackupData = null;
 
-function triggerDailyBackupDownload() {
+async function triggerDailyBackupDownload() {
   if (!window.KK_DB) return;
-  const res = window.KK_DB.downloadBackupFile("تحميل يدوي للمدير");
+  const res = await window.KK_DB.downloadBackupFile("تحميل يدوي للمدير");
+  if (res && res.canceled) {
+    showToast("ℹ️ تم إلغاء تحديد مكان الملف");
+    return;
+  }
   if (res && res.success) {
-    showToast(`🛡️ تم تحميل ملف النسخة الاحتياطية (${res.fileName}) بنجاح على جهازك`);
+    showToast(`🛡️ تم حفظ ملف النسخة الاحتياطية (${res.fileName}) بنجاح على جهازك`);
     checkDailyBackupSchedule();
     renderAdminBackupView();
   }
@@ -2424,26 +2678,32 @@ function createManualWebRestorePoint() {
   renderAdminBackupView();
 }
 
-function restoreWebPointById(pointId) {
+async function restoreWebPointById(pointId) {
   if (!window.KK_DB) return;
   const points = window.KK_DB.getWebRestorePoints();
   const point = points.find(p => p.id === pointId);
   if (!point) return;
 
-  const confirmMsg = `هل أنت متأكد من استرجاع البيانات إلى نقطة: "${point.label}" (${point.dateFormatted} - ${point.timeFormatted})؟\n\nسيتم استرجاع جميع المنتجات والطلبات والأقسام كما كانت في هذه اللحظة، مع حفظ نقطة أمان تلقائية للوضع الحالي.`;
+  const confirmMsg = `هل أنت متأكد من استرجاع البيانات إلى نقطة: "${point.label}" (${point.dateFormatted} - ${point.timeFormatted})؟\n\nسيتم استرجاع جميع المنتجات والطلبات والأقسام كما كانت في هذه اللحظة، ومزامنتها فورياً على جميع الأجهزة والهواتف مع حفظ نقطة أمان تلقائية للوضع الحالي.`;
   if (!confirm(confirmMsg)) return;
 
-  const res = window.KK_DB.restoreFromWebPoint(pointId);
-  if (res.success) {
-    showToast("✅ تم استرجاع البيانات بنجاح تام من نقطة الويب!");
-    renderAdminOverview();
-    renderAdminOrders();
-    renderAdminInventory();
-    renderAdminCategories();
-    loadAdminSettingsValues();
-    renderAdminBackupView();
-  } else {
-    showToast(`⚠️ ${res.error || "فشل الاسترجاع"}`);
+  showToast("⏳ جاري استرجاع البيانات ومزامنة جميع الأجهزة سحابياً...");
+
+  try {
+    const res = await window.KK_DB.restoreFromWebPoint(pointId);
+    if (res.success) {
+      showToast(`✅ تم استرجاع البيانات ومزامنتها بنجاح (${res.restoredCounts?.products || 0} منتج، ${res.restoredCounts?.orders || 0} طلب) على كافة الأجهزة!`);
+      renderAdminOverview();
+      renderAdminOrders();
+      renderAdminInventory();
+      renderAdminCategories();
+      loadAdminSettingsValues();
+      renderAdminBackupView();
+    } else {
+      showToast(`⚠️ ${res.error || "فشل الاسترجاع"}`);
+    }
+  } catch (err) {
+    showToast(`⚠️ خطأ أثناء الاسترجاع: ${err.message}`);
   }
 }
 
@@ -2503,35 +2763,41 @@ function cancelFileRestore(e) {
   if (previewEl) previewEl.style.display = "none";
 }
 
-function applyFileRestore(e) {
+async function applyFileRestore(e) {
   if (e) e.stopPropagation();
   if (!window.pendingFileBackupData || !window.KK_DB) {
     showToast("⚠️ لا توجد بيانات محددة للاسترجاع");
     return;
   }
 
-  if (!confirm("تحذير: هل أنت متأكد من استرجاع بيانات هذا الملف بالكامل؟ سيتم استبدال المنتجات والطلبات الحالية مع حفظ نقطة أمان تلقائية أولاً.")) {
+  if (!confirm("تحذير: هل أنت متأكد من استرجاع بيانات هذا الملف بالكامل؟ سيتم استبدال المنتجات والطلبات الحالية ومزامنتها على كافة الأجهزة مع حفظ نقطة أمان تلقائية أولاً.")) {
     return;
   }
 
-  const res = window.KK_DB.restoreFromData(window.pendingFileBackupData, true);
-  if (res.success) {
-    showToast(`✅ تم استرجاع البيانات بنجاح من الملف (${res.restoredCounts.products} منتج، ${res.restoredCounts.orders} طلب)`);
-    cancelFileRestore();
-    renderAdminOverview();
-    renderAdminOrders();
-    renderAdminInventory();
-    renderAdminCategories();
-    loadAdminSettingsValues();
-    renderAdminBackupView();
-  } else {
-    showToast(`⚠️ ${res.error || "فشل استرجاع الملف"}`);
+  showToast("⏳ جاري استرجاع البيانات من الملف ومزامنتها سحابياً...");
+
+  try {
+    const res = await window.KK_DB.restoreFromData(window.pendingFileBackupData, true);
+    if (res.success) {
+      showToast(`✅ تم استرجاع البيانات بنجاح ومزامنتها مع كافة الأجهزة (${res.restoredCounts?.products || 0} منتج، ${res.restoredCounts?.orders || 0} طلب)!`);
+      cancelFileRestore();
+      renderAdminOverview();
+      renderAdminOrders();
+      renderAdminInventory();
+      renderAdminCategories();
+      loadAdminSettingsValues();
+      renderAdminBackupView();
+    } else {
+      showToast(`⚠️ ${res.error || "فشل استرجاع الملف"}`);
+    }
+  } catch (err) {
+    showToast(`⚠️ خطأ أثناء الاسترجاع: ${err.message}`);
   }
 }
 
-function emergencyFactoryReset() {
+async function emergencyFactoryReset() {
   if (!window.KK_DB) return;
-  const firstConfirm = confirm("تنبيه خطير جداً:\nهل أنت متأكد من رغبتك في إعادة ضبط المصنع؟\nسيتم استرجاع الكتالوج الأصلي والطلبات الافتراضية مع حفظ نقطة استرجاع أمان تلقائية.");
+  const firstConfirm = confirm("تنبيه خطير جداً:\nهل أنت متأكد من رغبتك في إعادة ضبط المصنع ومزامنتها على جميع الأجهزة؟\nسيتم استرجاع الكتالوج الأصلي والطلبات الافتراضية مع حفظ نقطة استرجاع أمان تلقائية.");
   if (!firstConfirm) return;
 
   const pin = prompt("لإتمام إعادة ضبط المصنع، يرجى كتابة كلمة 'تأكيد':");
@@ -2540,16 +2806,40 @@ function emergencyFactoryReset() {
     return;
   }
 
-  const res = window.KK_DB.restoreFactoryDefaults();
-  if (res.success) {
-    showToast("🔄 تم استعادة ضبط المصنع بنجاح");
+  showToast("⏳ جاري استعادة ضبط المصنع ومزامنة التغييرات سحابياً...");
+
+  try {
+    const res = await window.KK_DB.restoreFactoryDefaults();
+    if (res.success) {
+      showToast("🔄 تم استعادة ضبط المصنع ومزامنتها بنجاح على كافة الأجهزة");
+      renderAdminOverview();
+      renderAdminOrders();
+      renderAdminInventory();
+      renderAdminCategories();
+      loadAdminSettingsValues();
+      renderAdminBackupView();
+    }
+  } catch (err) {
+    showToast(`⚠️ خطأ: ${err.message}`);
+  }
+}
+
+async function triggerFullCloudSync() {
+  if (!window.KK_DB) return;
+  showToast("🔄 جاري مزامنة السحابة الشاملة مع جميع الأجهزة والهواتف...");
+  try {
+    await window.KK_DB.forceSyncNow();
+    const count = await window.KK_DB.syncAllLocalProductsToCloud();
+    showToast(`✅ تمت المزامنة الشاملة بنجاح (${count} منتج تم تأكيد حفظها وتحديثها سحابياً)!`);
     renderAdminOverview();
     renderAdminOrders();
     renderAdminInventory();
     renderAdminCategories();
-    loadAdminSettingsValues();
     renderAdminBackupView();
+  } catch (err) {
+    showToast(`⚠️ تعذر إتمام المزامنة: ${err.message}`);
   }
 }
+window.triggerFullCloudSync = triggerFullCloudSync;
 
 

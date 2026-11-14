@@ -1,35 +1,41 @@
 // Vercel Serverless Function: /api/db-health
-// Health check and database status indicator
+// Safe health check and database connectivity indicator
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function handler(req, res) {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-cloud-db-url, x-firebase-url");
-  
+
   const hasKV = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-  const firebaseUrl = process.env.FIREBASE_DB_URL || req.headers["x-cloud-db-url"] || req.headers["x-firebase-url"] || "https://kased-karim-default-rtdb.firebaseio.com";
+  const firebaseUrl = process.env.FIREBASE_DB_URL || "https://kased-karim-default-rtdb.firebaseio.com";
   const hasFirebase = !!(firebaseUrl && firebaseUrl.trim());
 
-  let firebasePing = null;
+  let firebasePing = "standby";
   if (hasFirebase) {
     try {
       const cleanUrl = firebaseUrl.trim().replace(/\/$/, "");
-      const pingRes = await fetch(`${cleanUrl}/.json?shallow=true`, { cache: "no-store" });
-      firebasePing = pingRes.ok ? "connected" : "error_" + pingRes.status;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const pingRes = await fetch(`${cleanUrl}/.json?shallow=true`, {
+        signal: controller.signal,
+        cache: "no-store"
+      });
+      clearTimeout(timeoutId);
+      firebasePing = pingRes.ok ? "connected" : "status_" + pingRes.status;
     } catch (e) {
-      firebasePing = "unreachable";
+      firebasePing = "offline";
     }
   }
 
   return res.status(200).json({
     status: "ok",
-    environment: "vercel-serverless",
-    timestamp: new Date().toISOString(),
+    environment: "production",
+    timestamp: Date.now(),
     database: {
-      provider: hasKV ? "vercel-kv" : (hasFirebase ? "firebase-rtdb" : "standby"),
-      kvConnected: hasKV,
-      firebaseConnected: hasFirebase,
-      firebasePing,
-      readyForProduction: hasKV || hasFirebase
+      provider: hasKV ? "primary-kv" : (hasFirebase ? "primary-cloud" : "local-cache"),
+      connected: hasKV || firebasePing === "connected"
     }
   });
 }

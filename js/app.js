@@ -3,6 +3,17 @@
  * Main E-Commerce & Interactive Application Logic
  */
 
+// Safe HTML Escaping Utility for XSS Prevention
+window.escapeHtml = window.escapeHtml || function(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+};
+
 // Application State
 const STATE = {
   products: [],
@@ -79,47 +90,137 @@ function saveCart() {
   updateCartUI();
 }
 
-// 3. Render Category Tabs with Dynamic Item Counts
+// 3. Render Category Tabs with Dynamic Item Counts & Anchored Subcategories
+function renderActiveSubcategoriesStrip(parentCat, cats) {
+  const strip = document.getElementById("activeSubcategoryBar");
+  if (!strip) return;
+
+  if (!parentCat || parentCat.id === "all") {
+    strip.style.display = "none";
+    strip.innerHTML = "";
+    return;
+  }
+
+  const subCats = cats.filter(c => c.parentId === parentCat.id);
+  if (!subCats || subCats.length === 0) {
+    strip.style.display = "none";
+    strip.innerHTML = "";
+    return;
+  }
+
+  const subCatIds = subCats.map(c => c.id);
+  const totalParentCount = STATE.products.filter(p => p.category === parentCat.id || subCatIds.includes(p.category)).length;
+  const isParentSelected = STATE.activeCategory === parentCat.id;
+
+  const escapeFn = typeof escapeHTML === "function" ? escapeHTML : (s => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"));
+
+  let html = `
+    <span class="subcat-strip-label">
+      <i class="fas fa-layer-group"></i>
+      <span>الأقسام الفرعية لـ ${escapeFn(parentCat.name)}:</span>
+    </span>
+    <button type="button" class="subcat-chip ${isParentSelected ? 'active' : ''}" onclick="selectSubcategory('${parentCat.id}')" title="عرض كافة منتجات ${escapeFn(parentCat.name)}">
+      <span>الكل في ${escapeFn(parentCat.name)}</span>
+      <span class="subcat-count">${totalParentCount}</span>
+    </button>
+  `;
+
+  subCats.forEach(sub => {
+    const count = STATE.products.filter(p => p.category === sub.id).length;
+    const isActive = STATE.activeCategory === sub.id;
+    html += `
+      <button type="button" class="subcat-chip ${isActive ? 'active' : ''}" onclick="selectSubcategory('${sub.id}')" title="قسم فرعي: ${escapeFn(sub.name)}">
+        <span>${escapeFn(sub.name)}</span>
+        <span class="subcat-count">${count}</span>
+      </button>
+    `;
+  });
+
+  strip.innerHTML = html;
+  strip.style.display = "flex";
+}
+
+window.selectSubcategory = function(catId) {
+  STATE.activeCategory = catId;
+  STATE.visibleCount = 6;
+  renderCategoryTabs();
+  renderProducts();
+  if (typeof updateSubBarActiveCategory === "function") updateSubBarActiveCategory();
+};
+
 function renderCategoryTabs() {
   const tabsContainer = document.getElementById("categoryTabs");
   if (!tabsContainer) return;
 
   const cats = window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []);
+  const mainCats = cats.filter(c => !c.parentId);
 
-  tabsContainer.innerHTML = cats.map(cat => {
+  // Determine current active main category or parent of active subcategory
+  const activeSub = cats.find(c => c.id === STATE.activeCategory && c.parentId);
+  const activeParent = activeSub ? mainCats.find(c => c.id === activeSub.parentId) : null;
+  const activeMain = mainCats.find(c => c.id === STATE.activeCategory);
+  const currentFamily = activeMain || activeParent || null;
+
+  tabsContainer.innerHTML = mainCats.map(cat => {
     let count = 0;
+    const childCats = cats.filter(c => c.parentId === cat.id);
+    const hasSubs = childCats.length > 0;
+
     if (cat.id === "all") {
       count = STATE.products.length;
     } else {
-      const childIds = cats.filter(c => c.parentId === cat.id).map(c => c.id);
+      const childIds = childCats.map(c => c.id);
       count = STATE.products.filter(p => p.category === cat.id || childIds.includes(p.category)).length;
     }
     
-    const isActive = STATE.activeCategory === cat.id ? "active" : "";
-    const isSub = !!cat.parentId;
-    const displayName = isSub ? `<span style="opacity: 0.6; font-size: 0.8em; margin-left: 3px;">↳</span>${cat.name}` : cat.name;
+    const isDirectActive = STATE.activeCategory === cat.id;
+    const isParentActive = hasSubs && activeParent && activeParent.id === cat.id;
+    const activeClass = isDirectActive ? "active" : (isParentActive ? "active-parent" : "");
+    const hasSubClass = hasSubs ? "has-subcategories" : "";
+    const caretHtml = hasSubs ? `<i class="fas fa-angle-down subcat-caret" aria-hidden="true"></i>` : "";
 
     return `
-      <button class="category-tab-btn ${isActive} ${isSub ? 'is-subcategory' : ''}" data-category="${cat.id}">
-        <span>${displayName}</span>
+      <button class="category-tab-btn ${activeClass} ${hasSubClass}" data-category="${cat.id}" ${hasSubs ? `title="يحتوي على أقسام فرعية - انقر أو مرر لعرض التفريعات"` : ""}>
+        <span>${cat.name}</span>
+        ${caretHtml}
         <span class="tab-count">${count}</span>
       </button>
     `;
   }).join("");
 
+  // Render or update anchored subcategories strip
+  renderActiveSubcategoriesStrip(currentFamily, cats);
+
   // Attach tab events
-  tabsContainer.querySelectorAll(".category-tab-btn").forEach(btn => {
+  const tabButtons = tabsContainer.querySelectorAll(".category-tab-btn");
+  tabButtons.forEach(btn => {
+    const catId = btn.dataset.category;
+    const thisCat = mainCats.find(c => c.id === catId);
+    const hasSubs = cats.some(c => c.parentId === catId);
+
     btn.addEventListener("click", () => {
-      STATE.activeCategory = btn.dataset.category;
+      STATE.activeCategory = catId;
       STATE.visibleCount = 6;
       renderCategoryTabs();
       renderProducts();
-      updateSubBarActiveCategory();
+      if (typeof updateSubBarActiveCategory === "function") updateSubBarActiveCategory();
 
       // Smoothly bring clicked tab into view
       btn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     });
+
+    // Hover preview of subcategories for categories that have them
+    if (hasSubs) {
+      btn.addEventListener("mouseenter", () => {
+        renderActiveSubcategoriesStrip(thisCat, cats);
+      });
+    }
   });
+
+  // When mouse leaves tabs container, restore strip to the currently active category family
+  tabsContainer.onmouseleave = () => {
+    renderActiveSubcategoriesStrip(currentFamily, cats);
+  };
 
   if (typeof updateCategoryScrollButtons === "function") {
     updateCategoryScrollButtons();
@@ -341,9 +442,9 @@ function renderProducts() {
   }
 
   grid.innerHTML = visibleItems.map(item => `
-    <article class="product-card" data-id="${item.id}">
+    <article class="product-card" data-id="${escapeHtml(item.id)}">
       <div class="product-media">
-        <img class="product-img" src="${item.image}" alt="${item.name}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1200&q=80'">
+        <img class="product-img" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1200&q=80'">
         
         <div class="card-badges">
           ${item.isExclusive ? '<span class="badge-exclusive"><i class="fas fa-crown"></i> حصري في زايد</span>' : ''}
@@ -351,7 +452,7 @@ function renderProducts() {
         </div>
 
         <div class="card-hover-actions">
-          <button class="btn-card-quickview" onclick="openQuickView('${item.id}')">
+          <button class="btn-card-quickview" onclick="openQuickView('${escapeHtml(item.id)}')">
             <i class="fas fa-expand"></i>
             <span>المواصفات الفنية</span>
           </button>
@@ -360,20 +461,20 @@ function renderProducts() {
 
       <div class="product-body">
         <div class="product-category-row">
-          <span class="product-cat-tag">${item.categoryName}</span>
+          <span class="product-cat-tag">${escapeHtml(item.categoryName)}</span>
           <div class="product-rating">
             <i class="fas fa-star"></i>
-            <span>${item.rating || '5.0'}</span>
+            <span>${escapeHtml(item.rating || '5.0')}</span>
           </div>
         </div>
 
-        <h3 class="product-name" onclick="openQuickView('${item.id}')">${item.name}</h3>
-        <p class="product-en-name">${item.enName}</p>
+        <h3 class="product-name" onclick="openQuickView('${escapeHtml(item.id)}')">${escapeHtml(item.name)}</h3>
+        <p class="product-en-name">${escapeHtml(item.enName)}</p>
 
         <div class="product-specs-pills">
-          ${item.specs?.cri ? `<span class="spec-pill">${item.specs.cri}</span>` : ''}
-          ${item.specs?.colorTemp ? `<span class="spec-pill">${item.specs.colorTemp.split(' ')[0]}</span>` : ''}
-          ${item.style ? `<span class="spec-pill">${item.style}</span>` : ''}
+          ${item.specs?.cri ? `<span class="spec-pill">${escapeHtml(item.specs.cri)}</span>` : ''}
+          ${item.specs?.colorTemp ? `<span class="spec-pill">${escapeHtml(item.specs.colorTemp.split(' ')[0])}</span>` : ''}
+          ${item.style ? `<span class="spec-pill">${escapeHtml(item.style)}</span>` : ''}
         </div>
 
         <div class="product-footer">
@@ -385,7 +486,7 @@ function renderProducts() {
             ${item.originalPrice ? `<span class="product-price-old">${formatPrice(item.originalPrice)} ج.م</span>` : ''}
           </div>
 
-          <button class="btn-card-quote" title="إضافة للسلة" onclick="addToCart('${item.id}', 1)">
+          <button class="btn-card-quote" title="إضافة للسلة" onclick="addToCart('${escapeHtml(item.id)}', 1)">
             <i class="fas fa-plus"></i>
           </button>
         </div>
@@ -463,13 +564,13 @@ function openQuickView(productId) {
   if (specsTable) {
     const s = item.specs || {};
     specsTable.innerHTML = `
-      ${s.dimensions ? `<tr><td>الأبعاد والمقاسات</td><td>${s.dimensions}</td></tr>` : ''}
-      ${s.material ? `<tr><td>الخامات والتشطيب</td><td>${s.material}</td></tr>` : ''}
-      ${s.colorTemp ? `<tr><td>درجة حرارة الضوء</td><td>${s.colorTemp}</td></tr>` : ''}
-      ${s.wattage ? `<tr><td>الاستهلاك والقدرة</td><td>${s.wattage}</td></tr>` : ''}
-      ${s.cri ? `<tr><td>معامل وضوح الألوان</td><td>${s.cri}</td></tr>` : ''}
-      ${s.voltage ? `<tr><td>جهد التشغيل</td><td>${s.voltage}</td></tr>` : ''}
-      ${s.warranty ? `<tr><td>الضمان المعتمد</td><td>${s.warranty}</td></tr>` : ''}
+      ${s.dimensions ? `<tr><td>الأبعاد والمقاسات</td><td>${escapeHtml(s.dimensions)}</td></tr>` : ''}
+      ${s.material ? `<tr><td>الخامات والتشطيب</td><td>${escapeHtml(s.material)}</td></tr>` : ''}
+      ${s.colorTemp ? `<tr><td>درجة حرارة الضوء</td><td>${escapeHtml(s.colorTemp)}</td></tr>` : ''}
+      ${s.wattage ? `<tr><td>الاستهلاك والقدرة</td><td>${escapeHtml(s.wattage)}</td></tr>` : ''}
+      ${s.cri ? `<tr><td>معامل وضوح الألوان</td><td>${escapeHtml(s.cri)}</td></tr>` : ''}
+      ${s.voltage ? `<tr><td>جهد التشغيل</td><td>${escapeHtml(s.voltage)}</td></tr>` : ''}
+      ${s.warranty ? `<tr><td>الضمان المعتمد</td><td>${escapeHtml(s.warranty)}</td></tr>` : ''}
     `;
   }
 

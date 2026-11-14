@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+  <!-- Security Shield & Anti-Analysis (Executive First Guard) -->
+  <script src="js/security-shield.js?v=13.0"></script>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>لوحة التحكم وإدارة المعرض | Kased Karim Lighting - الشيخ زايد</title>
@@ -21,28 +24,32 @@
   <link rel="stylesheet" href="css/style.css?v=11.0">
   <link rel="stylesheet" href="css/components.css?v=11.0">
   <link rel="stylesheet" href="css/admin.css?v=11.0">
+
+  <!-- Security Shield & Anti-Analysis -->
+  <script src="js/security-shield.js?v=12.0"></script>
 </head>
 <body class="admin-page-body">
 
   <!-- ====================================================================
        ADMIN PIN SECURITY GATE (بوابة الدخول السرية الخاصة بالمديرين)
        ==================================================================== -->
-  <div id="adminAuthGate" class="admin-auth-overlay" style="display: none;">
+  <div id="adminAuthGate" class="admin-auth-overlay" role="dialog" aria-modal="true" aria-labelledby="adminAuthTitle" style="display: none;">
     <div class="admin-auth-card">
       <div class="admin-auth-emblem">
         <i class="fas fa-shield-halved"></i>
       </div>
-      <h2 class="admin-auth-title">بوابة الإدارة التنفيذية</h2>
+      <h2 class="admin-auth-title" id="adminAuthTitle">بوابة الإدارة التنفيذية</h2>
       <div class="admin-auth-subtitle">معرض قاصد كريم للإضاءة الفاخرة • الشيخ زايد</div>
       
       <p class="admin-auth-desc">
-        هذه الصفحة مخصصة لمديري المعرض فقط. يرجى إدخال رمز الدخول السري (PIN):
+        هذه الصفحة مخصصة لمديري المعرض فقط ومحمية بتشفير سحابي. يرجى إدخال رمز الدخول السري:
       </p>
 
       <form id="adminPinForm" onsubmit="handleAdminPinSubmit(event)">
         <div class="admin-pin-input-wrap">
-          <input type="password" id="adminPinInput" class="admin-pin-input" placeholder="••••" maxlength="10" autocomplete="current-password" autofocus required>
-          <button type="button" class="btn-toggle-pin" onclick="togglePinVisibility()" title="إظهار / إخفاء الرمز">
+          <label for="adminPinInput" class="visually-hidden" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;">رمز الدخول السري</label>
+          <input type="password" id="adminPinInput" class="admin-pin-input" placeholder="••••••••" maxlength="20" autocomplete="current-password" autofocus required aria-label="رمز الدخول السري">
+          <button type="button" class="btn-toggle-pin" onclick="togglePinVisibility()" title="إظهار / إخفاء الرمز" aria-label="إظهار أو إخفاء الرمز">
             <i class="fas fa-eye" id="pinEyeIcon"></i>
           </button>
         </div>
@@ -56,11 +63,6 @@
           <i class="fas fa-unlock-keyhole"></i>
           <span>فتح لوحة التحكم</span>
         </button>
-
-        <div class="admin-pin-hint">
-          <span>الرمز الافتراضي المعتمد: </span>
-          <strong style="color: var(--accent); letter-spacing: 2px;">2026</strong>
-        </div>
       </form>
 
       <div style="margin-top: 1.5rem; border-top: 1px solid #334155; padding-top: 1rem; text-align: center;">
@@ -93,13 +95,17 @@
         </div>
 
         <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <button type="button" class="btn-daily-backup-top" onclick="triggerFullCloudSync()" title="مزامنة سحابية فورية لجميع الأجهزة والهواتف الآن" style="background: linear-gradient(135deg, #10B981, #059669); color: #FFFFFF; border: none; box-shadow: 0 4px 14px rgba(16,185,129,0.35);">
+            <i class="fas fa-arrows-rotate"></i>
+            <span>مزامنة سحابية شاملة</span>
+          </button>
           <button type="button" class="btn-daily-backup-top" onclick="triggerDailyBackupDownload()" title="تحميل النسخة الاحتياطية اليومية للجهاز فوراً (.json)">
             <i class="fas fa-file-arrow-down"></i>
             <span>نسخة اليوم للجهاز</span>
           </button>
-          <button type="button" class="btn-copy-admin-link" onclick="copyAdminSecretLink()" title="نسخ رابط الإدارة السري المخصص لمشاركته مع المديرين">
+          <button type="button" class="btn-copy-admin-link" onclick="copyAdminSecretLink()" title="نسخ رابط لوحة التحكم">
             <i class="fas fa-link"></i>
-            <span>نسخ رابط الإدارة السري</span>
+            <span>نسخ رابط لوحة التحكم</span>
           </button>
           <a href="index.html" class="btn-secondary" style="font-size: 0.85rem; padding: 0.55rem 1.15rem; color: #FFFFFF; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2);">
             <i class="fas fa-store"></i>
@@ -813,7 +819,7 @@
                   <span>نقاط الاسترجاع السريعة (Web Restore Points)</span>
                 </div>
                 <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0.35rem 0 0;">
-                  يقوم النظام تلقائياً بإنشاء نقطة استرجاع قبل أي عملية حذف (لمنتج، لطلب، أو لقسم) بالإضافة لنقطة يومية تلقائية. يمكنك استرجاع أي نقطة بضغطة زر واحدة.
+                  يقوم النظام تلقائياً بإنشاء نقطة استرجاع قبل أي عملية حذف (لمنتج، لطلب، أو لقسم) بالإضافة لنقطة يومية تلقائية. عند استرجاع أي نقطة، يتم تطبيقها ومزامنتها سحابياً وفورياً مع كافة الأجهزة وهواتف العملاء بدقة شاملة.
                 </p>
               </div>
 
@@ -863,12 +869,151 @@
     </main>
   </div>
 
+  <!-- ====================================================================
+       EDIT PRODUCT MODAL (نافذة تعديل كافة تفاصيل القطعة)
+       ==================================================================== -->
+  <div class="modal-overlay" id="adminEditProductModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+    <div class="modal-content" style="max-width: 780px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="editModalTitle" style="display: flex; align-items: center; gap: 0.6rem;">
+          <i class="fas fa-pen-to-square" style="color: var(--accent);"></i>
+          <span>تعديل كافة تفاصيل وحدة الإضاءة</span>
+        </h3>
+        <button type="button" class="modal-close" onclick="closeEditProductModal()" aria-label="إغلاق">&times;</button>
+      </div>
+
+      <form id="adminEditProductForm" onsubmit="handleEditProductSubmit(event)" style="padding: 1.25rem 1.5rem;">
+        <input type="hidden" id="editProductId">
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="admin-form-group">
+            <label class="admin-label">اسم وحدة الإضاءة (عربي) *</label>
+            <input type="text" id="editProductName" class="admin-input" required>
+          </div>
+          <div class="admin-form-group">
+            <label class="admin-label">الاسم بالإنجليزية (اختياري)</label>
+            <input type="text" id="editProductEnName" class="admin-input">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+          <div class="admin-form-group">
+            <label class="admin-label">القسم *</label>
+            <select id="editProductCategory" class="admin-select" required></select>
+          </div>
+          <div class="admin-form-group">
+            <label class="admin-label">السعر الفعلي (ج.م) *</label>
+            <input type="number" id="editProductPrice" class="admin-input" min="0" required>
+          </div>
+          <div class="admin-form-group">
+            <label class="admin-label">السعر قبل الخصم (اختياري)</label>
+            <input type="number" id="editProductOriginalPrice" class="admin-input" min="0">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+          <div class="admin-form-group">
+            <label class="admin-label">الستايل / الطراز</label>
+            <input type="text" id="editProductStyle" class="admin-input" placeholder="مودرن / كلاسيك / معمارية">
+          </div>
+          <div class="admin-form-group">
+            <label class="admin-label">الضمان المعتمد</label>
+            <input type="text" id="editProductWarranty" class="admin-input" placeholder="5 سنوات ضمان معتمد">
+          </div>
+        </div>
+
+        <!-- Badges Checkboxes -->
+        <div style="display: flex; gap: 1.5rem; margin-top: 1.25rem; padding: 0.85rem 1rem; background: var(--bg-soft); border-radius: var(--radius-sm);">
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
+            <input type="checkbox" id="editProductIsNew">
+            <span>قطعة جديدة (NEW)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
+            <input type="checkbox" id="editProductIsExclusive">
+            <span>إصدار حصري (EXCLUSIVE)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
+            <input type="checkbox" id="editProductIsBestSeller">
+            <span>الأكثر طلباً (BEST SELLER)</span>
+          </label>
+        </div>
+
+        <!-- Images Section -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: 1.25rem;">
+          <!-- Main Image -->
+          <div>
+            <label class="admin-label">الصورة الرئيسية للقطعة *</label>
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <input type="text" id="editProductImageUrl" class="admin-input" placeholder="رابط URL للصورة أو ارفع ملفاً">
+              <button type="button" class="btn-secondary" style="padding: 0 0.85rem;" onclick="document.getElementById('editProductMainFileInput').click()" title="رفع صورة من الجهاز">
+                <i class="fas fa-upload"></i>
+              </button>
+            </div>
+            <input type="file" id="editProductMainFileInput" accept="image/*" style="display: none;" onchange="handleEditImageUpload(this.files[0], false)">
+            <div style="height: 120px; border-radius: 8px; border: 1px dashed var(--border-color); background: var(--bg-soft); display: flex; align-items: center; justify-content: center; overflow: hidden;">
+              <img id="editProductImagePreview" src="" alt="معاينة الصورة" style="max-height: 100%; max-width: 100%; object-fit: contain; display: none;">
+              <span id="editProductImagePlaceholder" style="font-size: 0.8rem; color: var(--text-muted);">لا توجد صورة</span>
+            </div>
+          </div>
+
+          <!-- Secondary Image -->
+          <div>
+            <label class="admin-label">الصورة الإضافية / زاوية ثانية (اختياري)</label>
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <input type="text" id="editProductSecondaryImageUrl" class="admin-input" placeholder="رابط URL أو ارفع صورة إضافية">
+              <button type="button" class="btn-secondary" style="padding: 0 0.85rem;" onclick="document.getElementById('editProductSecondaryFileInput').click()" title="رفع صورة إضافية">
+                <i class="fas fa-upload"></i>
+              </button>
+              <button type="button" class="btn-secondary" style="color: #EF4444;" onclick="resetEditSecondaryImage(event)" title="حذف الصورة الإضافية">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </div>
+            <input type="file" id="editProductSecondaryFileInput" accept="image/*" style="display: none;" onchange="handleEditImageUpload(this.files[0], true)">
+            <div style="height: 120px; border-radius: 8px; border: 1px dashed var(--border-color); background: var(--bg-soft); display: flex; align-items: center; justify-content: center; overflow: hidden;">
+              <img id="editProductSecondaryImagePreview" src="" alt="معاينة الصورة الإضافية" style="max-height: 100%; max-width: 100%; object-fit: contain; display: none;">
+              <span id="editProductSecondaryImagePlaceholder" style="font-size: 0.8rem; color: var(--text-muted);">لا توجد صورة إضافية</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Technical Specifications -->
+        <div style="margin-top: 1.25rem;">
+          <label class="admin-label">المواصفات الفنية والمعمارية</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <input type="text" id="editProductDimensions" class="admin-input" placeholder="الأبعاد (مثال: القطر 80 سم × الارتفاع 120 سم)">
+            <input type="text" id="editProductMaterial" class="admin-input" placeholder="الخامات (مثال: كريستال عصفور نقي + نحاس مطلي)">
+            <input type="text" id="editProductColorTemp" class="admin-input" placeholder="حرارة اللون (مثال: 3000K أصفر دافئ / ثلاثي درجات)">
+            <input type="text" id="editProductWattage" class="admin-input" placeholder="القدرة والاستهلاك (مثال: LED 72W موفر للطاقة)">
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="admin-form-group" style="margin-top: 1rem;">
+          <label class="admin-label">الوصف المعماري للقطعة</label>
+          <textarea id="editProductDescription" class="admin-textarea" rows="3" placeholder="وصف تفصيلي لتصميم القطعة ولمساتها الديكورية..."></textarea>
+        </div>
+
+        <!-- Actions -->
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.75rem; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
+          <button type="button" class="btn-secondary" onclick="closeEditProductModal()">
+            <span>إلغاء</span>
+          </button>
+          <button type="submit" class="btn-primary" style="padding: 0.75rem 2rem; font-weight: 800; background: linear-gradient(135deg, #10B981, #059669); border: none; box-shadow: 0 4px 14px rgba(16,185,129,0.35);">
+            <i class="fas fa-floppy-disk"></i>
+            <span>حفظ ومزامنة التعديلات سحابياً</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/data.js?v=11.0"></script>
-  <script src="js/db.js?v=11.0"></script>
-  <script src="js/admin.js?v=11.0"></script>
+  <script src="js/security-shield.js?v=13.0"></script>
+  <script src="js/data.js?v=13.0"></script>
+  <script src="js/db.js?v=13.0"></script>
+  <script src="js/admin.js?v=13.0"></script>
 </body>
 </html>

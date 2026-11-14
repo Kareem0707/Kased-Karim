@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+  <!-- Security Shield & Anti-Analysis (Executive First Guard) -->
+  <script src="js/security-shield.js?v=13.0"></script>
+
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-6SZ2WK3LPS"></script>
   <script>
@@ -94,6 +97,9 @@
   <link rel="stylesheet" href="css/style.css?v=11.0">
   <link rel="stylesheet" href="css/components.css?v=11.0">
   <link rel="stylesheet" href="css/admin.css?v=11.0">
+
+  <!-- Security Shield & Anti-Analysis -->
+  <script src="js/security-shield.js?v=12.0"></script>
 
   <!-- Schema.org JSON-LD Structured Data for Google Knowledge Graph & Local Pack -->
   <script type="application/ld+json">
@@ -401,7 +407,7 @@
   </div>
 
   <!-- Mobile Navigation Drawer -->
-  <div class="mobile-nav-drawer" id="mobileNavDrawer">
+  <div class="mobile-nav-drawer" id="mobileNavDrawer" role="dialog" aria-modal="true" aria-label="قائمة التصفح بالهاتف">
     <div class="mobile-nav-header">
       <div class="brand-link">
         <div class="brand-text-col">
@@ -409,7 +415,7 @@
           <span class="brand-title-ar" style="font-size: 0.7rem; color: var(--accent); font-weight: 700; display: block;">قاصد كريم للإضاءة الفاخرة • زايد</span>
         </div>
       </div>
-      <button class="modal-close-btn" style="position: static;" onclick="document.getElementById('mobileNavDrawer').classList.remove('active')">
+      <button class="modal-close-btn" style="position: static;" onclick="document.getElementById('mobileNavDrawer').classList.remove('active')" title="إغلاق" aria-label="إغلاق القائمة">
         <i class="fas fa-times"></i>
       </button>
     </div>
@@ -531,13 +537,17 @@
             <i class="fas fa-chevron-left"></i>
           </button>
         </div>
+
+        <!-- Attached Active Subcategories Strip (Anchored directly to parent category) -->
+        <div class="active-subcategory-strip" id="activeSubcategoryBar" style="display: none;"></div>
       </div>
 
       <!-- Search, Sort & Manage Controls -->
       <div class="catalog-controls">
         <div class="search-input-wrap">
+          <label for="searchInput" class="visually-hidden" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;">البحث عن وحدات الإضاءة</label>
           <i class="fas fa-search search-icon"></i>
-          <input type="text" class="search-input" id="searchInput" placeholder="ابحث باسم وحدة الإضاءة، الطراز، أو الكود...">
+          <input type="text" class="search-input" id="searchInput" placeholder="ابحث باسم وحدة الإضاءة، الطراز، أو الكود..." aria-label="البحث عن وحدات الإضاءة">
         </div>
 
         <div class="controls-right">
@@ -545,7 +555,7 @@
           
           <!-- Custom Luxury Sort Dropdown -->
           <div class="luxury-sort-dropdown" id="luxurySortDropdown">
-            <button type="button" class="luxury-sort-trigger" id="luxurySortTrigger" aria-haspopup="listbox" aria-expanded="false">
+            <button type="button" class="luxury-sort-trigger" id="luxurySortTrigger" aria-haspopup="listbox" aria-expanded="false" aria-label="ترتيب المنتجات">
               <i class="fas fa-arrow-down-short-wide sort-leading-icon"></i>
               <span class="sort-trigger-label" id="sortTriggerLabel">المعروضات المميزة</span>
               <i class="fas fa-chevron-down sort-trigger-icon"></i>
@@ -736,9 +746,9 @@
   <!-- ========================================================================
        QUICK VIEW / PRODUCT SPECIFICATIONS MODAL
        ======================================================================== -->
-  <div class="modal-backdrop" id="quickViewModal">
+  <div class="modal-backdrop" id="quickViewModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-dialog">
-      <button class="modal-close-btn" onclick="closeQuickView()" title="إغلاق">
+      <button class="modal-close-btn" onclick="closeQuickView()" title="إغلاق" aria-label="إغلاق النافذة">
         <i class="fas fa-times"></i>
       </button>
 
@@ -796,14 +806,14 @@
        CART / SHOPPING BASKET DRAWER (عربة التسوق العادية)
        ======================================================================== -->
   <div class="cart-drawer-backdrop" id="cartDrawerBackdrop">
-    <div class="cart-drawer">
+    <div class="cart-drawer" role="dialog" aria-modal="true" aria-label="سلة الطلبات">
       <div class="drawer-header">
         <div class="drawer-title-wrap">
           <i class="fas fa-shopping-cart" style="color: var(--accent); font-size: 1.25rem;"></i>
           <h3 class="drawer-title">سلة الطلبات</h3>
           <span class="drawer-count-pill cart-count-badge">0</span>
         </div>
-        <button class="drawer-close-btn" onclick="toggleCartDrawer(false)">
+        <button class="drawer-close-btn" onclick="toggleCartDrawer(false)" aria-label="إغلاق سلة الطلبات">
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -849,18 +859,27 @@
   <!-- ========================================================================
        CUSTOMER CHECKOUT MODAL (إتمام وتأكيد الطلب المباشر)
        ======================================================================== -->
-  <div class="modal-backdrop" id="checkoutModal">
+  <div class="modal-backdrop" id="checkoutModal" role="dialog" aria-modal="true" aria-labelledby="checkoutModalTitle">
     <div class="modal-dialog checkout-modal-dialog">
-      <button class="modal-close-btn" onclick="closeCheckoutModal()" title="إغلاق">
+      <button class="modal-close-btn" onclick="closeCheckoutModal()" title="إغلاق" aria-label="إغلاق النافذة">
         <i class="fas fa-times"></i>
       </button>
 
       <div style="margin-bottom: 1.25rem;">
         <span class="section-tag">DIRECT LUXURY CHECKOUT</span>
-        <h2 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem;">إتمام طلب وحدات الإضاءة</h2>
+        <h2 id="checkoutModalTitle" style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem;">إتمام طلب وحدات الإضاءة</h2>
         <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
           أدخل بيانات التواصل وموقع العقار بالشيخ زايد لتأكيد الطلب والتسليم مع الضمان المعتمد.
         </p>
+      </div>
+
+      <!-- Showroom Order & Payment Policy Notice -->
+      <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.65rem;">
+        <i class="fas fa-shield-halved" style="color: var(--accent); font-size: 1.15rem; flex-shrink: 0;"></i>
+        <div>
+          <strong style="color: var(--text-main); display: block;">حجز وطلب مباشر من صالة العرض بالشيخ زايد</strong>
+          <span>الدفع عند الاستلام بعد المعاينة أو عبر التحويل البنكي وفودافون كاش، مع شهادة ضمان معتمدة.</span>
+        </div>
       </div>
 
       <!-- Checkout Summary Mini -->
@@ -875,7 +894,7 @@
       <form id="checkoutOrderForm" novalidate onsubmit="handleCheckoutSubmit(event)">
         <div class="form-grid">
           <div class="form-group full-width">
-            <label class="form-label">
+            <label class="form-label" for="custNameInput">
               <span>الاسم الكريم (الاسم الأول واسم العائلة)</span>
               <span style="color: #EF4444; font-weight: 800;">*</span>
             </label>
@@ -890,7 +909,7 @@
           </div>
 
           <div class="form-group full-width">
-            <label class="form-label">
+            <label class="form-label" for="custPhoneInput">
               <span>رقم الهاتف / واتساب لتأكيد الطلب</span>
               <span style="color: #EF4444; font-weight: 800;">*</span>
             </label>
@@ -905,7 +924,7 @@
           </div>
 
           <div class="form-group full-width">
-            <label class="form-label">
+            <label class="form-label" for="custAddressInput">
               <span>عنوان الفيلا / العقار بالتفصيل بالشيخ زايد</span>
               <span style="color: #EF4444; font-weight: 800;">*</span>
             </label>
@@ -921,8 +940,8 @@
           </div>
 
           <div class="form-group full-width">
-            <label class="form-label">ملاحظات خاصة (أوقات التوصيل، مواصفات الأسقف، الخ) - اختياري</label>
-            <textarea name="custNotes" class="form-textarea" rows="2" placeholder="أي تفاصيل خاصة يفضل معرفتها قبل المعاينة أو التسليم..."></textarea>
+            <label class="form-label" for="custNotesInput">ملاحظات خاصة (أوقات التوصيل، مواصفات الأسقف، الخ) - اختياري</label>
+            <textarea id="custNotesInput" name="custNotes" class="form-textarea" rows="2" placeholder="أي تفاصيل خاصة يفضل معرفتها قبل المعاينة أو التسليم..."></textarea>
           </div>
         </div>
 
@@ -940,12 +959,12 @@
   <!-- ========================================================================
        ORDER SUCCESS MODAL (إيصال استلام الطلب وتأكيده للعميل)
        ======================================================================== -->
-  <div class="modal-backdrop" id="orderSuccessModal">
+  <div class="modal-backdrop" id="orderSuccessModal" role="dialog" aria-modal="true" aria-labelledby="orderSuccessTitle">
     <div class="modal-dialog" style="max-width: 480px; text-align: center; padding: 2.5rem 2rem;">
       <div style="width: 70px; height: 70px; border-radius: var(--radius-full); background: rgba(16, 185, 129, 0.1); color: #10B981; font-size: 2.2rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem;">
         <i class="fas fa-check"></i>
       </div>
-      <h3 style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">تم استلام طلبكم بنجاح!</h3>
+      <h3 id="orderSuccessTitle" style="font-size: 1.4rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">تم استلام طلبكم بنجاح!</h3>
       <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 1.5rem;">
         شكراً لاختياركم معرض قاصد كريم للإضاءة الفاخرة بالشيخ زايد. تم إرسال تفاصيل طلبكم لفريق المعرض والمستودع لتجهيزه فوراً.
       </p>
@@ -974,15 +993,15 @@
   <!-- ========================================================================
        CUSTOMER ORDER TRACKING MODAL (نافذة تتبع حالة الطلب للعميل)
        ======================================================================== -->
-  <div class="modal-backdrop" id="trackOrderModal">
+  <div class="modal-backdrop" id="trackOrderModal" role="dialog" aria-modal="true" aria-labelledby="trackModalTitle">
     <div class="modal-dialog track-modal-dialog">
-      <button class="modal-close-btn" onclick="closeTrackOrderModal()" title="إغلاق">
+      <button class="modal-close-btn" onclick="closeTrackOrderModal()" title="إغلاق" aria-label="إغلاق النافذة">
         <i class="fas fa-times"></i>
       </button>
 
       <div style="margin-bottom: 1.25rem;">
         <span class="section-tag">LIVE SHOWROOM TRACKING</span>
-        <h2 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.5rem;">
+        <h2 id="trackModalTitle" style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.5rem;">
           <i class="fas fa-truck-fast" style="color: var(--accent);"></i>
           <span>تتبع حالة ومسار طلبك بالشيخ زايد</span>
         </h2>
@@ -993,8 +1012,9 @@
 
       <!-- Quick Search Bar -->
       <div class="track-search-box">
-        <input type="text" id="trackSearchInput" class="track-search-input" placeholder="أدخل رقم الطلب (مثال: ORD-3894) أو رقم هاتفك...">
-        <button type="button" class="btn-primary" style="padding: 0.75rem 1.25rem; font-weight: 700; white-space: nowrap;" onclick="searchAndTrackOrder()">
+        <label for="trackSearchInput" class="visually-hidden" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;">كود الطلب</label>
+        <input type="text" id="trackSearchInput" class="track-search-input" placeholder="أدخل رقم أو كود الطلب (مثال: ORD-XXXX-XXXX)..." aria-label="رقم أو كود الطلب">
+        <button type="button" id="trackSearchBtn" class="btn-primary" style="padding: 0.75rem 1.25rem; font-weight: 700; white-space: nowrap;" onclick="searchAndTrackOrder()" aria-label="تتبع الطلب">
           <i class="fas fa-search"></i>
           <span>تتبع</span>
         </button>
@@ -1030,21 +1050,21 @@
               </div>
             </div>
 
-            <button type="button" class="btn-secondary" style="font-size: 0.78rem; padding: 0.4rem 0.8rem;" onclick="refreshCurrentTrackOrder(this)">
+            <button type="button" class="btn-secondary" style="font-size: 0.78rem; padding: 0.4rem 0.8rem;" onclick="refreshCurrentTrackOrder(this)" aria-label="تحديث الحالة">
               <i class="fas fa-rotate" id="trackRefreshIcon"></i>
               <span>تحديث الحالة</span>
             </button>
           </div>
 
-          <!-- Customer Info -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 1rem 0; padding: 0.85rem; background: #F8FAFC; border-radius: var(--radius-sm); font-size: 0.82rem;">
-            <div>
-              <span style="color: var(--text-muted); display: block;">العميل الكريم:</span>
-              <strong id="trackCustomerName" style="color: var(--text-main);">--</strong>
+          <!-- Verified Showroom Order Info (Privacy-Safe: Zero Customer PII Exposed) -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 0.85rem 0; padding: 0.65rem 0.85rem; background: #F8FAFC; border-radius: var(--radius-sm); font-size: 0.82rem;">
+            <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted);">
+              <i class="fas fa-building" style="color: var(--accent);"></i>
+              <span>معرض قاصد كريم • سنتر الطاهرة بالشيخ زايد</span>
             </div>
-            <div>
-              <span style="color: var(--text-muted); display: block;">العنوان بالشيخ زايد:</span>
-              <span id="trackCustomerAddress" style="color: var(--text-main); font-weight: 600;">--</span>
+            <div style="font-weight: 700; color: #10B981; display: flex; align-items: center; gap: 0.35rem;">
+              <i class="fas fa-shield-check"></i>
+              <span>طلب موثق ومعتمد سحابياً</span>
             </div>
           </div>
 
@@ -1123,9 +1143,10 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/data.js?v=11.0"></script>
-  <script src="js/db.js?v=11.0"></script>
-  <script src="js/app.js?v=11.0"></script>
-  <script src="js/admin.js?v=11.0"></script>
+  <script src="js/security-shield.js?v=13.0"></script>
+  <script src="js/data.js?v=13.0"></script>
+  <script src="js/db.js?v=13.0"></script>
+  <script src="js/app.js?v=13.0"></script>
+  <script src="js/checkout.js?v=13.0"></script>
 </body>
 </html>

@@ -15,72 +15,8 @@ const DB_KEYS = {
   CUSTOM_CLOUD_URL: "kk_custom_cloud_url"
 };
 
-// Real Verified Orders from the Showroom (Luxury Client Demonstrations)
-const SEED_ORDERS = [
-  {
-    id: "ORD-3985",
-    timestamp: 1791928093202,
-    dateFormatted: "اليوم - 12:48 ص",
-    customer: {
-      name: "م. كريم عبد الرحمن",
-      phone: "01006367690",
-      city: "الشيخ زايد",
-      address: "كمبوند الربوة - المجاورة الرابعة - فيلا 114 بالشيخ زايد",
-      notes: "يرجى التنسيق المسبق مع مسؤول الموقع قبل تسليم الدلايات لفحص ارتفاعات السقف"
-    },
-    items: [
-      {
-        id: "kk-002",
-        name: "نظام المسارات المغناطيسية المعمارية الذكية",
-        enName: "Ultra-Slim Magnetic Track System Pro",
-        price: 18400,
-        qty: 1,
-        image: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=1200&q=80",
-        categoryName: "مسارات مغناطيسية واسبوتات"
-      },
-      {
-        id: "kk-003",
-        name: "دلاية الهالة المضيئة العائمة المعاصرة",
-        enName: "Aurora Floating Halo Pendant",
-        price: 43200,
-        qty: 1,
-        image: "https://images.unsplash.com/photo-1517991104123-1d56a6e81ed9?auto=format&fit=crop&w=1200&q=80",
-        categoryName: "دلايات فاخرة"
-      }
-    ],
-    subtotal: 61600,
-    total: 61600,
-    status: "confirmed",
-    isRead: true
-  },
-  {
-    id: "ORD-5412",
-    timestamp: 1791928008057,
-    dateFormatted: "اليوم - 12:46 ص",
-    customer: {
-      name: "د. شريف المنياوي",
-      phone: "01012345678",
-      city: "الشيخ زايد",
-      address: "كمبوند بيفرلي هيلز - الحي السادس عشر - فيلا 28 بالشيخ زايد",
-      notes: "تمت المعاينة بصالة العرض بسنتر الطاهرة بنجاح"
-    },
-    items: [
-      {
-        id: "kk-004",
-        name: "أبليك جداري أونيكس رخامي مضيء",
-        enName: "Illuminated Natural Onyx Sconce",
-        price: 13900,
-        qty: 1,
-        image: "https://images.unsplash.com/photo-1509644851169-2acc08aa25b5?auto=format&fit=crop&w=1200&q=80",
-        categoryName: "إضاءات جدارية Sconces"
-      }
-    ],
-    subtotal: 13900,
-    total: 13900,
-    status: "processing",
-    isRead: true
-  }
-];
+// Production Orders Cache (Zero Hardcoded Customer Data)
+// All orders are dynamically stored and fetched via encrypted serverless endpoints
 
 class KasedKarimDB {
   constructor() {
@@ -108,32 +44,41 @@ class KasedKarimDB {
 
   // 1. Initialize Database & Local Cache
   initDatabase() {
-    let cachedProducts = [];
+    // A. Retrieve tombstone set of deleted product IDs so they are NEVER resurrected on refresh
+    let deletedProductIds = new Set();
+    try {
+      const rawDeleted = localStorage.getItem("kk_deleted_product_ids_v1");
+      if (rawDeleted) {
+        const parsed = JSON.parse(rawDeleted);
+        if (Array.isArray(parsed)) parsed.forEach(id => deletedProductIds.add(id));
+      }
+    } catch (e) {}
+
+    // B. Check existing cached products in localStorage
+    let cachedProducts = null;
     try {
       const raw = localStorage.getItem(DB_KEYS.PRODUCTS);
-      cachedProducts = raw ? JSON.parse(raw) : [];
+      if (raw) cachedProducts = JSON.parse(raw);
     } catch (e) {
-      cachedProducts = [];
+      cachedProducts = null;
     }
 
-    const prodMap = new Map();
-    // 1. Base catalog first
-    INITIAL_PRODUCTS.forEach((p, idx) => {
-      prodMap.set(p.id, {
-        ...p,
-        salesCount: [34, 28, 22, 19, 15, 45, 12, 17, 14, 25, 9, 11][idx] || 10,
-        warranty: p.specs?.warranty || "5 سنوات ضمان معتمد"
-      });
-    });
-
-    // 2. Overlay any previously stored local/custom products
-    if (Array.isArray(cachedProducts)) {
-      cachedProducts.forEach(p => {
-        prodMap.set(p.id, { ...prodMap.get(p.id), ...p });
-      });
+    // Only if local database has never been initialized on this device, seed with INITIAL_PRODUCTS
+    if (!Array.isArray(cachedProducts) || cachedProducts.length === 0) {
+      // First visit seed (excluding any previously deleted IDs)
+      const seeded = (typeof INITIAL_PRODUCTS !== "undefined" ? INITIAL_PRODUCTS : [])
+        .filter(p => !deletedProductIds.has(p.id))
+        .map((p, idx) => ({
+          ...p,
+          salesCount: [34, 28, 22, 19, 15, 45, 12, 17, 14, 25, 9, 11][idx] || 10,
+          warranty: p.specs?.warranty || "5 سنوات ضمان معتمد"
+        }));
+      localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(seeded));
+    } else {
+      // Clean any accidental resurrected items that exist in deletedProductIds
+      const sanitized = cachedProducts.filter(p => p && p.id && !deletedProductIds.has(p.id));
+      localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(sanitized));
     }
-
-    localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(Array.from(prodMap.values())));
 
     // Initialize Orders - sanitize and remove old dummy placeholder and test orders
     let localOrders = [];
@@ -146,8 +91,11 @@ class KasedKarimDB {
 
     localOrders = (localOrders || []).filter(o => 
       o && o.id &&
+      o.id !== "ORD-3985" &&
+      o.id !== "ORD-5412" &&
       o.id !== "ORD-8941" && 
-      o.id !== "ORD-8820" && 
+      o.id !== "ORD-8820" &&
+      !o.id.startsWith("DEMO-") &&
       (!o.customer || (
         !o.customer.name.includes("ككك") && 
         !o.customer.name.includes("منك") &&
@@ -155,22 +103,11 @@ class KasedKarimDB {
       ))
     );
 
-    // If ORD-3985 was altered by test submissions in localStorage, restore its verified version
-    const ord3985 = localOrders.find(o => o.id === "ORD-3985");
-    if (ord3985 && ord3985.customer && ord3985.customer.name.includes("ككك")) {
-      ord3985.customer.name = "م. كريم عبد الرحمن";
-      ord3985.customer.phone = "01006367690";
-      ord3985.customer.address = "كمبوند الربوة - المجاورة الرابعة - فيلا 114 بالشيخ زايد";
-    }
-
-    if (!localOrders || localOrders.length === 0) {
-      localOrders = [...SEED_ORDERS];
-    }
     localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(localOrders));
 
     localOrders.forEach(o => {
       this.knownOrderIds.add(o.id);
-      this.notifiedOrderIds.add(o.id); // Historical orders are marked as already known
+      this.notifiedOrderIds.add(o.id);
     });
 
     // 3. Initialize Categories
@@ -344,6 +281,15 @@ class KasedKarimDB {
       "Cache-Control": "no-cache, no-store",
       "Pragma": "no-cache"
     };
+
+    // Attach Admin Authentication Token if available
+    const adminToken = (typeof sessionStorage !== "undefined" && sessionStorage.getItem("kk_admin_token")) ||
+                       (typeof localStorage !== "undefined" && localStorage.getItem("kk_admin_token"));
+    if (adminToken) {
+      headers["Authorization"] = `Bearer ${adminToken}`;
+      headers["x-admin-token"] = adminToken;
+    }
+
     const customUrl = this.getCustomCloudUrl();
     if (customUrl) {
       headers["x-cloud-db-url"] = customUrl;
@@ -353,28 +299,91 @@ class KasedKarimDB {
   }
 
   // --------------------------------------------------------------------------
-  // CLOUD DATABASE SYNC ENGINE
+  // CLOUD DATABASE SYNC ENGINE (Adaptive, Privacy-Preserving Polling)
   // --------------------------------------------------------------------------
   initCloudSync() {
-    // 1. Immediate initial sync on load (Orders, Products, Categories, Settings)
-    this.syncFromCloud(false);
+    // 1. Initial sync of public catalog, categories, and settings
     this.syncProductsFromCloud(false);
     this.syncCategoriesFromCloud();
     this.syncSettingsFromCloud();
 
-    // 2. Continuous fast background poll (every 4 seconds for orders, 15 seconds for catalog/settings)
-    setInterval(() => {
-      this.syncFromCloud(true);
-    }, 4000);
+    const isAdminPage = typeof window !== "undefined" && (
+      window.location.pathname.includes("admin.html") || 
+      !!document.getElementById("adminPageRoot")
+    );
 
-    setInterval(() => {
-      this.syncProductsFromCloud(true);
-      this.syncCategoriesFromCloud();
-      this.syncSettingsFromCloud();
-    }, 15000);
+    // Only sync orders if user is explicitly on admin dashboard and has admin credentials
+    const hasAdminToken = typeof sessionStorage !== "undefined" && (
+      !!sessionStorage.getItem("kk_admin_token") || !!localStorage.getItem("kk_admin_token")
+    );
+
+    if (isAdminPage && hasAdminToken) {
+      this.syncFromCloud(false);
+    }
+
+    // 2. High-Frequency Real-Time Polling & Adaptive Visibility Refresh
+    let orderInterval = null;
+    let catalogInterval = null;
+
+    const startBackgroundSync = () => {
+      if (orderInterval) clearInterval(orderInterval);
+      if (catalogInterval) clearInterval(catalogInterval);
+
+      // Admin orders polling: every 15 seconds (when on admin dashboard and visible)
+      if (isAdminPage) {
+        orderInterval = setInterval(() => {
+          if (typeof document !== "undefined" && !document.hidden) {
+            const token = sessionStorage.getItem("kk_admin_token") || localStorage.getItem("kk_admin_token");
+            if (token) {
+              this.syncFromCloud(true);
+            }
+          }
+        }, 15000);
+      }
+
+      // Catalog & Settings polling: every 20 seconds across all devices
+      catalogInterval = setInterval(() => {
+        if (typeof document !== "undefined" && !document.hidden) {
+          this.syncProductsFromCloud(true);
+          this.syncCategoriesFromCloud();
+          this.syncSettingsFromCloud();
+        }
+      }, 20000);
+    };
+
+    const stopBackgroundSync = () => {
+      if (orderInterval) clearInterval(orderInterval);
+      if (catalogInterval) clearInterval(catalogInterval);
+      orderInterval = null;
+      catalogInterval = null;
+    };
+
+    startBackgroundSync();
+
+    // 3. Instant Multi-Device Sync on Foreground Focus / Reconnection
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", () => {
+        this.forceSyncNow();
+      });
+
+      window.addEventListener("online", () => {
+        this.forceSyncNow();
+      });
+
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) {
+            stopBackgroundSync();
+          } else {
+            startBackgroundSync();
+            this.forceSyncNow();
+          }
+        });
+      }
+    }
   }
 
-  // Sync Products from Cloud to Local
+  // Sync Products from Cloud to Local (Cloud is Ground Truth)
   async syncProductsFromCloud(isBackground = false) {
     try {
       let cloudProducts = null;
@@ -428,29 +437,23 @@ class KasedKarimDB {
         } catch (errApi) {}
       }
 
-      if (cloudProducts && Array.isArray(cloudProducts) && cloudProducts.length > 0) {
+      // Cloud Ground Truth Synchronization
+      let deletedIds = new Set();
+      try {
+        const rawDel = localStorage.getItem("kk_deleted_product_ids_v1");
+        if (rawDel) JSON.parse(rawDel).forEach(id => deletedIds.add(id));
+      } catch(e) {}
+
+      if (cloudProducts && Array.isArray(cloudProducts)) {
+        // Strictly filter out any products marked as deleted
+        cloudProducts = cloudProducts.filter(p => p && p.id && !deletedIds.has(p.id));
         const currentProducts = this.getProducts();
-        const productMap = new Map();
+        const currentStr = JSON.stringify(currentProducts);
+        const cloudStr = JSON.stringify(cloudProducts);
 
-        // 1. Base products first
-        INITIAL_PRODUCTS.forEach(p => productMap.set(p.id, p));
-
-        // 2. Existing local custom products
-        currentProducts.forEach(p => productMap.set(p.id, p));
-
-        // 3. Merge incoming cloud products (Cloud is ground-truth)
-        let hasChanges = false;
-        cloudProducts.forEach(cp => {
-          if (!productMap.has(cp.id) || JSON.stringify(productMap.get(cp.id)) !== JSON.stringify(cp)) {
-            productMap.set(cp.id, cp);
-            hasChanges = true;
-          }
-        });
-
-        if (hasChanges) {
-          const mergedList = Array.from(productMap.values());
-          localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(mergedList));
-          window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: { merged: true, products: mergedList } }));
+        if (currentStr !== cloudStr) {
+          localStorage.setItem(DB_KEYS.PRODUCTS, cloudStr);
+          window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: { merged: false, products: cloudProducts } }));
         }
       }
     } catch (e) {
@@ -529,15 +532,10 @@ class KasedKarimDB {
           return true;
         });
 
-        const localOrders = this.getOrders();
-        const orderMap = new Map();
-        localOrders.forEach(o => orderMap.set(o.id, o));
-
         const trulyNewOrders = [];
 
         cleanCloudOrders.forEach(cloudOrder => {
           const isKnown = this.knownOrderIds.has(cloudOrder.id);
-          this.knownOrderIds.add(cloudOrder.id);
 
           // Only consider an order for instant alert if:
           // 1. Initial sync has already completed (so historical orders on page load never alert!)
@@ -549,30 +547,23 @@ class KasedKarimDB {
               trulyNewOrders.push(cloudOrder);
             }
           }
-
-          if (orderMap.has(cloudOrder.id)) {
-            const existing = orderMap.get(cloudOrder.id);
-            const resolvedStatus = cloudOrder.status || existing.status || "pending";
-            const isRead = typeof cloudOrder.isRead === "boolean" ? cloudOrder.isRead : existing.isRead;
-            orderMap.set(cloudOrder.id, {
-              ...existing,
-              ...cloudOrder,
-              status: resolvedStatus,
-              isRead: isRead
-            });
-          } else {
-            orderMap.set(cloudOrder.id, cloudOrder);
-          }
         });
+
+        // Cloud is Ground Truth: set known IDs to current cloud orders
+        this.knownOrderIds.clear();
+        cleanCloudOrders.forEach(o => this.knownOrderIds.add(o.id));
 
         // Mark initial sync complete
         this.isInitialSyncCompleted = true;
 
-        const mergedOrders = Array.from(orderMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(mergedOrders));
+        const localOrders = this.getOrders();
+        const localOrdStr = JSON.stringify(localOrders);
+        const cloudOrdStr = JSON.stringify(cleanCloudOrders);
 
-        // Recalculate sales for products from all active orders
-        this.recalculateAllProductSales();
+        if (localOrdStr !== cloudOrdStr) {
+          localStorage.setItem(DB_KEYS.ORDERS, cloudOrdStr);
+          this.recalculateAllProductSales();
+        }
 
         if (trulyNewOrders.length > 0) {
           // Strictly pick the newest order with highest timestamp
@@ -589,7 +580,7 @@ class KasedKarimDB {
             this.playLuxuryChime();
           }
           window.dispatchEvent(new CustomEvent("kk_new_order_placed", { detail: latestNewOrder }));
-        } else {
+        } else if (localOrdStr !== cloudOrdStr) {
           window.dispatchEvent(new CustomEvent("kk_orders_updated"));
         }
       }
@@ -601,10 +592,12 @@ class KasedKarimDB {
   }
 
   async forceSyncNow() {
-    await this.syncFromCloud(false);
-    await this.syncProductsFromCloud(false);
-    await this.syncCategoriesFromCloud();
-    await this.syncSettingsFromCloud();
+    await Promise.allSettled([
+      this.syncProductsFromCloud(false),
+      this.syncCategoriesFromCloud(),
+      this.syncSettingsFromCloud(),
+      this.syncFromCloud(false)
+    ]);
   }
 
   // --------------------------------------------------------------------------
@@ -676,17 +669,17 @@ class KasedKarimDB {
     }).catch(() => null);
   }
 
-  // Push entire local catalog to cloud database with one call
+  // Push entire local catalog to cloud database with one atomic call
   async syncAllLocalProductsToCloud() {
     const products = this.getProducts();
     const customUrl = this.getCustomCloudUrl();
-    let count = 0;
 
+    // 1. Direct Firebase RTDB Batch (if customUrl configured)
     if (customUrl) {
       try {
         const mapObj = {};
         products.forEach(p => {
-          mapObj[p.id] = p;
+          if (p && p.id) mapObj[p.id] = p;
         });
         const res = await fetch(`${customUrl}/products.json`, {
           method: "PUT",
@@ -698,7 +691,21 @@ class KasedKarimDB {
       } catch (e) {}
     }
 
-    // Fallback: batch individual products to /api/products
+    // 2. Atomic Batch Overwrite to /api/products
+    try {
+      const res = await fetch("/api/products", {
+        method: "PUT",
+        cache: "no-store",
+        headers: this.getCloudHeaders(),
+        body: JSON.stringify({ products })
+      });
+      if (res.ok) {
+        return products.length;
+      }
+    } catch (e) {}
+
+    // 3. Fallback: individual product push
+    let count = 0;
     for (const p of products) {
       try {
         await this.sendProductToCloud(p);
@@ -916,7 +923,18 @@ class KasedKarimDB {
     return newProduct;
   }
 
-  deleteProduct(productId) {
+  async deleteProduct(productId) {
+    // 1. Record ID in permanent tombstone set so it can NEVER be resurrected by refresh or stale cache
+    try {
+      const rawDeleted = localStorage.getItem("kk_deleted_product_ids_v1");
+      const deletedIds = rawDeleted ? JSON.parse(rawDeleted) : [];
+      if (!deletedIds.includes(productId)) {
+        deletedIds.push(productId);
+        localStorage.setItem("kk_deleted_product_ids_v1", JSON.stringify(deletedIds));
+      }
+    } catch(e) {}
+
+    // 2. Filter local products
     let products = this.getProducts();
     const target = products.find(p => p.id === productId);
     if (target) {
@@ -925,10 +943,42 @@ class KasedKarimDB {
     products = products.filter(p => p.id !== productId);
     localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
 
-    this.deleteProductFromCloud(productId);
+    // 3. Multi-device cloud delete and batch overwrite
+    await this.deleteProductFromCloud(productId);
+    await this.syncAllLocalProductsToCloud();
 
+    this.recalculateAllProductSales();
     window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: { deletedId: productId } }));
     return true;
+  }
+
+  async updateProduct(productId, updatedData) {
+    let products = this.getProducts();
+    const idx = products.findIndex(p => p.id === productId);
+    if (idx === -1) return { success: false, error: "المنتج غير موجود" };
+
+    const oldProduct = products[idx];
+    this.saveWebRestorePoint(`قبل تعديل المنتج: ${oldProduct.name}`);
+
+    const updatedProduct = {
+      ...oldProduct,
+      ...updatedData,
+      id: productId, // Never change product ID
+      price: parseFloat(updatedData.price) || 0,
+      originalPrice: updatedData.originalPrice ? parseFloat(updatedData.originalPrice) : null,
+      updatedAt: Date.now()
+    };
+
+    products[idx] = updatedProduct;
+    localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(products));
+
+    // Push updated product and full batch to cloud
+    await this.sendProductToCloud(updatedProduct);
+    await this.syncAllLocalProductsToCloud();
+
+    this.recalculateAllProductSales();
+    window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: updatedProduct }));
+    return { success: true, product: updatedProduct };
   }
 
   // --------------------------------------------------------------------------
@@ -950,56 +1000,64 @@ class KasedKarimDB {
     }
   }
 
-  createOrder(customerData, cartItems) {
-    if (!cartItems || cartItems.length === 0) return null;
+  async createOrder(customerData, cartItems) {
+    if (!cartItems || cartItems.length === 0) {
+      throw new Error("سلة الطلبات فارغة");
+    }
 
-    const orders = this.getOrders();
-    const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
-    const orderId = "ORD-" + Math.floor(1000 + Math.random() * 9000);
-
-    const now = new Date();
-    const dateFormatted = `${now.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' })} - ${now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}`;
-
-    const newOrder = {
-      id: orderId,
-      timestamp: Date.now(),
-      dateFormatted: dateFormatted,
+    const payload = {
       customer: {
-        name: customerData.name || "عميل قاصد كريم",
-        phone: customerData.phone || "01000000000",
+        name: (customerData.name || "").trim(),
+        phone: (customerData.phone || "").trim(),
         city: customerData.city || "الشيخ زايد",
-        address: customerData.address || "الشيخ زايد",
-        notes: customerData.notes || ""
+        address: (customerData.address || "").trim(),
+        notes: (customerData.notes || "").trim()
       },
       items: cartItems.map(item => ({
         id: item.id,
         name: item.name,
         enName: item.enName || "",
         price: item.price,
-        qty: item.qty,
+        qty: parseInt(item.qty, 10) || 1,
         image: item.image,
         categoryName: item.categoryName || ""
-      })),
-      subtotal: subtotal,
-      total: subtotal,
-      status: "pending",
-      isRead: false
+      }))
     };
 
-    orders.unshift(newOrder);
-    this.knownOrderIds.add(orderId);
-    localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
+    // Submit order to secure server endpoint and await persistence confirmation
+    const res = await fetch("/api/orders", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "تعذر إرسال الطلب إلى الخادم السحابي");
+    }
+
+    const confirmedOrder = data.order;
+
+    // Cache locally on this device
+    try {
+      const orders = this.getOrders();
+      orders.unshift(confirmedOrder);
+      this.knownOrderIds.add(confirmedOrder.id);
+      localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(orders));
+    } catch (e) {}
 
     this.incrementSales(cartItems);
-    this.sendOrderToCloud(newOrder);
 
-    const isAdmin = typeof document !== 'undefined' && (document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot"));
+    const isAdmin = typeof document !== 'undefined' && (
+      document.body.classList.contains("is-admin-user") || !!document.getElementById("adminPageRoot")
+    );
     if (isAdmin) {
       this.playLuxuryChime();
     }
-    window.dispatchEvent(new CustomEvent("kk_new_order_placed", { detail: newOrder }));
 
-    return newOrder;
+    window.dispatchEvent(new CustomEvent("kk_new_order_placed", { detail: confirmedOrder }));
+    return confirmedOrder;
   }
 
   updateOrderStatus(orderId, newStatus) {
@@ -1165,7 +1223,7 @@ class KasedKarimDB {
     }
   }
 
-  addCategory(categoryData) {
+  async addCategory(categoryData) {
     if (!categoryData || !categoryData.name || !categoryData.name.trim()) {
       return { success: false, error: "اسم القسم إجباري" };
     }
@@ -1196,12 +1254,12 @@ class KasedKarimDB {
     window.CATEGORIES = categories;
     if (typeof CATEGORIES !== "undefined") CATEGORIES = categories;
 
-    this.sendCategoriesToCloud(categories);
+    await this.sendCategoriesToCloud(categories);
     window.dispatchEvent(new CustomEvent("kk_categories_updated", { detail: { action: "add", category: newCat } }));
     return { success: true, category: newCat };
   }
 
-  updateCategory(id, updatedData) {
+  async updateCategory(id, updatedData) {
     if (!id || id === "all") return { success: false, error: "لا يمكن تعديل هذا القسم الأساسي" };
     const categories = this.getCategories();
     const cat = categories.find(c => c.id === id);
@@ -1216,12 +1274,12 @@ class KasedKarimDB {
     window.CATEGORIES = categories;
     if (typeof CATEGORIES !== "undefined") CATEGORIES = categories;
 
-    this.sendCategoriesToCloud(categories);
+    await this.sendCategoriesToCloud(categories);
     window.dispatchEvent(new CustomEvent("kk_categories_updated", { detail: { action: "update", category: cat } }));
     return { success: true, category: cat };
   }
 
-  deleteCategory(id) {
+  async deleteCategory(id) {
     if (!id || id === "all") return { success: false, error: "لا يمكن حذف قسم الكل المعروض" };
     let categories = this.getCategories();
     const deletedCat = categories.find(c => c.id === id);
@@ -1236,7 +1294,7 @@ class KasedKarimDB {
     window.CATEGORIES = categories;
     if (typeof CATEGORIES !== "undefined") CATEGORIES = categories;
 
-    this.sendCategoriesToCloud(categories);
+    await this.sendCategoriesToCloud(categories);
     window.dispatchEvent(new CustomEvent("kk_categories_updated", { detail: { action: "delete", id } }));
     return { success: true };
   }
@@ -1278,18 +1336,11 @@ class KasedKarimDB {
 
       if (cloudCats && Array.isArray(cloudCats) && cloudCats.length > 0) {
         const localCats = this.getCategories();
-        const catMap = new Map();
-        localCats.forEach(c => catMap.set(c.id, c));
-        cloudCats.forEach(c => {
-          if (c && c.id) catMap.set(c.id, { ...catMap.get(c.id), ...c });
-        });
-
-        const merged = Array.from(catMap.values());
-        if (JSON.stringify(merged) !== JSON.stringify(localCats)) {
-          localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(merged));
-          window.CATEGORIES = merged;
-          if (typeof CATEGORIES !== "undefined") CATEGORIES = merged;
-          window.dispatchEvent(new CustomEvent("kk_categories_updated", { detail: { merged: true, categories: merged } }));
+        if (JSON.stringify(cloudCats) !== JSON.stringify(localCats)) {
+          localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(cloudCats));
+          window.CATEGORIES = cloudCats;
+          if (typeof CATEGORIES !== "undefined") CATEGORIES = cloudCats;
+          window.dispatchEvent(new CustomEvent("kk_categories_updated", { detail: { merged: false, categories: cloudCats } }));
         }
       }
     } catch (e) {}
@@ -1299,22 +1350,22 @@ class KasedKarimDB {
     const customUrl = this.getCustomCloudUrl();
     if (customUrl) {
       try {
-        fetch(`${customUrl}/categories.json`, {
+        await fetch(`${customUrl}/categories.json`, {
           method: "PUT",
           cache: "no-store",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(categories)
-        }).catch(() => null);
+        });
       } catch (e) {}
     }
 
     try {
-      fetch("/api/settings", {
+      await fetch("/api/settings", {
         method: "POST",
         cache: "no-store",
         headers: this.getCloudHeaders(),
         body: JSON.stringify({ type: "categories", categories: categories })
-      }).catch(() => null);
+      });
     } catch (e) {}
   }
 
@@ -1393,7 +1444,7 @@ class KasedKarimDB {
 
       if (cloudSettings && typeof cloudSettings === "object") {
         const localSettings = this.getSettings();
-        if (cloudSettings.updatedAt && (!localSettings.updatedAt || cloudSettings.updatedAt > localSettings.updatedAt)) {
+        if (JSON.stringify(cloudSettings) !== JSON.stringify(localSettings)) {
           const merged = { ...localSettings, ...cloudSettings, social: { ...localSettings.social, ...(cloudSettings.social || {}) } };
           localStorage.setItem(DB_KEYS.SETTINGS, JSON.stringify(merged));
           window.SHOWROOM_INFO = merged;
@@ -1418,12 +1469,12 @@ class KasedKarimDB {
     }
 
     try {
-      fetch("/api/settings", {
+      await fetch("/api/settings", {
         method: "POST",
         cache: "no-store",
         headers: this.getCloudHeaders(),
         body: JSON.stringify({ type: "settings", settings: settings })
-      }).catch(() => null);
+      });
     } catch (e) {}
   }
 
@@ -1474,23 +1525,49 @@ class KasedKarimDB {
     };
   }
 
-  downloadBackupFile(label = "نسخة احتياطية يومية") {
+  async downloadBackupFile(label = "نسخة احتياطية يومية") {
     const backupData = this.generateBackupData(label);
     const jsonStr = JSON.stringify(backupData, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10);
     const fileName = `kased-karim-backup-${dateStr}.json`;
 
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    let savedLocally = false;
+
+    // 1. Native Windows/OS "Save As" Location Picker
+    if (typeof window.showSaveFilePicker === "function") {
+      try {
+        const fileHandle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{
+            description: "ملف نسخة احتياطية لكافة بيانات المعرض (JSON)",
+            accept: { "application/json": [".json"] }
+          }]
+        });
+        const writableStream = await fileHandle.createWritable();
+        await writableStream.write(jsonStr);
+        await writableStream.close();
+        savedLocally = true;
+      } catch (err) {
+        if (err.name === "AbortError") {
+          return { success: false, canceled: true };
+        }
+        console.warn("File Picker API fallback:", err);
+      }
+    }
+
+    // 2. Standard Browser Download Fallback (Mobile / Non-supported desktop browsers)
+    if (!savedLocally) {
+      const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
 
     // Record today as having downloaded backup
     localStorage.setItem("kk_last_downloaded_backup_date", dateStr);
@@ -1539,18 +1616,18 @@ class KasedKarimDB {
           method: "PUT",
           cache: "no-store",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: newPoint.id,
-            timestamp: newPoint.timestamp,
-            dateFormatted: newPoint.dateFormatted,
-            label: newPoint.label,
-            counts: newPoint.counts,
-            totalRevenue: newPoint.totalRevenue,
-            data: backupData
-          })
+          body: JSON.stringify(newPoint)
         }).catch(() => null);
       } catch (e) {}
     }
+
+    // Always push snapshot to /api/backup so all admin devices can access it!
+    fetch("/api/backup", {
+      method: "POST",
+      cache: "no-store",
+      headers: this.getCloudHeaders(),
+      body: JSON.stringify(newPoint)
+    }).catch(() => null);
 
     window.dispatchEvent(new CustomEvent("kk_restore_points_updated"));
     return newPoint;
@@ -1567,7 +1644,7 @@ class KasedKarimDB {
     } catch (e) {}
   }
 
-  restoreFromData(backupData, syncToCloud = true) {
+  async restoreFromData(backupData, syncToCloud = true) {
     if (!backupData || typeof backupData !== "object") {
       return { success: false, error: "بيانات النسخة الاحتياطية غير صالحة" };
     }
@@ -1576,12 +1653,19 @@ class KasedKarimDB {
     this.saveWebRestorePoint("نقطة أمان تلقائية (قبل الاسترجاع)");
 
     // 1. Restore Products
-    if (Array.isArray(backupData.products) && backupData.products.length > 0) {
+    if (Array.isArray(backupData.products)) {
+      // Un-tombstone any restored product IDs so they won't be filtered out
+      const restoredIds = new Set(backupData.products.map(p => p.id));
+      try {
+        const rawDel = localStorage.getItem("kk_deleted_product_ids_v1");
+        if (rawDel) {
+          const remainingDel = JSON.parse(rawDel).filter(id => !restoredIds.has(id));
+          localStorage.setItem("kk_deleted_product_ids_v1", JSON.stringify(remainingDel));
+        }
+      } catch(e) {}
+
       localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(backupData.products));
-      if (syncToCloud) {
-        this.syncAllLocalProductsToCloud();
-      }
-      window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: { merged: true, products: backupData.products } }));
+      window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: { merged: false, products: backupData.products } }));
     }
 
     // 2. Restore Orders
@@ -1589,19 +1673,7 @@ class KasedKarimDB {
       localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(backupData.orders));
       this.knownOrderIds.clear();
       backupData.orders.forEach(o => this.knownOrderIds.add(o.id));
-      if (syncToCloud) {
-        const customUrl = this.getCustomCloudUrl();
-        if (customUrl) {
-          const mapObj = {};
-          backupData.orders.forEach(o => { mapObj[encodeURIComponent(o.id)] = o; });
-          fetch(`${customUrl}/orders.json`, {
-            method: "PUT",
-            cache: "no-store",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(mapObj)
-          }).catch(() => null);
-        }
-      }
+      this.recalculateAllProductSales();
       window.dispatchEvent(new CustomEvent("kk_orders_updated"));
     }
 
@@ -1610,25 +1682,75 @@ class KasedKarimDB {
       localStorage.setItem(DB_KEYS.CATEGORIES, JSON.stringify(backupData.categories));
       window.CATEGORIES = backupData.categories;
       if (typeof CATEGORIES !== "undefined") CATEGORIES = backupData.categories;
-      if (syncToCloud) {
-        this.sendCategoriesToCloud(backupData.categories);
-      }
-      window.dispatchEvent(new CustomEvent("kk_categories_updated"));
+      window.dispatchEvent(new CustomEvent("kk_categories_updated", { detail: { merged: false, categories: backupData.categories } }));
     }
 
     // 4. Restore Settings
     if (backupData.settings && typeof backupData.settings === "object") {
-      localStorage.setItem(DB_KEYS.SETTINGS, JSON.stringify(backupData.settings));
-      window.SHOWROOM_INFO = backupData.settings;
-      if (typeof SHOWROOM_INFO !== "undefined") SHOWROOM_INFO = backupData.settings;
-      if (syncToCloud) {
-        this.sendSettingsToCloud(backupData.settings);
+      const safeSettings = { ...backupData.settings, updatedAt: Date.now() };
+      localStorage.setItem(DB_KEYS.SETTINGS, JSON.stringify(safeSettings));
+      window.SHOWROOM_INFO = safeSettings;
+      if (typeof SHOWROOM_INFO !== "undefined") SHOWROOM_INFO = safeSettings;
+      window.dispatchEvent(new CustomEvent("kk_settings_updated", { detail: safeSettings }));
+    }
+
+    // 5. Cloud Synchronization (Multi-Device Ground Truth Overwrite)
+    let cloudSynced = false;
+    if (syncToCloud) {
+      const cloudHeaders = this.getCloudHeaders();
+
+      // Primary: Atomic multi-device cloud restore via /api/backup
+      try {
+        const backupRes = await fetch("/api/backup", {
+          method: "POST",
+          cache: "no-store",
+          headers: cloudHeaders,
+          body: JSON.stringify({
+            action: "restore",
+            data: {
+              products: backupData.products || [],
+              orders: backupData.orders || [],
+              categories: backupData.categories || [],
+              settings: backupData.settings ? { ...backupData.settings, updatedAt: Date.now() } : {}
+            }
+          })
+        });
+        if (backupRes.ok) {
+          cloudSynced = true;
+        }
+      } catch (errBackup) {
+        console.warn("Restore backup endpoint error:", errBackup);
       }
-      window.dispatchEvent(new CustomEvent("kk_settings_updated", { detail: backupData.settings }));
+
+      // Secondary: Direct Batch endpoints confirmation
+      try {
+        const batchTasks = [];
+        if (Array.isArray(backupData.products) && backupData.products.length > 0) {
+          batchTasks.push(this.syncAllLocalProductsToCloud());
+        }
+        if (Array.isArray(backupData.orders)) {
+          batchTasks.push(
+            fetch("/api/orders", {
+              method: "PUT",
+              cache: "no-store",
+              headers: cloudHeaders,
+              body: JSON.stringify({ orders: backupData.orders })
+            })
+          );
+        }
+        if (Array.isArray(backupData.categories) && backupData.categories.length > 0) {
+          batchTasks.push(this.sendCategoriesToCloud(backupData.categories));
+        }
+        if (backupData.settings && typeof backupData.settings === "object") {
+          batchTasks.push(this.sendSettingsToCloud({ ...backupData.settings, updatedAt: Date.now() }));
+        }
+        await Promise.allSettled(batchTasks);
+      } catch (e) {}
     }
 
     return {
       success: true,
+      cloudSynced,
       restoredCounts: {
         products: backupData.products?.length || 0,
         orders: backupData.orders?.length || 0,
@@ -1637,13 +1759,13 @@ class KasedKarimDB {
     };
   }
 
-  restoreFromWebPoint(pointId) {
+  async restoreFromWebPoint(pointId) {
     const points = this.getWebRestorePoints();
     const point = points.find(p => p.id === pointId);
     if (!point || !point.data) {
       return { success: false, error: "نقطة الاسترجاع غير موجودة" };
     }
-    return this.restoreFromData(point.data, true);
+    return await this.restoreFromData(point.data, true);
   }
 
   deleteWebRestorePoint(pointId) {
@@ -1654,15 +1776,15 @@ class KasedKarimDB {
     return true;
   }
 
-  restoreFactoryDefaults() {
+  async restoreFactoryDefaults() {
     this.saveWebRestorePoint("قبل استعادة ضبط المصنع");
 
     const defaultProducts = [...INITIAL_PRODUCTS];
-    const defaultOrders = [...SEED_ORDERS];
+    const defaultOrders = [];
     const defaultCategories = typeof INITIAL_CATEGORIES !== "undefined" ? [...INITIAL_CATEGORIES] : [...CATEGORIES];
     const defaultSettings = typeof INITIAL_SHOWROOM_INFO !== "undefined" ? { ...INITIAL_SHOWROOM_INFO } : { ...SHOWROOM_INFO };
 
-    return this.restoreFromData({
+    return await this.restoreFromData({
       products: defaultProducts,
       orders: defaultOrders,
       categories: defaultCategories,
