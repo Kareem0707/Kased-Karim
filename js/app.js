@@ -1358,49 +1358,12 @@ let lightingCeremonyTimer = null;
 
 function initLightingCeremony() {
   const overlay = document.getElementById("lightingCeremonyOverlay");
-  const flash = document.getElementById("lightingFlashBurst");
-  if (!overlay) return;
-
-  // Ensure body is in initial ceremony state
-  document.body.classList.add("ceremony-in-progress");
-  document.body.classList.remove("ceremony-illuminated");
-  overlay.classList.remove("ignited");
-  if (flash) flash.classList.remove("flash-active");
-
-  // Allow immediate skip by clicking anywhere
-  overlay.onclick = () => {
-    igniteLightingCeremony();
-  };
-
-  // Brief suspenseful darkness (320ms) then sudden illumination
-  if (lightingCeremonyTimer) clearTimeout(lightingCeremonyTimer);
-  lightingCeremonyTimer = setTimeout(() => {
-    igniteLightingCeremony();
-  }, 320);
-
-  function igniteLightingCeremony() {
-    if (lightingCeremonyTimer) clearTimeout(lightingCeremonyTimer);
-    if (overlay.classList.contains("ignited")) return;
-
-    // 1. Fire luminous flash blast
-    if (flash) {
-      flash.classList.remove("flash-active");
-      void flash.offsetWidth; // Force CSS reflow
-      flash.classList.add("flash-active");
-    }
-
-    // 2. Dissolve the dark overlay
+  if (overlay) {
+    overlay.style.display = "none";
     overlay.classList.add("ignited");
-
-    // 3. Illuminate palace, chandelier, and trigger staggered text reveals
-    document.body.classList.remove("ceremony-in-progress");
-    document.body.classList.add("ceremony-illuminated");
-
-    // 4. Clean up overlay from view once animation finishes
-    setTimeout(() => {
-      overlay.style.display = "none";
-    }, 950);
   }
+  document.body.classList.remove("ceremony-in-progress");
+  document.body.classList.add("ceremony-illuminated");
 }
 
 // Click outside listener to close sub-bar cleanly

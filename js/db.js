@@ -2159,7 +2159,6 @@ class KasedKarimDB {
       return [];
     }
   }
-  }
 }
 
 // Global Singleton Database Instance

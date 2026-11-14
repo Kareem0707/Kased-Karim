@@ -179,6 +179,7 @@ body::before {
    ========================================================================== */
 
 .lighting-ceremony-overlay {
+  display: none !important;
   position: fixed;
   inset: 0;
   width: 100vw;
@@ -186,14 +187,24 @@ body::before {
   height: 100dvh;
   background: #060709;
   z-index: 999999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  overflow: hidden;
-  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.75s ease;
-  pointer-events: all;
-  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body.ceremony-in-progress {
+  overflow: auto;
+}
+
+body.ceremony-in-progress .hero-architectural-bg {
+  filter: brightness(1) contrast(1) saturate(1) !important;
+  transform: none !important;
+}
+
+body.ceremony-in-progress .site-header,
+body.ceremony-in-progress .top-bar {
+  transform: translateY(0) !important;
+  opacity: 1 !important;
 }
 
 .lighting-ceremony-overlay.ignited {
