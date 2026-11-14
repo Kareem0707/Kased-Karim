@@ -96,19 +96,20 @@ async function checkAdminSecurityGate() {
   }
 }
 
+let otpTimerInterval = null;
+
 async function handleAdminPinSubmit(e) {
   if (e) e.preventDefault();
   const pinInput = document.getElementById("adminPinInput");
   const errorEl = document.getElementById("adminPinError");
-  const gateEl = document.getElementById("adminAuthGate");
-  const rootEl = document.getElementById("adminPageRoot");
-  const submitBtn = document.querySelector("#adminPinForm button[type='submit']");
+  const errorTextEl = document.getElementById("adminPinErrorText") || errorEl;
+  const submitBtn = document.getElementById("adminPinSubmitBtn") || document.querySelector("#adminPinForm button[type='submit']");
 
   if (!pinInput) return;
   const val = pinInput.value.trim();
   if (!val) {
     if (errorEl) {
-      errorEl.textContent = "يرجى كتابة رمز الدخول";
+      if (errorTextEl) errorTextEl.textContent = "يرجى كتابة رمز المرور الرئيسي";
       errorEl.style.display = "flex";
     }
     return;
@@ -117,7 +118,7 @@ async function handleAdminPinSubmit(e) {
   const originalBtnHtml = submitBtn ? submitBtn.innerHTML : "";
   if (submitBtn) {
     submitBtn.disabled = true;
-    submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>جارٍ التحقق الأمني...</span>`;
+    submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>جارٍ إرسال كود الأمان للجيميل...</span>`;
   }
 
   try {
@@ -129,28 +130,36 @@ async function handleAdminPinSubmit(e) {
 
     const data = await res.json();
 
-    if (res.ok && data.success && data.token) {
-      sessionStorage.setItem(ADMIN_TOKEN_KEY, data.token);
-      localStorage.setItem(ADMIN_TOKEN_KEY, data.token);
-
+    if (res.ok && data.success) {
       if (errorEl) errorEl.style.display = "none";
-      if (gateEl) gateEl.style.display = "none";
-      if (rootEl) rootEl.style.display = "block";
-      document.body.classList.add("is-admin-user");
 
-      showToast("✅ مرحباً بكم في لوحة تحكم معرض قاصد كريم");
+      // Case A: 2FA OTP Step Required (Owner requested 6-digit email security)
+      if (data.step === "otp_required") {
+        const step1 = document.getElementById("adminAuthStep1");
+        const step2 = document.getElementById("adminAuthStep2");
+        if (step1) step1.style.display = "none";
+        if (step2) step2.style.display = "block";
 
-      if (window.KK_DB) {
-        window.KK_DB.markAllOrdersAsRead();
-        window.KK_DB.syncFromCloud(false);
+        const maskedEmailEl = document.getElementById("adminMaskedEmailDisplay");
+        if (maskedEmailEl && data.emailMasked) {
+          maskedEmailEl.textContent = data.emailMasked;
+        }
+
+        // Initialize and focus 6-digit OTP boxes
+        initOtpInputs();
+        startOtpCountdownTimer(600); // 10 minutes
+
+        showToast("📧 تم إرسال كود التحقق السداسي إلى بريدك الإلكتروني بنجاح");
+        return;
       }
-      updateAdminHeaderBadge();
-      renderAdminOverview();
-      renderAdminOrders();
-      renderAdminInventory();
+
+      // Case B: Direct Token Authorized (Emergency bypass)
+      if (data.token) {
+        completeAdminAuthSuccess(data.token);
+      }
     } else {
       if (errorEl) {
-        errorEl.textContent = data.error || "رمز الدخول غير صحيح";
+        if (errorTextEl) errorTextEl.textContent = data.error || "رمز الدخول غير صحيح";
         errorEl.style.display = "flex";
       }
       pinInput.value = "";
@@ -164,6 +173,208 @@ async function handleAdminPinSubmit(e) {
       submitBtn.disabled = false;
       submitBtn.innerHTML = originalBtnHtml;
     }
+  }
+}
+
+async function handleAdminOtpSubmit(e) {
+  if (e) e.preventDefault();
+  const digitBoxes = document.querySelectorAll(".otp-digit-box");
+  const errorEl = document.getElementById("adminOtpError");
+  const errorTextEl = document.getElementById("adminOtpErrorText") || errorEl;
+  const submitBtn = document.getElementById("adminOtpSubmitBtn");
+
+  let code = "";
+  digitBoxes.forEach(box => {
+    code += box.value.trim();
+  });
+
+  if (code.length !== 6) {
+    if (errorEl) {
+      if (errorTextEl) errorTextEl.textContent = "يرجى كتابة رمز الأمان السداسي كاملاً (6 أرقام)";
+      errorEl.style.display = "flex";
+    }
+    return;
+  }
+
+  const originalBtnHtml = submitBtn ? submitBtn.innerHTML : "";
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>جارٍ مطابقة الرمز ومصادقة الجهاز...</span>`;
+  }
+
+  try {
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "verify_otp", otp: code })
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.success && data.token) {
+      if (errorEl) errorEl.style.display = "none";
+      if (otpTimerInterval) clearInterval(otpTimerInterval);
+      completeAdminAuthSuccess(data.token);
+    } else {
+      if (errorEl) {
+        if (errorTextEl) errorTextEl.textContent = data.error || "رمز التحقق غير صحيح أو انتهت صلاحيته";
+        errorEl.style.display = "flex";
+      }
+      // Shake animation on OTP boxes
+      const container = document.getElementById("otpBoxesContainer");
+      if (container) {
+        container.style.animation = "adminShake 0.4s ease";
+        setTimeout(() => { if (container) container.style.animation = ""; }, 450);
+      }
+      digitBoxes.forEach(b => b.value = "");
+      if (digitBoxes[0]) digitBoxes[0].focus();
+      showToast(data.error || "⚠️ رمز التحقق غير صحيح");
+    }
+  } catch (err) {
+    showToast("⚠️ تعذر التحقق من رمز الأمان سحابياً");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHtml;
+    }
+  }
+}
+
+function completeAdminAuthSuccess(token) {
+  sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+  localStorage.setItem(ADMIN_TOKEN_KEY, token);
+  localStorage.setItem("kk_admin_authorized", "true");
+
+  const gateEl = document.getElementById("adminAuthGate");
+  const rootEl = document.getElementById("adminPageRoot");
+  if (gateEl) gateEl.style.display = "none";
+  if (rootEl) rootEl.style.display = "block";
+  document.body.classList.add("is-admin-user");
+
+  showToast("✅ مرحباً بكم في لوحة تحكم معرض قاصد كريم (جلسة مشفرة)");
+
+  if (window.KK_DB) {
+    window.KK_DB.markAllOrdersAsRead();
+    window.KK_DB.syncFromCloud(false);
+  }
+  updateAdminHeaderBadge();
+  renderAdminOverview();
+  renderAdminOrders();
+  renderAdminInventory();
+  renderAdminCategories();
+  renderAdminBackupView();
+}
+
+function initOtpInputs() {
+  const boxes = document.querySelectorAll(".otp-digit-box");
+  if (!boxes || boxes.length === 0) return;
+
+  boxes.forEach((box, idx) => {
+    box.value = "";
+    box.oninput = (e) => {
+      const val = e.target.value.replace(/[^0-9]/g, "");
+      e.target.value = val ? val[val.length - 1] : "";
+      if (e.target.value && idx < boxes.length - 1) {
+        boxes[idx + 1].focus();
+      }
+      // If all 6 digits entered, auto-submit
+      let fullCode = "";
+      boxes.forEach(b => fullCode += b.value);
+      if (fullCode.length === 6) {
+        handleAdminOtpSubmit();
+      }
+    };
+
+    box.onkeydown = (e) => {
+      if (e.key === "Backspace" && !box.value && idx > 0) {
+        boxes[idx - 1].focus();
+      }
+    };
+
+    box.onpaste = (e) => {
+      e.preventDefault();
+      const pasteData = (e.clipboardData || window.clipboardData).getData("text").replace(/[^0-9]/g, "");
+      if (pasteData) {
+        for (let i = 0; i < boxes.length; i++) {
+          boxes[i].value = pasteData[i] || "";
+        }
+        if (pasteData.length >= 6) {
+          boxes[5].focus();
+          handleAdminOtpSubmit();
+        } else {
+          const nextIdx = Math.min(pasteData.length, boxes.length - 1);
+          boxes[nextIdx].focus();
+        }
+      }
+    };
+  });
+
+  setTimeout(() => {
+    if (boxes[0]) boxes[0].focus();
+  }, 100);
+}
+
+function startOtpCountdownTimer(durationSec = 600) {
+  if (otpTimerInterval) clearInterval(otpTimerInterval);
+  let remaining = durationSec;
+  const timerEl = document.getElementById("otpCountdownTimer");
+
+  const update = () => {
+    const mins = Math.floor(remaining / 60);
+    const secs = remaining % 60;
+    if (timerEl) {
+      timerEl.textContent = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+    if (remaining <= 0) {
+      clearInterval(otpTimerInterval);
+      if (timerEl) timerEl.textContent = "منتهي الصلاحية";
+    }
+    remaining--;
+  };
+
+  update();
+  otpTimerInterval = setInterval(update, 1000);
+}
+
+async function resendAdminOtp() {
+  const pinInput = document.getElementById("adminPinInput");
+  const val = pinInput ? pinInput.value.trim() : "";
+  if (!val) {
+    backToStep1();
+    return;
+  }
+  showToast("⏳ جاري توليد وإرسال رمز أمان جديد للجيميل...");
+  try {
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: val })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      startOtpCountdownTimer(600);
+      showToast("📧 تم إرسال كود أمان جديد إلى بريدك الإلكتروني بنجاح");
+      const boxes = document.querySelectorAll(".otp-digit-box");
+      boxes.forEach(b => b.value = "");
+      if (boxes[0]) boxes[0].focus();
+    } else {
+      showToast(data.error || "⚠️ تعذر إعادة الإرسال");
+    }
+  } catch (e) {
+    showToast("⚠️ تعذر الاتصال بالسيرفر");
+  }
+}
+
+function backToStep1() {
+  if (otpTimerInterval) clearInterval(otpTimerInterval);
+  const step1 = document.getElementById("adminAuthStep1");
+  const step2 = document.getElementById("adminAuthStep2");
+  if (step1) step1.style.display = "block";
+  if (step2) step2.style.display = "none";
+  const pinInput = document.getElementById("adminPinInput");
+  if (pinInput) {
+    pinInput.focus();
+    pinInput.select();
   }
 }
 
@@ -822,18 +1033,15 @@ async function deleteProduct(productId) {
 }
 
 // ----------------------------------------------------------------------------
-// 5.1 EDIT PRODUCT CONTROLLERS & MODAL HANDLERS
+// 5.1 DEDICATED LUXURY PRODUCT EDITOR STUDIO & CLOUD SYNC CONTROLLER
 // ----------------------------------------------------------------------------
-function openEditProductModal(productId) {
+function openProductEditorPage(productId) {
   if (!window.KK_DB) return;
   const product = window.KK_DB.getProductById(productId);
   if (!product) {
     showToast("⚠️ لم يتم العثور على المنتج المطلوب");
     return;
   }
-
-  const modal = document.getElementById("adminEditProductModal");
-  if (!modal) return;
 
   // Populate Categories Select
   const catSelect = document.getElementById("editProductCategory");
@@ -846,33 +1054,48 @@ function openEditProductModal(productId) {
     `).join("");
   }
 
+  // Display badges & title
+  const displayNameEl = document.getElementById("editorProductDisplayName");
+  if (displayNameEl) displayNameEl.textContent = product.name || "";
+  const idBadgeEl = document.getElementById("editorProductIdBadge");
+  if (idBadgeEl) idBadgeEl.textContent = `ID: ${product.id}`;
+
   // Populate Basic Fields
-  document.getElementById("editProductId").value = product.id;
-  document.getElementById("editProductName").value = product.name || "";
-  document.getElementById("editProductEnName").value = product.enName || "";
-  document.getElementById("editProductStyle").value = product.style || "";
-  document.getElementById("editProductPrice").value = product.price || 0;
-  document.getElementById("editProductOriginalPrice").value = product.originalPrice || "";
-  document.getElementById("editProductWarranty").value = product.warranty || "5 سنوات";
-  document.getElementById("editProductDescription").value = product.description || "";
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = (val !== undefined && val !== null) ? val : "";
+  };
+
+  setVal("editProductId", product.id);
+  setVal("editProductName", product.name);
+  setVal("editProductEnName", product.enName);
+  setVal("editProductStyle", product.style);
+  setVal("editProductPrice", product.price || 0);
+  setVal("editProductOriginalPrice", product.originalPrice || "");
+  setVal("editProductWarranty", product.warranty || "5 سنوات ضمان معتمد");
+  setVal("editProductDescription", product.description || "");
 
   // Badges
-  document.getElementById("editProductIsNew").checked = !!product.isNew;
-  document.getElementById("editProductIsExclusive").checked = !!product.isExclusive;
-  document.getElementById("editProductIsBestSeller").checked = !!product.isBestSeller;
+  const setChk = (id, checked) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = !!checked;
+  };
+  setChk("editProductIsNew", product.isNew);
+  setChk("editProductIsExclusive", product.isExclusive);
+  setChk("editProductIsBestSeller", product.isBestSeller);
 
   // Specifications
   const specs = product.specs || {};
-  document.getElementById("editProductDimensions").value = specs.dimensions || "";
-  document.getElementById("editProductMaterial").value = specs.material || "";
-  document.getElementById("editProductColorTemp").value = specs.colorTemp || "";
-  document.getElementById("editProductWattage").value = specs.wattage || "";
+  setVal("editProductDimensions", specs.dimensions || "");
+  setVal("editProductMaterial", specs.material || "");
+  setVal("editProductColorTemp", specs.colorTemp || "");
+  setVal("editProductWattage", specs.wattage || "");
 
   // Images
   const imgUrl = product.image || "";
   const secImgUrl = product.secondaryImage || "";
-  document.getElementById("editProductImageUrl").value = imgUrl;
-  document.getElementById("editProductSecondaryImageUrl").value = secImgUrl;
+  setVal("editProductImageUrl", imgUrl);
+  setVal("editProductSecondaryImageUrl", secImgUrl);
 
   const previewEl = document.getElementById("editProductImagePreview");
   const placeholderEl = document.getElementById("editProductImagePlaceholder");
@@ -900,36 +1123,146 @@ function openEditProductModal(productId) {
     }
   }
 
-  modal.classList.add("active");
-  document.body.style.overflow = "hidden";
+  // Update Live Preview Card
+  updateLiveEditorPreview();
+
+  // Switch to dedicated studio pane and scroll to top
+  switchAdminTab("editProduct");
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function closeEditProductModal() {
-  const modal = document.getElementById("adminEditProductModal");
-  if (modal) modal.classList.remove("active");
-  document.body.style.overflow = "";
+// Keep backwards-compatible alias so inventory table buttons work flawlessly
+window.openEditProductModal = openProductEditorPage;
+
+function closeProductEditor() {
+  // Return smoothly to the inventory tab
+  const invTabBtn = document.querySelectorAll(".admin-tab-btn")[3] || document.querySelector('[onclick*="inventory"]');
+  switchAdminTab("inventory", invTabBtn);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+window.closeEditProductModal = closeProductEditor;
+
+function resetEditSecondaryImage(e) {
+  if (e) e.preventDefault();
+  const secInput = document.getElementById("editProductSecondaryImageUrl");
+  if (secInput) secInput.value = "";
+  const secPreview = document.getElementById("editProductSecondaryImagePreview");
+  const secPlaceholder = document.getElementById("editProductSecondaryImagePlaceholder");
+  if (secPreview) secPreview.style.display = "none";
+  if (secPlaceholder) secPlaceholder.style.display = "block";
+  updateLiveEditorPreview();
+  showToast("تم إزالة الصورة الإضافية للقطعة");
+}
+
+function updateLiveEditorPreview() {
+  const name = document.getElementById("editProductName")?.value?.trim() || "اسم وحدة الإضاءة";
+  const enName = document.getElementById("editProductEnName")?.value?.trim() || "";
+  const catSelect = document.getElementById("editProductCategory");
+  const catName = catSelect?.options[catSelect.selectedIndex]?.text?.trim() || "القسم الرئيسي";
+  const price = parseFloat(document.getElementById("editProductPrice")?.value) || 0;
+  const origPriceVal = document.getElementById("editProductOriginalPrice")?.value?.trim();
+  const origPrice = origPriceVal ? parseFloat(origPriceVal) : null;
+  const imgUrl = document.getElementById("editProductImageUrl")?.value?.trim() || "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=800&q=80";
+
+  const isNew = document.getElementById("editProductIsNew")?.checked;
+  const isExclusive = document.getElementById("editProductIsExclusive")?.checked;
+  const isBestSeller = document.getElementById("editProductIsBestSeller")?.checked;
+
+  const dims = document.getElementById("editProductDimensions")?.value?.trim();
+  const material = document.getElementById("editProductMaterial")?.value?.trim();
+
+  // Update image preview & live card
+  const previewLiveImg = document.getElementById("previewLiveImg");
+  if (previewLiveImg) previewLiveImg.src = imgUrl;
+
+  const mainPreviewImg = document.getElementById("editProductImagePreview");
+  const mainPlaceholder = document.getElementById("editProductImagePlaceholder");
+  if (mainPreviewImg && mainPlaceholder) {
+    if (imgUrl) {
+      mainPreviewImg.src = imgUrl;
+      mainPreviewImg.style.display = "block";
+      mainPlaceholder.style.display = "none";
+    } else {
+      mainPreviewImg.style.display = "none";
+      mainPlaceholder.style.display = "block";
+    }
+  }
+
+  // Update titles & category
+  const titleEl = document.getElementById("previewLiveTitle");
+  if (titleEl) titleEl.textContent = name;
+  const enTitleEl = document.getElementById("previewLiveEnTitle");
+  if (enTitleEl) {
+    enTitleEl.textContent = enName;
+    enTitleEl.style.display = enName ? "block" : "none";
+  }
+  const catEl = document.getElementById("previewLiveCat");
+  if (catEl) catEl.textContent = catName;
+
+  // Update specs preview
+  const specsEl = document.getElementById("previewLiveSpecs");
+  if (specsEl) {
+    const specParts = [];
+    if (dims) specParts.push(`الأبعاد: ${dims}`);
+    if (material) specParts.push(`الخامة: ${material}`);
+    specsEl.textContent = specParts.length > 0 ? specParts.join(" • ") : "المواصفات: تصميم فندقي فاخر";
+  }
+
+  // Update price and discount
+  const priceEl = document.getElementById("previewLivePrice");
+  if (priceEl) priceEl.textContent = `${formatPrice(price)} ج.م`;
+
+  const origPriceEl = document.getElementById("previewLiveOriginalPrice");
+  const discountPillEl = document.getElementById("previewLiveDiscountPill");
+  if (origPrice && origPrice > price) {
+    if (origPriceEl) {
+      origPriceEl.textContent = `${formatPrice(origPrice)} ج.م`;
+      origPriceEl.style.display = "inline";
+    }
+    if (discountPillEl) {
+      const discountPct = Math.round(((origPrice - price) / origPrice) * 100);
+      discountPillEl.textContent = `خصم ${discountPct}%`;
+      discountPillEl.style.display = "inline-block";
+    }
+  } else {
+    if (origPriceEl) origPriceEl.style.display = "none";
+    if (discountPillEl) discountPillEl.style.display = "none";
+  }
+
+  // Update badges
+  const badgesWrap = document.getElementById("previewBadgesWrap");
+  if (badgesWrap) {
+    let badgesHtml = "";
+    if (isNew) badgesHtml += `<span class="badge-new" style="background: #10B981; color: #fff; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.72rem; font-weight: 800;">جديد 2026</span>`;
+    if (isExclusive) badgesHtml += `<span class="badge-exclusive" style="background: #D97706; color: #fff; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.72rem; font-weight: 800;">حصري</span>`;
+    if (isBestSeller) badgesHtml += `<span class="badge-bestseller" style="background: #DC2626; color: #fff; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.72rem; font-weight: 800;">الأكثر طلباً</span>`;
+    badgesWrap.innerHTML = badgesHtml;
+  }
 }
 
 async function handleEditProductSubmit(e) {
   if (e) e.preventDefault();
-  const form = document.getElementById("adminEditProductForm");
-  if (!form || !window.KK_DB) return;
+  if (!window.KK_DB) return;
 
-  const id = document.getElementById("editProductId").value;
-  const name = document.getElementById("editProductName").value.trim();
+  const id = document.getElementById("editProductId")?.value;
+  const name = document.getElementById("editProductName")?.value?.trim();
   const catSelect = document.getElementById("editProductCategory");
-  const category = catSelect.value;
-  const categoryName = catSelect.options[catSelect.selectedIndex]?.text?.trim() || "";
-  const price = parseFloat(document.getElementById("editProductPrice").value) || 0;
-  const originalPriceVal = document.getElementById("editProductOriginalPrice").value.trim();
+  const category = catSelect?.value;
+  const categoryName = catSelect?.options[catSelect.selectedIndex]?.text?.trim() || "";
+  const price = parseFloat(document.getElementById("editProductPrice")?.value) || 0;
+  const originalPriceVal = document.getElementById("editProductOriginalPrice")?.value?.trim();
   const originalPrice = originalPriceVal ? parseFloat(originalPriceVal) : null;
-  const warranty = document.getElementById("editProductWarranty").value.trim() || "5 سنوات ضمان معتمد";
-  const image = document.getElementById("editProductImageUrl").value.trim() || "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=800&q=80";
-  const secondaryImage = document.getElementById("editProductSecondaryImageUrl").value.trim();
-  const description = document.getElementById("editProductDescription").value.trim();
-  const enName = document.getElementById("editProductEnName").value.trim();
-  const style = document.getElementById("editProductStyle").value.trim();
+  const warranty = document.getElementById("editProductWarranty")?.value?.trim() || "5 سنوات ضمان معتمد";
+  const image = document.getElementById("editProductImageUrl")?.value?.trim() || "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=800&q=80";
+  const secondaryImage = document.getElementById("editProductSecondaryImageUrl")?.value?.trim();
+  const description = document.getElementById("editProductDescription")?.value?.trim();
+  const enName = document.getElementById("editProductEnName")?.value?.trim();
+  const style = document.getElementById("editProductStyle")?.value?.trim();
 
+  if (!id) {
+    showToast("⚠️ لم يتم تحديد معرّف القطعة");
+    return;
+  }
   if (!name) {
     showToast("⚠️ يرجى إدخال اسم القطعة");
     return;
@@ -947,28 +1280,44 @@ async function handleEditProductSubmit(e) {
     image,
     secondaryImage,
     description,
-    isNew: document.getElementById("editProductIsNew").checked,
-    isExclusive: document.getElementById("editProductIsExclusive").checked,
-    isBestSeller: document.getElementById("editProductIsBestSeller").checked,
+    isNew: !!document.getElementById("editProductIsNew")?.checked,
+    isExclusive: !!document.getElementById("editProductIsExclusive")?.checked,
+    isBestSeller: !!document.getElementById("editProductIsBestSeller")?.checked,
     specs: {
-      dimensions: document.getElementById("editProductDimensions").value.trim(),
-      material: document.getElementById("editProductMaterial").value.trim(),
-      colorTemp: document.getElementById("editProductColorTemp").value.trim(),
-      wattage: document.getElementById("editProductWattage").value.trim()
+      dimensions: document.getElementById("editProductDimensions")?.value?.trim() || "",
+      material: document.getElementById("editProductMaterial")?.value?.trim() || "",
+      colorTemp: document.getElementById("editProductColorTemp")?.value?.trim() || "",
+      wattage: document.getElementById("editProductWattage")?.value?.trim() || ""
     }
   };
 
+  const saveBtn = document.getElementById("saveProductEditorBtn");
+  const originalSaveBtnHtml = saveBtn ? saveBtn.innerHTML : "";
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>جارٍ الحفظ والمزامنة السحابية...</span>`;
+  }
+
   showToast("⏳ جاري حفظ وتطبيق تعديلات المنتج ومزامنتها سحابياً...");
 
-  const res = await window.KK_DB.updateProduct(id, updatedData);
-  if (res && res.success) {
-    showToast("✅ تم حفظ وتطبيق تعديلات المنتج ومزامنتها سحابياً بنجاح!");
-    closeEditProductModal();
-    renderAdminOverview();
-    renderAdminInventory();
-    renderAdminBackupView();
-  } else {
-    showToast(`⚠️ ${res.error || "تعذر حفظ التعديلات"}`);
+  try {
+    const res = await window.KK_DB.updateProduct(id, updatedData);
+    if (res && res.success) {
+      showToast("✅ تم حفظ وتطبيق تعديلات المنتج ومزامنتها سحابياً بنجاح!");
+      closeProductEditor();
+      renderAdminOverview();
+      renderAdminInventory();
+      renderAdminBackupView();
+    } else {
+      showToast(`⚠️ ${res?.error || "تعذر حفظ التعديلات"}`);
+    }
+  } catch (err) {
+    showToast("⚠️ حدث خطأ أثناء المزامنة السحابية");
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = originalSaveBtnHtml;
+    }
   }
 }
 
@@ -1002,15 +1351,7 @@ async function handleEditImageUpload(file, isSecondary = false) {
   }
 }
 
-function resetEditSecondaryImage(e) {
-  if (e) e.stopPropagation();
-  const input = document.getElementById("editProductSecondaryImageUrl");
-  const preview = document.getElementById("editProductSecondaryImagePreview");
-  const placeholder = document.getElementById("editProductSecondaryImagePlaceholder");
-  if (input) input.value = "";
-  if (preview) { preview.src = ""; preview.style.display = "none"; }
-  if (placeholder) placeholder.style.display = "block";
-}
+
 
 function exportCatalogData() {
   if (!window.KK_DB) return;

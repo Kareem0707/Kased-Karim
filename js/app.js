@@ -46,6 +46,7 @@ function initApp() {
   setupCategoryTabsScroll();
   updateCartUI();
   handleHeaderScroll();
+  checkAndDisplayAdminHeaderIcon();
 }
 
 // 1. Load Products from Database Engine
@@ -946,6 +947,69 @@ function setupEventListeners() {
   window.addEventListener("kk_settings_updated", () => {
     applyDynamicSettings();
   });
+
+  // Real-time Listeners for Orders & Persistent Admin Header Icon
+  window.addEventListener("kk_orders_updated", () => {
+    checkAndDisplayAdminHeaderIcon();
+  });
+
+  window.addEventListener("kk_new_order_placed", () => {
+    checkAndDisplayAdminHeaderIcon();
+  });
+
+  // Secret Admin Device Link: 5 clicks on logo activates executive shield button
+  let logoClickCount = 0;
+  let logoTimer = null;
+  document.querySelectorAll(".brand-link, .top-bar-brand, .brand-title-en").forEach(logo => {
+    logo.addEventListener("click", () => {
+      logoClickCount++;
+      clearTimeout(logoTimer);
+      logoTimer = setTimeout(() => { logoClickCount = 0; }, 2500);
+      if (logoClickCount >= 5) {
+        logoClickCount = 0;
+        localStorage.setItem("kk_admin_authorized", "true");
+        checkAndDisplayAdminHeaderIcon();
+        if (typeof showToast === "function") {
+          showToast("🛡️ تم إظهار وتثبيت أيقونة الإدارة التنفيذية في الهيدر بنجاح ✓");
+        }
+      }
+    });
+  });
+}
+
+// ----------------------------------------------------------------------------
+// PERSISTENT EXECUTIVE ADMIN HEADER BUTTON CONTROLLER
+// ----------------------------------------------------------------------------
+function checkAndDisplayAdminHeaderIcon() {
+  const adminBtn = document.getElementById("adminHeaderBtn");
+  const adminBadge = document.getElementById("adminHeaderBadge");
+  if (!adminBtn) return;
+
+  const token = localStorage.getItem("kk_admin_token") || sessionStorage.getItem("kk_admin_token");
+  const isAuth = !!token || localStorage.getItem("kk_admin_authorized") === "true";
+
+  if (isAuth) {
+    adminBtn.style.display = "inline-flex";
+    document.body.classList.add("is-admin-device");
+
+    const unreadCount = window.KK_DB && typeof window.KK_DB.getUnreadOrdersCount === "function"
+      ? window.KK_DB.getUnreadOrdersCount()
+      : 0;
+
+    if (adminBadge) {
+      adminBadge.textContent = unreadCount;
+      adminBadge.style.display = unreadCount > 0 ? "flex" : "none";
+    }
+
+    if (unreadCount > 0) {
+      adminBtn.classList.add("has-new-orders");
+    } else {
+      adminBtn.classList.remove("has-new-orders");
+    }
+  } else {
+    adminBtn.style.display = "none";
+    adminBtn.classList.remove("has-new-orders");
+  }
 }
 
 // ----------------------------------------------------------------------------

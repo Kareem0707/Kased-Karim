@@ -31,39 +31,92 @@
 <body class="admin-page-body">
 
   <!-- ====================================================================
-       ADMIN PIN SECURITY GATE (بوابة الدخول السرية الخاصة بالمديرين)
+       EXECUTIVE 2-FACTOR AUTHENTICATION (2FA) GATEWAY (بوابة الإدارة المشفرة)
        ==================================================================== -->
   <div id="adminAuthGate" class="admin-auth-overlay" role="dialog" aria-modal="true" aria-labelledby="adminAuthTitle" style="display: none;">
     <div class="admin-auth-card">
-      <div class="admin-auth-emblem">
-        <i class="fas fa-shield-halved"></i>
-      </div>
-      <h2 class="admin-auth-title" id="adminAuthTitle">بوابة الإدارة التنفيذية</h2>
-      <div class="admin-auth-subtitle">معرض قاصد كريم للإضاءة الفاخرة • الشيخ زايد</div>
       
-      <p class="admin-auth-desc">
-        هذه الصفحة مخصصة لمديري المعرض فقط ومحمية بتشفير سحابي. يرجى إدخال رمز الدخول السري:
-      </p>
+      <!-- STEP 1: MASTER PASSWORD VERIFICATION -->
+      <div id="adminAuthStep1">
+        <div class="admin-auth-emblem">
+          <i class="fas fa-shield-halved"></i>
+        </div>
+        <h2 class="admin-auth-title" id="adminAuthTitle">بوابة الإدارة التنفيذية</h2>
+        <div class="admin-auth-subtitle">معرض قاصد كريم للإضاءة الفاخرة • الشيخ زايد</div>
+        
+        <p class="admin-auth-desc">
+          هذه الصفحة مخصصة لمديري المعرض ومحمية بالتحقق الثنائي (2FA). أدخل رمز المرور الرئيسي:
+        </p>
 
-      <form id="adminPinForm" onsubmit="handleAdminPinSubmit(event)">
-        <div class="admin-pin-input-wrap">
-          <label for="adminPinInput" class="visually-hidden" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;">رمز الدخول السري</label>
-          <input type="password" id="adminPinInput" class="admin-pin-input" placeholder="••••••••" maxlength="20" autocomplete="current-password" autofocus required aria-label="رمز الدخول السري">
-          <button type="button" class="btn-toggle-pin" onclick="togglePinVisibility()" title="إظهار / إخفاء الرمز" aria-label="إظهار أو إخفاء الرمز">
-            <i class="fas fa-eye" id="pinEyeIcon"></i>
+        <form id="adminPinForm" onsubmit="handleAdminPinSubmit(event)">
+          <div class="admin-pin-input-wrap">
+            <label for="adminPinInput" class="visually-hidden">رمز الدخول السري</label>
+            <input type="password" id="adminPinInput" class="admin-pin-input" placeholder="••••••••" maxlength="30" autocomplete="current-password" autofocus required aria-label="رمز الدخول السري">
+            <button type="button" class="btn-toggle-pin" onclick="togglePinVisibility()" title="إظهار / إخفاء الرمز" aria-label="إظهار أو إخفاء الرمز">
+              <i class="fas fa-eye" id="pinEyeIcon"></i>
+            </button>
+          </div>
+
+          <div id="adminPinError" class="admin-pin-error" style="display: none;">
+            <i class="fas fa-circle-exclamation"></i>
+            <span id="adminPinErrorText">رمز الدخول غير صحيح</span>
+          </div>
+
+          <button type="submit" id="adminPinSubmitBtn" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 1rem; margin-top: 1rem;">
+            <i class="fas fa-paper-plane"></i>
+            <span>التحقق وإرسال كود الأمان للجيميل</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- STEP 2: 6-DIGIT EMAIL OTP VERIFICATION -->
+      <div id="adminAuthStep2" style="display: none;">
+        <div class="admin-auth-emblem" style="color: #10B981; border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.1);">
+          <i class="fas fa-envelope-circle-check"></i>
+        </div>
+        <h2 class="admin-auth-title" style="color: #F8FAFC;">التحقق الأمني الثنائي (2FA)</h2>
+        <div class="admin-auth-subtitle" style="color: #10B981;">تم إرسال كود التحقق السداسي بنجاح ✓</div>
+
+        <p class="admin-auth-desc" style="margin-bottom: 0.75rem;">
+          تم إرسال رمز أمان سري مكون من 6 أرقام إلى بريدك الإلكتروني المعتمد:<br>
+          <strong id="adminMaskedEmailDisplay" style="color: var(--accent); font-family: monospace; font-size: 1.05rem; letter-spacing: 0.5px;">kasedkarim.lighting@gmail.com</strong>
+        </p>
+
+        <div class="otp-timer-badge">
+          <i class="fas fa-clock"></i>
+          <span>صلاحية الرمز: <strong id="otpCountdownTimer">10:00</strong></span>
+        </div>
+
+        <form id="adminOtpForm" onsubmit="handleAdminOtpSubmit(event)">
+          <div class="otp-inputs-wrapper" id="otpBoxesContainer">
+            <input type="text" maxlength="1" inputmode="numeric" class="otp-digit-box" data-idx="0" autofocus autocomplete="one-time-code">
+            <input type="text" maxlength="1" inputmode="numeric" class="otp-digit-box" data-idx="1">
+            <input type="text" maxlength="1" inputmode="numeric" class="otp-digit-box" data-idx="2">
+            <input type="text" maxlength="1" inputmode="numeric" class="otp-digit-box" data-idx="3">
+            <input type="text" maxlength="1" inputmode="numeric" class="otp-digit-box" data-idx="4">
+            <input type="text" maxlength="1" inputmode="numeric" class="otp-digit-box" data-idx="5">
+          </div>
+
+          <div id="adminOtpError" class="admin-pin-error" style="display: none;">
+            <i class="fas fa-circle-exclamation"></i>
+            <span id="adminOtpErrorText">كود التحقق غير صحيح</span>
+          </div>
+
+          <button type="submit" id="adminOtpSubmitBtn" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 1rem; margin-top: 1rem; background: linear-gradient(135deg, #10B981, #059669);">
+            <i class="fas fa-shield-check"></i>
+            <span>تأكيد ومصادقة جهاز الإدارة</span>
+          </button>
+        </form>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.25rem; font-size: 0.82rem;">
+          <button type="button" class="btn-text-link" id="resendOtpBtn" onclick="resendAdminOtp()" style="color: var(--accent);">
+            <i class="fas fa-rotate-right"></i> <span>إعادة إرسال الكود</span>
+          </button>
+          <button type="button" class="btn-text-link" onclick="backToStep1()" style="color: #94A3B8;">
+            <i class="fas fa-arrow-right"></i> <span>تغيير رمز المرور</span>
           </button>
         </div>
-
-        <div id="adminPinError" class="admin-pin-error" style="display: none;">
-          <i class="fas fa-circle-exclamation"></i>
-          <span>رمز الدخول غير صحيح، يرجى المحاولة مرة أخرى</span>
-        </div>
-
-        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 1rem; margin-top: 1rem;">
-          <i class="fas fa-unlock-keyhole"></i>
-          <span>فتح لوحة التحكم</span>
-        </button>
-      </form>
+      </div>
 
       <div style="margin-top: 1.5rem; border-top: 1px solid #334155; padding-top: 1rem; text-align: center;">
         <a href="index.html" style="color: #94A3B8; text-decoration: none; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.4rem;">
@@ -546,6 +599,276 @@
       </section>
 
       <!-- ====================================================================
+           DEDICATED FULL-VIEW PRODUCT EDITOR STUDIO (استوديو تعديل القطع الفاخر)
+           ==================================================================== -->
+      <section class="admin-tab-pane admin-product-editor-pane" id="adminPane_editProduct">
+        <!-- Top Navigation Header -->
+        <div class="editor-top-nav">
+          <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <button type="button" class="editor-back-btn" onclick="closeProductEditor()">
+              <i class="fas fa-arrow-right"></i>
+              <span>العودة لقائمة المنتجات</span>
+            </button>
+            <div>
+              <h2 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fas fa-pen-ruler" style="color: var(--accent);"></i>
+                <span>استوديو تعديل وتنسيق وحدة الإضاءة:</span>
+                <span id="editorProductDisplayName" style="color: var(--accent);"></span>
+              </h2>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
+                التعديلات يتم حفظها ومزامنتها لحظياً عبر السحابة وتنعكس على المتجر المباشر
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <span id="editorProductIdBadge" style="background: rgba(197, 160, 89, 0.15); color: #855D10; padding: 0.35rem 0.85rem; border-radius: 20px; font-weight: 700; font-size: 0.82rem; font-family: monospace;">ID: --</span>
+          </div>
+        </div>
+
+        <form id="adminEditProductPageForm" onsubmit="handleEditProductSubmit(event)">
+          <input type="hidden" id="editProductId">
+
+          <div class="editor-studio-layout">
+            <!-- RIGHT COLUMN: PRODUCT SPECIFICATIONS & FIELDS -->
+            <div class="editor-form-col">
+              <!-- Card 1: Identity & Category -->
+              <div class="editor-card">
+                <div class="editor-card-header">
+                  <i class="fas fa-tag"></i>
+                  <h4>البيانات الأساسية وتصنيف القطعة</h4>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+                  <div class="form-group">
+                    <label class="form-label">
+                      <span>اسم وحدة الإضاءة (عربي)</span>
+                      <span class="required-tag">* (إجباري)</span>
+                    </label>
+                    <input type="text" id="editProductName" class="form-input" placeholder="مثال: دلاية موندريان الكريستالية" required oninput="updateLiveEditorPreview()">
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">
+                      <span>الاسم بالإنجليزية</span>
+                      <span class="optional-tag">(اختياري)</span>
+                    </label>
+                    <input type="text" id="editProductEnName" class="form-input" placeholder="Mondrian Crystal Pendant" oninput="updateLiveEditorPreview()">
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: 1.25rem;">
+                  <div class="form-group">
+                    <label class="form-label">
+                      <span>القسم أو التبويب الرئيسي</span>
+                      <span class="required-tag">* (إجباري)</span>
+                    </label>
+                    <select id="editProductCategory" class="form-select" required onchange="updateLiveEditorPreview()"></select>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">
+                      <span>الستايل / الطراز المعماري</span>
+                      <span class="optional-tag">(اختياري)</span>
+                    </label>
+                    <input type="text" id="editProductStyle" class="form-input" placeholder="مودرن إيطالي / كلاسيك راقي" oninput="updateLiveEditorPreview()">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 2: Pricing & Badges -->
+              <div class="editor-card">
+                <div class="editor-card-header">
+                  <i class="fas fa-coins"></i>
+                  <h4>التسعير والخصومات والشارات الترويجية</h4>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.25rem;">
+                  <div class="form-group">
+                    <label class="form-label">
+                      <span>السعر الفعلي الحالي (ج.م)</span>
+                      <span class="required-tag">* (إجباري)</span>
+                    </label>
+                    <input type="number" id="editProductPrice" class="form-input" min="0" placeholder="مثال: 32500" required oninput="updateLiveEditorPreview()">
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">
+                      <span>السعر قبل الخصم (ج.م)</span>
+                      <span class="optional-tag">(اختياري)</span>
+                    </label>
+                    <input type="number" id="editProductOriginalPrice" class="form-input" min="0" placeholder="مثال: 40000" oninput="updateLiveEditorPreview()">
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">
+                      <span>فترة الضمان المعتمد</span>
+                      <span class="optional-tag">(اختياري)</span>
+                    </label>
+                    <input type="text" id="editProductWarranty" class="form-input" placeholder="5 سنوات ضمان معتمد" oninput="updateLiveEditorPreview()">
+                  </div>
+                </div>
+
+                <!-- Badges -->
+                <div style="display: flex; gap: 1.5rem; margin-top: 1.5rem; padding: 1rem 1.25rem; background: #F8FAFC; border-radius: 8px; border: 1px solid var(--border-light); flex-wrap: wrap;">
+                  <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
+                    <input type="checkbox" id="editProductIsNew" onchange="updateLiveEditorPreview()" style="width: 18px; height: 18px; accent-color: var(--accent);">
+                    <span style="color: #059669;">تمييز كـ "جديد 2026" (NEW)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
+                    <input type="checkbox" id="editProductIsExclusive" onchange="updateLiveEditorPreview()" style="width: 18px; height: 18px; accent-color: var(--accent);">
+                    <span style="color: #D97706;">إصدار حصري بالشيخ زايد (EXCLUSIVE)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
+                    <input type="checkbox" id="editProductIsBestSeller" onchange="updateLiveEditorPreview()" style="width: 18px; height: 18px; accent-color: var(--accent);">
+                    <span style="color: #DC2626;">شارة "الأكثر طلباً" (BEST SELLER)</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Card 3: Technical Specifications -->
+              <div class="editor-card">
+                <div class="editor-card-header">
+                  <i class="fas fa-sliders"></i>
+                  <h4>المواصفات الفنية والهندسية للقطعة</h4>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+                  <div class="form-group">
+                    <label class="form-label">الأبعاد والقياسات</label>
+                    <input type="text" id="editProductDimensions" class="form-input" placeholder="القطر 80 سم × الارتفاع 120 سم" oninput="updateLiveEditorPreview()">
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">خامات التصنيع</label>
+                    <input type="text" id="editProductMaterial" class="form-input" placeholder="كريستال عصفور نقي + نحاس مطلي بذهب 24k" oninput="updateLiveEditorPreview()">
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">درجة حرارة الإضاءة (CCT)</label>
+                    <input type="text" id="editProductColorTemp" class="form-input" placeholder="3000K أصفر دافئ / ثلاثي درجات الإضاءة" oninput="updateLiveEditorPreview()">
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">القدرة واستهلاك الطاقة</label>
+                    <input type="text" id="editProductWattage" class="form-input" placeholder="LED 72W موفر للطاقة" oninput="updateLiveEditorPreview()">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 4: Architectural Description -->
+              <div class="editor-card">
+                <div class="editor-card-header">
+                  <i class="fas fa-align-right"></i>
+                  <h4>الوصف المعماري والجمالي للقطعة</h4>
+                </div>
+                <textarea id="editProductDescription" class="form-textarea" rows="4" placeholder="اكتب وصفاً معمارياً فاخراً يبرز جمال وفخامة القطعة في بهو الفيلات والقصور..." oninput="updateLiveEditorPreview()"></textarea>
+              </div>
+            </div>
+
+            <!-- LEFT COLUMN: LIVE STOREFRONT PREVIEW & IMAGES STUDIO -->
+            <div class="editor-preview-col">
+              <div class="editor-preview-container">
+                <!-- Live Preview Card -->
+                <div class="editor-card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem;">
+                    <span style="font-size: 0.85rem; font-weight: 800; color: #0F172A; display: flex; align-items: center; gap: 0.4rem;">
+                      <i class="fas fa-eye" style="color: var(--accent);"></i>
+                      <span>معاينة حية للمتجر</span>
+                    </span>
+                    <span style="background: rgba(16, 185, 129, 0.15); color: #059669; font-size: 0.72rem; font-weight: 800; padding: 0.15rem 0.5rem; border-radius: 12px;">
+                      مباشر ⚡
+                    </span>
+                  </div>
+
+                  <!-- The Simulated Storefront Card -->
+                  <div class="editor-live-preview-card">
+                    <div class="editor-preview-image-wrap">
+                      <img id="previewLiveImg" src="" alt="معاينة القطعة" onerror="this.src='assets/images/default-light.jpg'">
+                      <div class="editor-preview-badges" id="previewBadgesWrap"></div>
+                    </div>
+                    <div class="editor-preview-details">
+                      <div class="editor-preview-category" id="previewLiveCat">دلايات فاخرة</div>
+                      <div class="editor-preview-title" id="previewLiveTitle">اسم وحدة الإضاءة</div>
+                      <div class="editor-preview-en-title" id="previewLiveEnTitle">Lighting Unit Name</div>
+                      <div style="font-size: 0.78rem; color: #64748B; margin-bottom: 0.5rem;" id="previewLiveSpecs">المواصفات: قياسات معمارية راقية</div>
+                      <div class="editor-preview-price-wrap">
+                        <span class="editor-preview-price" id="previewLivePrice">0 ج.م</span>
+                        <span class="editor-preview-original-price" id="previewLiveOriginalPrice" style="display: none;"></span>
+                        <span class="editor-preview-discount-pill" id="previewLiveDiscountPill" style="display: none;"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Images Studio Card -->
+                <div class="editor-card">
+                  <div class="editor-card-header">
+                    <i class="fas fa-camera"></i>
+                    <h4>استوديو صور القطعة</h4>
+                  </div>
+
+                  <!-- Primary Image -->
+                  <div style="margin-bottom: 1.5rem;">
+                    <label class="form-label">
+                      <span>الصورة الأساسية للقطعة</span>
+                      <span class="required-tag">* (إجباري)</span>
+                    </label>
+                    <div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
+                      <input type="text" id="editProductImageUrl" class="form-input" placeholder="رابط URL للصورة أو ارفع من الجهاز" oninput="updateLiveEditorPreview()">
+                      <button type="button" class="btn-secondary" style="padding: 0 0.85rem;" onclick="document.getElementById('editProductMainFileInput').click()" title="رفع صورة من الجهاز">
+                        <i class="fas fa-upload"></i>
+                      </button>
+                    </div>
+                    <input type="file" id="editProductMainFileInput" accept="image/*" style="display: none;" onchange="handleEditImageUpload(this.files[0], false)">
+                    <div style="height: 110px; border-radius: 8px; border: 1px dashed var(--border-light); background: #F8FAFC; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                      <img id="editProductImagePreview" src="" alt="معاينة الصورة" style="max-height: 100%; max-width: 100%; object-fit: contain; display: none;">
+                      <span id="editProductImagePlaceholder" style="font-size: 0.8rem; color: var(--text-muted);">لا توجد صورة أساسية</span>
+                    </div>
+                  </div>
+
+                  <!-- Secondary Image -->
+                  <div>
+                    <label class="form-label">
+                      <span>الصورة الإضافية / الزاوية الثانية</span>
+                      <span class="optional-tag">(اختياري)</span>
+                    </label>
+                    <div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
+                      <input type="text" id="editProductSecondaryImageUrl" class="form-input" placeholder="رابط URL أو ارفع صورة إضافية" oninput="updateLiveEditorPreview()">
+                      <button type="button" class="btn-secondary" style="padding: 0 0.85rem;" onclick="document.getElementById('editProductSecondaryFileInput').click()" title="رفع صورة إضافية">
+                        <i class="fas fa-upload"></i>
+                      </button>
+                      <button type="button" class="btn-secondary" style="color: #DC2626;" onclick="resetEditSecondaryImage(event)" title="إزالة الصورة الإضافية">
+                        <i class="fas fa-trash-alt"></i>
+                      </button>
+                    </div>
+                    <input type="file" id="editProductSecondaryFileInput" accept="image/*" style="display: none;" onchange="handleEditImageUpload(this.files[0], true)">
+                    <div style="height: 110px; border-radius: 8px; border: 1px dashed var(--border-light); background: #F8FAFC; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                      <img id="editProductSecondaryImagePreview" src="" alt="معاينة الصورة الإضافية" style="max-height: 100%; max-width: 100%; object-fit: contain; display: none;">
+                      <span id="editProductSecondaryImagePlaceholder" style="font-size: 0.8rem; color: var(--text-muted);">لا توجد صورة إضافية</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STICKY ACTION BAR -->
+          <div class="editor-sticky-bar">
+            <button type="button" class="editor-cancel-btn" onclick="closeProductEditor()">
+              <i class="fas fa-arrow-right"></i>
+              <span>إلغاء والعودة للمخزون</span>
+            </button>
+
+            <button type="submit" id="saveProductEditorBtn" class="editor-save-btn">
+              <i class="fas fa-cloud-arrow-up"></i>
+              <span>حفظ ومزامنة التعديلات سحابياً فوراً</span>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ====================================================================
            TAB 5: CATEGORIES MANAGER (إدارة أقسام المعرض والأنواع)
            ==================================================================== -->
       <section class="admin-tab-pane" id="adminPane_categories">
@@ -867,144 +1190,6 @@
       </section>
 
     </main>
-  </div>
-
-  <!-- ====================================================================
-       EDIT PRODUCT MODAL (نافذة تعديل كافة تفاصيل القطعة)
-       ==================================================================== -->
-  <div class="modal-overlay" id="adminEditProductModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
-    <div class="modal-content" style="max-width: 780px; max-height: 90vh; overflow-y: auto;">
-      <div class="modal-header">
-        <h3 class="modal-title" id="editModalTitle" style="display: flex; align-items: center; gap: 0.6rem;">
-          <i class="fas fa-pen-to-square" style="color: var(--accent);"></i>
-          <span>تعديل كافة تفاصيل وحدة الإضاءة</span>
-        </h3>
-        <button type="button" class="modal-close" onclick="closeEditProductModal()" aria-label="إغلاق">&times;</button>
-      </div>
-
-      <form id="adminEditProductForm" onsubmit="handleEditProductSubmit(event)" style="padding: 1.25rem 1.5rem;">
-        <input type="hidden" id="editProductId">
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-          <div class="admin-form-group">
-            <label class="admin-label">اسم وحدة الإضاءة (عربي) *</label>
-            <input type="text" id="editProductName" class="admin-input" required>
-          </div>
-          <div class="admin-form-group">
-            <label class="admin-label">الاسم بالإنجليزية (اختياري)</label>
-            <input type="text" id="editProductEnName" class="admin-input">
-          </div>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
-          <div class="admin-form-group">
-            <label class="admin-label">القسم *</label>
-            <select id="editProductCategory" class="admin-select" required></select>
-          </div>
-          <div class="admin-form-group">
-            <label class="admin-label">السعر الفعلي (ج.م) *</label>
-            <input type="number" id="editProductPrice" class="admin-input" min="0" required>
-          </div>
-          <div class="admin-form-group">
-            <label class="admin-label">السعر قبل الخصم (اختياري)</label>
-            <input type="number" id="editProductOriginalPrice" class="admin-input" min="0">
-          </div>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
-          <div class="admin-form-group">
-            <label class="admin-label">الستايل / الطراز</label>
-            <input type="text" id="editProductStyle" class="admin-input" placeholder="مودرن / كلاسيك / معمارية">
-          </div>
-          <div class="admin-form-group">
-            <label class="admin-label">الضمان المعتمد</label>
-            <input type="text" id="editProductWarranty" class="admin-input" placeholder="5 سنوات ضمان معتمد">
-          </div>
-        </div>
-
-        <!-- Badges Checkboxes -->
-        <div style="display: flex; gap: 1.5rem; margin-top: 1.25rem; padding: 0.85rem 1rem; background: var(--bg-soft); border-radius: var(--radius-sm);">
-          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
-            <input type="checkbox" id="editProductIsNew">
-            <span>قطعة جديدة (NEW)</span>
-          </label>
-          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
-            <input type="checkbox" id="editProductIsExclusive">
-            <span>إصدار حصري (EXCLUSIVE)</span>
-          </label>
-          <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
-            <input type="checkbox" id="editProductIsBestSeller">
-            <span>الأكثر طلباً (BEST SELLER)</span>
-          </label>
-        </div>
-
-        <!-- Images Section -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: 1.25rem;">
-          <!-- Main Image -->
-          <div>
-            <label class="admin-label">الصورة الرئيسية للقطعة *</label>
-            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <input type="text" id="editProductImageUrl" class="admin-input" placeholder="رابط URL للصورة أو ارفع ملفاً">
-              <button type="button" class="btn-secondary" style="padding: 0 0.85rem;" onclick="document.getElementById('editProductMainFileInput').click()" title="رفع صورة من الجهاز">
-                <i class="fas fa-upload"></i>
-              </button>
-            </div>
-            <input type="file" id="editProductMainFileInput" accept="image/*" style="display: none;" onchange="handleEditImageUpload(this.files[0], false)">
-            <div style="height: 120px; border-radius: 8px; border: 1px dashed var(--border-color); background: var(--bg-soft); display: flex; align-items: center; justify-content: center; overflow: hidden;">
-              <img id="editProductImagePreview" src="" alt="معاينة الصورة" style="max-height: 100%; max-width: 100%; object-fit: contain; display: none;">
-              <span id="editProductImagePlaceholder" style="font-size: 0.8rem; color: var(--text-muted);">لا توجد صورة</span>
-            </div>
-          </div>
-
-          <!-- Secondary Image -->
-          <div>
-            <label class="admin-label">الصورة الإضافية / زاوية ثانية (اختياري)</label>
-            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-              <input type="text" id="editProductSecondaryImageUrl" class="admin-input" placeholder="رابط URL أو ارفع صورة إضافية">
-              <button type="button" class="btn-secondary" style="padding: 0 0.85rem;" onclick="document.getElementById('editProductSecondaryFileInput').click()" title="رفع صورة إضافية">
-                <i class="fas fa-upload"></i>
-              </button>
-              <button type="button" class="btn-secondary" style="color: #EF4444;" onclick="resetEditSecondaryImage(event)" title="حذف الصورة الإضافية">
-                <i class="fas fa-trash-alt"></i>
-              </button>
-            </div>
-            <input type="file" id="editProductSecondaryFileInput" accept="image/*" style="display: none;" onchange="handleEditImageUpload(this.files[0], true)">
-            <div style="height: 120px; border-radius: 8px; border: 1px dashed var(--border-color); background: var(--bg-soft); display: flex; align-items: center; justify-content: center; overflow: hidden;">
-              <img id="editProductSecondaryImagePreview" src="" alt="معاينة الصورة الإضافية" style="max-height: 100%; max-width: 100%; object-fit: contain; display: none;">
-              <span id="editProductSecondaryImagePlaceholder" style="font-size: 0.8rem; color: var(--text-muted);">لا توجد صورة إضافية</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Technical Specifications -->
-        <div style="margin-top: 1.25rem;">
-          <label class="admin-label">المواصفات الفنية والمعمارية</label>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-            <input type="text" id="editProductDimensions" class="admin-input" placeholder="الأبعاد (مثال: القطر 80 سم × الارتفاع 120 سم)">
-            <input type="text" id="editProductMaterial" class="admin-input" placeholder="الخامات (مثال: كريستال عصفور نقي + نحاس مطلي)">
-            <input type="text" id="editProductColorTemp" class="admin-input" placeholder="حرارة اللون (مثال: 3000K أصفر دافئ / ثلاثي درجات)">
-            <input type="text" id="editProductWattage" class="admin-input" placeholder="القدرة والاستهلاك (مثال: LED 72W موفر للطاقة)">
-          </div>
-        </div>
-
-        <!-- Description -->
-        <div class="admin-form-group" style="margin-top: 1rem;">
-          <label class="admin-label">الوصف المعماري للقطعة</label>
-          <textarea id="editProductDescription" class="admin-textarea" rows="3" placeholder="وصف تفصيلي لتصميم القطعة ولمساتها الديكورية..."></textarea>
-        </div>
-
-        <!-- Actions -->
-        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.75rem; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
-          <button type="button" class="btn-secondary" onclick="closeEditProductModal()">
-            <span>إلغاء</span>
-          </button>
-          <button type="submit" class="btn-primary" style="padding: 0.75rem 2rem; font-weight: 800; background: linear-gradient(135deg, #10B981, #059669); border: none; box-shadow: 0 4px 14px rgba(16,185,129,0.35);">
-            <i class="fas fa-floppy-disk"></i>
-            <span>حفظ ومزامنة التعديلات سحابياً</span>
-          </button>
-        </div>
-      </form>
-    </div>
   </div>
 
   <!-- Toast Notification Container -->
