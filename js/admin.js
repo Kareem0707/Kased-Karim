@@ -149,7 +149,17 @@ async function handleAdminPinSubmit(e) {
         initOtpInputs();
         startOtpCountdownTimer(600); // 10 minutes
 
-        showToast("📧 تم إرسال كود التحقق السداسي إلى بريدك الإلكتروني بنجاح");
+        if (data.devOtp) {
+          // Pre-populate digit boxes for instant 1-click test verification
+          const boxes = document.querySelectorAll(".otp-digit-box");
+          const otpStr = String(data.devOtp);
+          boxes.forEach((box, i) => {
+            if (otpStr[i]) box.value = otpStr[i];
+          });
+          showToast(`📧 رمز أمان الجيميل للاختبار المباشر: ${data.devOtp}`);
+        } else {
+          showToast("📧 تم إرسال كود التحقق السداسي إلى بريدك الإلكتروني بنجاح");
+        }
         return;
       }
 

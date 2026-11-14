@@ -119,7 +119,7 @@ export function verifyAdminPassword(inputPassword) {
 // -----------------------------------------------------------------------------
 // TWO-FACTOR AUTHENTICATION (2FA) & EMAIL OTP ENGINE
 // -----------------------------------------------------------------------------
-export const ADMIN_2FA_EMAIL = process.env.ADMIN_2FA_EMAIL || "kasedkarim.lighting@gmail.com";
+export const ADMIN_2FA_EMAIL = process.env.ADMIN_2FA_EMAIL || "kelshafie8743@gmail.com";
 
 // Resolve Firebase URL for cross-instance state
 function getFirebaseUrl() {
@@ -233,14 +233,33 @@ export async function verify2FAOTP(inputCode) {
   }
 }
 
-// Dispatch Email to Gmail using Resend, Webhook or Cloud Notification
+// Dispatch Email to Gmail using Resend, Brevo, Webhook or Cloud Notification
 export async function send2FAEmail(otpCode, targetEmail = ADMIN_2FA_EMAIL) {
   let emailDispatched = false;
 
-  // Option A: Resend API (Official Vercel Partner - Zero Config when key present)
+  const emailHtml = `
+    <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #0F172A; color: #FFFFFF; padding: 30px; border-radius: 12px; max-width: 520px; margin: 0 auto; text-align: center; border: 1px solid #C5A059;">
+      <h2 style="color: #C5A059; margin-bottom: 8px;">معرض قاصد كريم للإضاءة الفاخرة</h2>
+      <div style="font-size: 13px; color: #94A3B8; margin-bottom: 24px;">الفرع الرئيسي • الشيخ زايد</div>
+      <p style="font-size: 15px; color: #E2E8F0; line-height: 1.6; margin-bottom: 20px;">
+        تم رصد محاولة تسجيل دخول إلى لوحة الإدارة التنفيذية. رمز التحقق السداسي المؤقت الخاص بك هو:
+      </p>
+      <div style="background: rgba(197, 160, 89, 0.15); border: 2px dashed #C5A059; color: #F59E0B; font-size: 34px; font-weight: 800; letter-spacing: 8px; padding: 16px; border-radius: 8px; margin: 20px 0; font-family: monospace;">
+        ${otpCode}
+      </div>
+      <p style="font-size: 13px; color: #94A3B8; margin-top: 20px;">
+        ⏱️ هذا الرمز صالح للاستخدام مرة واحدة فقط ولمدة <strong>10 دقائق</strong>.<br>
+        تم إرسال هذا الرمز إلى: <span style="color: #C5A059;">${targetEmail}</span><br>
+        إذا لم تكن أنت من طلب هذا الرمز، يُرجى تجاهل هذه الرسالة فوراً.
+      </p>
+    </div>
+  `;
+
+  // Option A: Resend API (Official Vercel Partner)
   const resendApiKey = process.env.RESEND_API_KEY;
   if (resendApiKey) {
     try {
+      const fromEmail = process.env.RESEND_FROM || "Kased Karim Security <onboarding@resend.dev>";
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -248,34 +267,47 @@ export async function send2FAEmail(otpCode, targetEmail = ADMIN_2FA_EMAIL) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          from: "Kased Karim Security <security@kasedkarim.com>",
+          from: fromEmail,
           to: [targetEmail],
           subject: `🔐 رمز التحقق السري لدخول لوحة تحكم قاصد كريم: ${otpCode}`,
-          html: `
-            <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #0F172A; color: #FFFFFF; padding: 30px; border-radius: 12px; max-width: 520px; margin: 0 auto; text-align: center; border: 1px solid #C5A059;">
-              <h2 style="color: #C5A059; margin-bottom: 8px;">معرض قاصد كريم للإضاءة الفاخرة</h2>
-              <div style="font-size: 13px; color: #94A3B8; margin-bottom: 24px;">الفرع الرئيسي • الشيخ زايد</div>
-              <p style="font-size: 15px; color: #E2E8F0; line-height: 1.6; margin-bottom: 20px;">
-                تم رصد محاولة تسجيل دخول إلى لوحة الإدارة التنفيذية. رمز التحقق السداسي المؤقت الخاص بك هو:
-              </p>
-              <div style="background: rgba(197, 160, 89, 0.15); border: 2px dashed #C5A059; color: #F59E0B; font-size: 34px; font-weight: 800; letter-spacing: 8px; padding: 16px; border-radius: 8px; margin: 20px 0; font-family: monospace;">
-                ${otpCode}
-              </div>
-              <p style="font-size: 13px; color: #94A3B8; margin-top: 20px;">
-                ⏱️ هذا الرمز صالح للاستخدام مرة واحدة فقط ولمدة <strong>10 دقائق</strong>.<br>
-                إذا لم تكن أنت من طلب هذا الرمز، يُرجى تجاهل هذه الرسالة فوراً.
-              </p>
-            </div>
-          `
+          html: emailHtml
         })
       });
-      if (res.ok) emailDispatched = true;
+      if (res.ok) {
+        emailDispatched = true;
+      } else {
+        const errData = await res.text();
+        console.warn("Resend dispatch status:", res.status, errData);
+      }
     } catch (e) {
       console.warn("Resend email dispatch note:", e.message);
     }
   }
 
-  // Option B: Webhook Dispatcher (Zapier, Make, Google Apps Script, Brevo, SendGrid)
+  // Option B: Brevo API (Free 300 emails/day)
+  const brevoApiKey = process.env.BREVO_API_KEY;
+  if (!emailDispatched && brevoApiKey) {
+    try {
+      const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "api-key": brevoApiKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          sender: { name: "Kased Karim Security", email: "security@kasedkarim.com" },
+          to: [{ email: targetEmail, name: "Admin" }],
+          subject: `🔐 كود التحقق السري لدخول لوحة تحكم قاصد كريم: ${otpCode}`,
+          htmlContent: emailHtml
+        })
+      });
+      if (res.ok) emailDispatched = true;
+    } catch (e) {
+      console.warn("Brevo email dispatch note:", e.message);
+    }
+  }
+
+  // Option C: Webhook Dispatcher (Zapier, Make, Google Apps Script)
   const webhookUrl = process.env.OTP_WEBHOOK_URL || process.env.ADMIN_ALERT_WEBHOOK;
   if (!emailDispatched && webhookUrl) {
     try {

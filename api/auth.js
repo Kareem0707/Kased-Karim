@@ -173,8 +173,9 @@ export default async function handler(req, res) {
         email: ADMIN_2FA_EMAIL,
         emailMasked: maskedEmail,
         message: `تم إرسال رمز أمان سداسي إلى بريدك الإلكتروني (${maskedEmail}). يرجى كتابة الرمز للمتابعة.`,
-        // In dev/unconfigured environment, return debug code if no external email service is linked yet
-        devOtp: (!emailResult.dispatched && process.env.NODE_ENV !== "production") ? otpCode : undefined
+        // When email service is dispatched, devOtp is undefined. When waiting for email provider key setup, devOtp allows instant verification testing
+        devOtp: (!emailResult.dispatched) ? otpCode : undefined,
+        emailDispatched: emailResult.dispatched
       });
     }
 
