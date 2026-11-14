@@ -38,15 +38,39 @@
   };
 
   // --------------------------------------------------------------------------
-  // 1. CHECKOUT MODAL CONTROLLER
+  // 1. CHECKOUT MODAL CONTROLLER & CART RETRIEVAL
   // --------------------------------------------------------------------------
+  function getCartItems() {
+    if (window.STATE && Array.isArray(window.STATE.cart) && window.STATE.cart.length > 0) {
+      return window.STATE.cart;
+    }
+    try {
+      const saved = localStorage.getItem("kased_karim_quotation_cart");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (window.STATE) {
+            window.STATE.cart = parsed;
+          } else {
+            window.STATE = { cart: parsed };
+          }
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return [];
+  }
+
   window.openCheckoutModal = function () {
-    if (!window.STATE || !window.STATE.cart || window.STATE.cart.length === 0) {
+    const cartItems = getCartItems();
+    if (!cartItems || cartItems.length === 0) {
       showToast("سلة طلباتك فارغة! تفضل باختيار وحدات الإضاءة أولاً.");
       return;
     }
 
-    if (typeof closeCartDrawer === "function") {
+    if (typeof toggleCartDrawer === "function") {
+      toggleCartDrawer(false);
+    } else if (typeof closeCartDrawer === "function") {
       closeCartDrawer();
     }
 
@@ -54,11 +78,11 @@
     const summaryList = document.getElementById("checkoutSummaryList") || document.getElementById("checkoutItemsSummaryList");
     const totalEl = document.getElementById("checkoutTotalSum") || document.getElementById("checkoutTotalSummary");
 
-    const totalAmount = window.STATE.cart.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0);
+    const totalAmount = cartItems.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0);
     if (totalEl) totalEl.textContent = `${formatPrice(totalAmount)} ج.م`;
 
     if (summaryList) {
-      summaryList.innerHTML = window.STATE.cart
+      summaryList.innerHTML = cartItems
         .map(
           item => `
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.45rem 0; border-bottom: 1px dashed var(--border-light); font-size: 0.85rem;">
@@ -69,8 +93,8 @@
             </div>
           </div>
           <div style="display: flex; align-items: center; gap: 0.65rem; white-space: nowrap;">
-            <span style="font-size: 0.75rem; color: var(--text-muted);">× ${item.qty}</span>
-            <span style="font-weight: 800; color: var(--accent);">${formatPrice(item.price * item.qty)} ج.م</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">× ${item.qty || 1}</span>
+            <span style="font-weight: 800; color: var(--accent);">${formatPrice((item.price || 0) * (item.qty || 1))} ج.م</span>
           </div>
         </div>
       `
@@ -236,12 +260,14 @@
   window.handleCheckoutSubmit = async function (e) {
     if (e) e.preventDefault();
 
+    const submitBtn = document.getElementById("btnSubmitCheckout") || document.getElementById("checkoutSubmitBtn");
+    if (submitBtn && submitBtn.disabled) return;
+
     const form = e ? e.target : document.getElementById("checkoutOrderForm");
     const nameInput = document.getElementById("custNameInput") || form?.custName || document.getElementById("checkoutCustomerName");
     const phoneInput = document.getElementById("custPhoneInput") || form?.custPhone || document.getElementById("checkoutCustomerPhone");
     const addressInput = document.getElementById("custAddressInput") || form?.custAddress || document.getElementById("checkoutCustomerAddress");
     const notesInput = form?.custNotes || document.querySelector("textarea[name='custNotes']") || document.getElementById("checkoutCustomerNotes");
-    const submitBtn = document.getElementById("btnSubmitCheckout") || document.getElementById("checkoutSubmitBtn");
 
     const rawName = (nameInput ? nameInput.value : "").trim();
     const rawPhone = (phoneInput ? phoneInput.value : "").trim();
@@ -329,6 +355,12 @@
       return;
     }
 
+    const cartItems = getCartItems();
+    if (!cartItems || cartItems.length === 0) {
+      showToast("⚠️ سلة طلباتك فارغة! تفضل باختيار وحدات الإضاءة أولاً.");
+      return;
+    }
+
     if (!window.KK_DB) {
       showToast("⚠️ جاري تهيئة الاتصال السحابي، يرجى المحاولة بعد لحظات...");
       return;
@@ -349,14 +381,22 @@
     }
 
     try {
-      const newOrder = await window.KK_DB.createOrder(customerData, window.STATE.cart);
+      const newOrder = await window.KK_DB.createOrder(customerData, cartItems);
 
       if (newOrder && newOrder.id) {
         closeCheckoutModal();
 
-        // Clear cart
-        window.STATE.cart = [];
+        // Clear cart everywhere
+        if (window.STATE) window.STATE.cart = [];
+        localStorage.removeItem("kased_karim_quotation_cart");
+        if (typeof updateCartUI === "function") updateCartUI();
         if (typeof saveCart === "function") saveCart();
+
+        // Save customer details for fast future orders
+        try {
+          localStorage.setItem("kk_customer_name", customerData.name);
+          localStorage.setItem("kk_customer_phone", customerData.phone);
+        } catch(e) {}
 
         // Save order ID and phone on customer device
         saveCustomerRecentOrder(newOrder.id, customerData.phone);
@@ -834,7 +874,7 @@
     updateCustomerTrackingBadge();
 
     const checkoutForm = document.getElementById("checkoutOrderForm");
-    if (checkoutForm) {
+    if (checkoutForm && !checkoutForm.getAttribute("onsubmit")) {
       checkoutForm.addEventListener("submit", handleCheckoutSubmit);
     }
 

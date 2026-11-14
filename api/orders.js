@@ -344,22 +344,29 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: "بيانات الطلب غير مكتملة" });
       }
 
-      // 1. Strict Server-Side Validation: Name must be at least two parts
-      const name = (order.customer.name || "").trim().replace(/[<>]/g, "");
+      const isQuickWhatsApp = Boolean(order.isQuickWhatsApp || (order.customer && order.customer.notes && order.customer.notes.includes("واتساب")));
+
+      // 1. Server-Side Validation: Name
+      let name = (order.customer.name || "").trim().replace(/[<>]/g, "");
+      if (!name) name = "عميل واتساب المعرض";
       const nameParts = name.split(/\s+/).filter(p => p.replace(/[.\-_]/g, "").length >= 2);
-      if (nameParts.length < 2) {
+      if (!isQuickWhatsApp && nameParts.length < 2) {
         return res.status(400).json({ success: false, error: "الاسم يجب أن يكون ثنائياً على الأقل" });
       }
 
-      // 2. Strict Server-Side Validation: Phone must be 11 digits
-      const phone = (order.customer.phone || "").replace(/[^0-9]/g, "");
-      if (phone.length < 11 || (!phone.startsWith("01") && !phone.startsWith("201"))) {
+      // 2. Server-Side Validation: Phone
+      let phone = (order.customer.phone || "").replace(/[^0-9]/g, "");
+      if (isQuickWhatsApp && !phone) {
+        phone = "01000000000";
+      } else if (phone.length < 11 || (!phone.startsWith("01") && !phone.startsWith("201"))) {
         return res.status(400).json({ success: false, error: "رقم الهاتف غير صحيح، يجب أن يتكون من 11 رقماً ويبدأ بـ 01" });
       }
 
-      // 3. Strict Server-Side Validation: Address
-      const address = (order.customer.address || "").trim().replace(/[<>]/g, "");
-      if (address.length < 5) {
+      // 3. Server-Side Validation: Address
+      let address = (order.customer.address || "").trim().replace(/[<>]/g, "");
+      if (isQuickWhatsApp && address.length < 5) {
+        address = "الشيخ زايد - طلب عبر واتساب";
+      } else if (address.length < 5) {
         return res.status(400).json({ success: false, error: "يرجى كتابة العنوان بالتفصيل (المنطقة / الشارع / رقم العقار)" });
       }
 

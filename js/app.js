@@ -24,6 +24,7 @@ const STATE = {
   selectedProduct: null,
   visibleCount: 6
 };
+window.STATE = STATE;
 
 // Storage Keys
 const STORAGE_KEYS = {
@@ -83,12 +84,17 @@ function loadCart() {
     } catch (e) {
       STATE.cart = [];
     }
+  } else {
+    STATE.cart = [];
   }
+  window.STATE = STATE;
 }
 
 function saveCart() {
+  window.STATE = STATE;
   localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(STATE.cart));
   updateCartUI();
+  window.dispatchEvent(new CustomEvent("kk_cart_updated", { detail: STATE.cart }));
 }
 
 // 3. Render Category Tabs with Dynamic Item Counts & Anchored Subcategories
@@ -683,7 +689,10 @@ function toggleCartDrawer(open) {
 
 // 7. Send Quotation & Order via WhatsApp with Official Order Code
 async function sendWhatsAppQuotation() {
-  if (STATE.cart.length === 0) {
+  if (!STATE.cart || STATE.cart.length === 0) {
+    loadCart();
+  }
+  if (!STATE.cart || STATE.cart.length === 0) {
     showToast("يرجى اختيار وحدات إضاءة أولاً لتأكيد طلبك");
     return;
   }

@@ -869,7 +869,17 @@ class KasedKarimDB {
   getProducts() {
     try {
       const data = localStorage.getItem(DB_KEYS.PRODUCTS);
-      return data ? JSON.parse(data) : [...INITIAL_PRODUCTS];
+      let list = data ? JSON.parse(data) : [...INITIAL_PRODUCTS];
+      try {
+        const rawDeleted = localStorage.getItem("kk_deleted_product_ids_v1");
+        if (rawDeleted) {
+          const deletedIds = new Set(JSON.parse(rawDeleted));
+          if (deletedIds.size > 0) {
+            list = list.filter(p => p && p.id && !deletedIds.has(p.id));
+          }
+        }
+      } catch(e) {}
+      return list;
     } catch (e) {
       console.error("DB Error getProducts:", e);
       return [...INITIAL_PRODUCTS];
