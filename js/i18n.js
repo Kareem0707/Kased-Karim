@@ -351,7 +351,14 @@
     constructor() {
       let saved = "ar";
       try {
-        saved = localStorage.getItem(STORAGE_KEY) || "ar";
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlLang = urlParams.get("lang");
+        if (urlLang === "en" || urlLang === "ar") {
+          saved = urlLang;
+          localStorage.setItem(STORAGE_KEY, urlLang);
+        } else {
+          saved = localStorage.getItem(STORAGE_KEY) || "ar";
+        }
       } catch (e) {}
       if (saved !== "en" && saved !== "ar") saved = "ar";
       this.currentLang = saved;

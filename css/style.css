@@ -70,8 +70,6 @@ html {
 }
 
 body {
-  direction: rtl;
-  text-align: right;
   font-family: var(--font-ar);
   background-color: var(--bg-primary);
   color: var(--text-main);
@@ -80,6 +78,18 @@ body {
   max-width: 100vw;
   width: 100%;
   position: relative;
+}
+
+html[dir="rtl"] body,
+body.is-ar {
+  direction: rtl;
+  text-align: right;
+}
+
+html[dir="ltr"] body,
+body.is-en {
+  direction: ltr;
+  text-align: left;
 }
 
 /* Subtle architectural lighting ambient background texture */
