@@ -7,38 +7,42 @@
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Cinzel:wght@400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:wght@400;500;600;700&display=swap');
 
 /* Color Tokens: Architectural Light Luxury */
+/* Color Tokens: Architectural Warm Ivory, Charcoal, Silver & Muted Brass (PRD Core Theme) */
 :root {
-  --bg-primary: #F9F9FB;       /* Crisp alabaster white */
-  --bg-surface: #FFFFFF;       /* Pure white */
-  --bg-light-grey: #F0F0F2;    /* Soft utility bar grey */
-  --text-main: #1E1E1E;        /* Deep charcoal slate */
-  --text-muted: #5A5A5A;       /* Muted metallic grey */
-  --border-light: #EAEAEA;     /* Soft architectural warm grey */
-  --accent: #C5A059;           /* Brushed champagne gold */
-  --accent-hover: #B89146;
-  --accent-gold: #C5A059;
-  --accent-gradient: linear-gradient(135deg, #C5A059 0%, #B89146 100%);
-  --accent-glow: rgba(197, 160, 89, 0.25);
+  --bg-primary: #FAF7F2;       /* Warm ivory background */
+  --bg-surface: #FFFFFF;       /* Pure white card surface */
+  --bg-ivory-soft: #F4EFEA;    /* Secondary warm ivory */
+  --bg-light-grey: #ECE8E1;    /* Soft utility bar warm ivory */
+  --text-main: #222222;        /* Deep charcoal text */
+  --text-muted: #5A5854;       /* Balanced charcoal muted */
+  --border-light: #E8E4DC;     /* Soft warm ivory / silver border */
   
-  /* Silver Metallic Palette for Shimmer */
+  /* Muted Brass Accents (No flashy bright yellow, calm and trustworthy) */
+  --accent: #B38A49;           /* Refined muted architectural brass */
+  --accent-hover: #9E793A;     /* Deeper brass on hover */
+  --accent-gold: #B38A49;
+  --accent-gradient: linear-gradient(135deg, #B38A49 0%, #9E793A 100%);
+  --accent-glow: rgba(179, 138, 73, 0.2);
+  
+  /* Silver Metallic Palette for Architectural Accents */
   --silver-bright: #FFFFFF;
-  --silver-light: #F8FAFC;
+  --silver-light: #F4F5F7;
   --silver-mid: #CBD5E1;
   --silver-deep: #64748B;
   --silver-dark: #334155;
 
-  /* Elevations & Shadows */
-  --shadow-subtle: 0 2px 10px rgba(0, 0, 0, 0.04);
-  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.02);
-  --shadow-hover: 0 16px 36px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.03);
-  --shadow-modal: 0 25px 65px -10px rgba(30, 30, 30, 0.35);
+  /* Elevations & Shadows (Subtle, calm, trustworthy) */
+  --shadow-subtle: 0 1px 4px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(0, 0, 0, 0.02);
+  --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.04);
+  --shadow-hover: 0 10px 24px rgba(0, 0, 0, 0.07);
+  --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.2);
 
-  /* Radii */
-  --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-full: 9999px;
+  /* Radii (Modern, sharper, square/flat aesthetic per PRD) */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 4px; /* Eliminates excessive rounded pill shapes per PRD section 5 */
 
   /* Typography */
   --font-ar: 'Cairo', system-ui, -apple-system, sans-serif;
@@ -1001,7 +1005,7 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
 
 .bento-card {
   position: relative;
-  border-radius: 12px;
+  border-radius: 4px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.45);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
@@ -1763,7 +1767,7 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
   padding: 0.4rem 1rem;
   background: #FFFFFF;
   border: 1px solid #E2E8F0;
-  border-radius: 20px;
+  border-radius: 4px;
   color: #334155;
   font-size: 0.84rem;
   font-weight: 600;
@@ -1785,12 +1789,12 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
 }
 .subcat-chip .subcat-count {
-  background: rgba(197, 160, 89, 0.15);
+  background: rgba(179, 138, 73, 0.15);
   color: #855D10;
   font-size: 0.72rem;
   font-weight: 700;
   padding: 0.1rem 0.45rem;
-  border-radius: 10px;
+  border-radius: 2px;
 }
 .subcat-chip.active .subcat-count {
   background: var(--accent);
@@ -2016,7 +2020,9 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
 .product-img {
   width: 100%;
   height: 100%;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
+  display: block;
   transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .product-card:hover .product-img {
@@ -2406,7 +2412,9 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
 .showroom-image-side img {
   width: 100%;
   height: 100%;
+  aspect-ratio: 16 / 10;
   object-fit: cover;
+  display: block;
 }
 .showroom-overlay-badge {
   position: absolute;
