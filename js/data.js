@@ -790,7 +790,7 @@ const INITIAL_SHOWROOM_INFO = {
   email: "vip@kasedkarim.com",
   workingHours: "يومياً من 11:00 صباحاً حتى 11:00 مساءً",
   consultationFee: "مجاناً للمشاريع والفيلات السكنية عند التعاقد",
-  googleClientId: "910456482507-6mr7uag968b7cmkadrru1ptjac3cfocs.apps.googleusercontent.com",
+  googleClientId: "975827952448-e6dekknbl9s5vfechtk9q7q0vgjqsvma.apps.googleusercontent.com",
   social: {
     facebook: "https://facebook.com",
     instagram: "https://instagram.com",
