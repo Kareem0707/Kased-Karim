@@ -892,9 +892,15 @@ function renderAdminOrders(statusFilter = null) {
       ? order.items 
       : (order.items && typeof order.items === "object" ? Object.values(order.items) : []);
 
-    const formattedDate = order.dateFormatted 
-      ? (order.timeFormatted ? `${order.dateFormatted} - ${order.timeFormatted}` : order.dateFormatted)
-      : (order.timestamp ? new Date(order.timestamp).toLocaleString("ar-EG", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "اليوم");
+    let formattedDate = "اليوم";
+    if (order.timestamp) {
+      const d = new Date(order.timestamp);
+      const datePart = d.toLocaleDateString("ar-EG", { timeZone: "Africa/Cairo", year: "numeric", month: "short", day: "numeric" });
+      const timePart = d.toLocaleTimeString("ar-EG", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit" });
+      formattedDate = `${datePart} - ${timePart}`;
+    } else if (order.dateFormatted) {
+      formattedDate = order.timeFormatted ? `${order.dateFormatted} - ${order.timeFormatted}` : order.dateFormatted;
+    }
 
     return `
       <div class="order-card-detailed ${isNew ? 'is-new-order' : ''}">

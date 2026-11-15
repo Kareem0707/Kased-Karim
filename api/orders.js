@@ -454,11 +454,13 @@ export default async function handler(req, res) {
       const highEntropyId = generateSecureOrderId();
       const now = Date.now();
       const dateFormatted = new Date().toLocaleDateString("ar-EG", {
+        timeZone: "Africa/Cairo",
         year: "numeric",
         month: "short",
         day: "numeric"
       });
       const timeFormatted = new Date().toLocaleTimeString("ar-EG", {
+        timeZone: "Africa/Cairo",
         hour: "2-digit",
         minute: "2-digit"
       });

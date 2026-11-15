@@ -1655,7 +1655,7 @@ class KasedKarimDB {
     const analytics = this.getAnalytics();
     const now = new Date();
     const dateFormatted = now.toISOString().slice(0, 10);
-    const timeFormatted = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+    const timeFormatted = now.toLocaleTimeString("ar-EG", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit" });
 
     return {
       system: "Kased Karim Lighting OS",
@@ -2335,6 +2335,7 @@ class KasedKarimDB {
         details,
         timestamp: Date.now(),
         dateFormatted: new Date().toLocaleDateString("ar-EG", {
+          timeZone: "Africa/Cairo",
           year: "numeric",
           month: "short",
           day: "numeric",

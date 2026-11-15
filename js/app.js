@@ -2021,8 +2021,12 @@ async function openCustomerProfileModal() {
             ? `<span style="font-size: 0.74rem; color: #10B981; font-weight: 700;"><i class="fas fa-check-circle"></i> تم سداد النقدية</span>`
             : `<span style="font-size: 0.74rem; color: #D97706; font-weight: 700;"><i class="fas fa-hand-holding-dollar"></i> الدفع نقدياً عند الاستلام — لم يتم التحصيل بعد</span>`;
 
-          const dateStr = ord.dateFormatted || (ord.timestamp ? new Date(ord.timestamp).toLocaleDateString("ar-EG", { year: "numeric", month: "short", day: "numeric" }) : "");
-          const timeStr = ord.timeFormatted || (ord.timestamp ? new Date(ord.timestamp).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }) : "");
+          const dateStr = ord.timestamp
+            ? new Date(ord.timestamp).toLocaleDateString("ar-EG", { timeZone: "Africa/Cairo", year: "numeric", month: "short", day: "numeric" })
+            : (ord.dateFormatted || "");
+          const timeStr = ord.timestamp
+            ? new Date(ord.timestamp).toLocaleTimeString("ar-EG", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit" })
+            : (ord.timeFormatted || "");
           const dateTimeDisplay = dateStr ? `${dateStr}${timeStr ? ' • ' + timeStr : ''}` : '';
 
           return `

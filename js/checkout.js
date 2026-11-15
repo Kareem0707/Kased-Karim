@@ -854,7 +854,16 @@
 
     if (idDisplay) idDisplay.textContent = `#${order.id}`;
     if (dateDisplay) {
-      dateDisplay.innerHTML = `<i class="fas fa-clock"></i> تم التسجيل: ${window.escapeHtml(order.dateFormatted || "اليوم")}`;
+      let dateText = order.dateFormatted || "اليوم";
+      if (order.timestamp) {
+        const d = new Date(order.timestamp);
+        const dPart = d.toLocaleDateString("ar-EG", { timeZone: "Africa/Cairo", year: "numeric", month: "short", day: "numeric" });
+        const tPart = d.toLocaleTimeString("ar-EG", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit" });
+        dateText = `${dPart} • ${tPart}`;
+      } else if (order.timeFormatted) {
+        dateText = `${order.dateFormatted} • ${order.timeFormatted}`;
+      }
+      dateDisplay.innerHTML = `<i class="fas fa-clock"></i> تم التسجيل: ${window.escapeHtml(dateText)}`;
     }
     if (totalSum) totalSum.textContent = `${formatPrice(order.total)} ج.م`;
 

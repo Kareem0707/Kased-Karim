@@ -229,13 +229,27 @@ export default async function handler(req, res) {
     const currentStatus = targetOrder.status || "received";
     const statusMessage = statusMessages[currentStatus] || statusMessages.received;
 
+    const orderTimestamp = targetOrder.timestamp || Date.now();
+    const cairoDate = new Date(orderTimestamp).toLocaleDateString("ar-EG", {
+      timeZone: "Africa/Cairo",
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+    const cairoTime = new Date(orderTimestamp).toLocaleTimeString("ar-EG", {
+      timeZone: "Africa/Cairo",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+
     return res.status(200).json({
       success: true,
       order: {
         id: targetOrder.id,
         status: currentStatus,
-        dateFormatted: targetOrder.dateFormatted || "مسجل حديثاً",
-        timestamp: targetOrder.timestamp || Date.now(),
+        dateFormatted: cairoDate,
+        timeFormatted: cairoTime,
+        timestamp: orderTimestamp,
         items: sanitizedItems,
         subtotal: targetOrder.subtotal || targetOrder.total || 0,
         total: targetOrder.total || 0,

@@ -312,10 +312,29 @@ export default async function handler(req, res) {
 
       myOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
+      const localizedOrders = myOrders.map(o => {
+        if (!o.timestamp) return o;
+        const d = new Date(o.timestamp);
+        return {
+          ...o,
+          dateFormatted: d.toLocaleDateString("ar-EG", {
+            timeZone: "Africa/Cairo",
+            year: "numeric",
+            month: "short",
+            day: "numeric"
+          }),
+          timeFormatted: d.toLocaleTimeString("ar-EG", {
+            timeZone: "Africa/Cairo",
+            hour: "2-digit",
+            minute: "2-digit"
+          })
+        };
+      });
+
       return res.status(200).json({
         success: true,
-        count: myOrders.length,
-        orders: myOrders
+        count: localizedOrders.length,
+        orders: localizedOrders
       });
     }
 
