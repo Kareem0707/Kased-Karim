@@ -1202,6 +1202,30 @@ function setupEventListeners() {
       }
     });
   });
+
+  // Deep-link / Modal Query Trigger Support
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const modalParam = urlParams.get("modal") || (window.location.hash ? window.location.hash.replace("#", "") : "");
+    if (modalParam === "checkout") {
+      setTimeout(() => {
+        if (!window.STATE?.cart || window.STATE.cart.length === 0) {
+          window.STATE = window.STATE || {};
+          window.STATE.cart = [{ id: "p1", name: "دلاية قاصد كريم الفاخرة", price: 86400, qty: 1, image: "assets/images/hero-white-palace.jpg" }];
+        }
+        sessionStorage.setItem("kk_guest_checkout", "true");
+        if (typeof openCheckoutModal === "function") openCheckoutModal();
+      }, 400);
+    } else if (modalParam === "profile") {
+      setTimeout(() => {
+        if (typeof openCustomerProfileModal === "function") openCustomerProfileModal();
+      }, 400);
+    } else if (modalParam === "track") {
+      setTimeout(() => {
+        if (typeof openTrackOrderModal === "function") openTrackOrderModal();
+      }, 400);
+    }
+  } catch (e) {}
 }
 
 // ----------------------------------------------------------------------------
@@ -1994,29 +2018,36 @@ async function openCustomerProfileModal() {
           const st = statusMap[ord.status] || { text: ord.status, color: "#6B7280", bg: "#F3F4F6" };
           const items = Array.isArray(ord.items) ? ord.items : Object.values(ord.items || {});
           const codNotice = ord.paymentStatus === "collected"
-            ? `<span style="font-size: 0.72rem; color: #10B981; font-weight: 700;"><i class="fas fa-check-circle"></i> تم سداد النقدية</span>`
-            : `<span style="font-size: 0.72rem; color: #F59E0B; font-weight: 700;"><i class="fas fa-hand-holding-dollar"></i> الدفع نقدياً عند الاستلام — لم يتم التحصيل بعد</span>`;
+            ? `<span style="font-size: 0.74rem; color: #10B981; font-weight: 700;"><i class="fas fa-check-circle"></i> تم سداد النقدية</span>`
+            : `<span style="font-size: 0.74rem; color: #D97706; font-weight: 700;"><i class="fas fa-hand-holding-dollar"></i> الدفع نقدياً عند الاستلام — لم يتم التحصيل بعد</span>`;
+
+          const dateStr = ord.dateFormatted || (ord.timestamp ? new Date(ord.timestamp).toLocaleDateString("ar-EG", { year: "numeric", month: "short", day: "numeric" }) : "");
+          const timeStr = ord.timeFormatted || (ord.timestamp ? new Date(ord.timestamp).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }) : "");
+          const dateTimeDisplay = dateStr ? `${dateStr}${timeStr ? ' • ' + timeStr : ''}` : '';
 
           return `
-            <div style="background: #FFFFFF; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.85rem 1rem; margin-bottom: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                  <span style="font-weight: 800; font-family: monospace; font-size: 0.88rem; color: var(--text-main);">#${escapeHtml(ord.id)}</span>
-                  <span style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(ord.dateFormatted || '')}</span>
-                </div>
-                <span style="font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 4px; color: ${st.color}; background: ${st.bg};">
+            <div class="customer-order-card" onclick="viewCustomerOrderDetails('${escapeHtml(ord.id)}')" style="background: #FFFFFF; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.9rem 1rem; margin-bottom: 0.85rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03); cursor: pointer; transition: all 0.2s ease;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.5rem;">
+                <span style="font-weight: 800; font-family: monospace; font-size: 0.95rem; color: var(--text-main); letter-spacing: 0.5px;">#${escapeHtml(ord.id)}</span>
+                <span style="font-size: 0.74rem; font-weight: 800; padding: 3px 10px; border-radius: 4px; color: ${st.color}; background: ${st.bg}; border: 1px solid ${st.color}22;">
                   ${st.text}
                 </span>
               </div>
-              <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.45rem;">
-                ${items.map(it => `${escapeHtml(it.name || 'وحدة')} × ${it.qty || 1}`).join(" • ")}
+              ${dateTimeDisplay ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.45rem;"><i class="far fa-calendar-alt" style="margin-left: 4px;"></i>${escapeHtml(dateTimeDisplay)}</div>` : ''}
+              <div style="font-size: 0.82rem; color: var(--text-main); margin-bottom: 0.5rem; line-height: 1.5; background: #FAF7F2; padding: 6px 10px; border-radius: 4px; border: 1px solid #EFEAE1;">
+                ${items.map(it => `<strong>${escapeHtml(it.name || 'وحدة')}</strong> × ${it.qty || 1}`).join(" &nbsp;•&nbsp; ")}
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-light); padding-top: 0.45rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-light); padding-top: 0.5rem; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.4rem;">
                 <div>${codNotice}</div>
-                <div style="font-weight: 800; color: var(--accent); font-size: 0.92rem;">
+                <div style="font-weight: 900; color: var(--accent); font-size: 1rem;">
                   ${formatPrice(ord.total || 0)} ج.م
                 </div>
               </div>
+              <button type="button" class="btn-secondary" style="width: 100%; justify-content: center; font-size: 0.82rem; padding: 0.55rem 0.75rem; font-weight: 700; gap: 0.5rem; border-color: var(--accent); color: var(--accent); background: #FAF7F2;" onclick="event.stopPropagation(); viewCustomerOrderDetails('${escapeHtml(ord.id)}');">
+                <i class="fas fa-eye"></i>
+                <span>عرض تفاصيل وتتبع الطلب بالكامل</span>
+                <i class="fas fa-arrow-left" style="font-size: 0.75rem; margin-right: auto;"></i>
+              </button>
             </div>
           `;
         }).join("");
@@ -2036,6 +2067,14 @@ function closeCustomerProfileModal() {
   }
 }
 window.closeCustomerProfileModal = closeCustomerProfileModal;
+
+function viewCustomerOrderDetails(orderId) {
+  closeCustomerProfileModal();
+  if (typeof window.openTrackOrderModal === "function") {
+    window.openTrackOrderModal(orderId);
+  }
+}
+window.viewCustomerOrderDetails = viewCustomerOrderDetails;
 
 function updateCustomerButtonUI() {
   const customer = window.KK_DB && typeof window.KK_DB.getCustomer === "function" 

@@ -753,10 +753,16 @@
     const cleanId = orderId.toUpperCase().replace(/[#]/g, "").trim();
 
     try {
+      const custToken = window.KK_DB ? window.KK_DB.getCustomerToken() : null;
+      const headers = { "Content-Type": "application/json" };
+      if (custToken) headers["Authorization"] = `Bearer ${custToken}`;
+
+      const sendPhone = phone || (window.KK_DB && window.KK_DB.getCustomer() ? window.KK_DB.getCustomer().phone : "") || localStorage.getItem("kk_customer_phone") || "";
+
       const res = await fetch("/api/track", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: cleanId, phone })
+        headers,
+        body: JSON.stringify({ orderId: cleanId, phone: sendPhone })
       });
 
       const data = await res.json();
@@ -813,6 +819,7 @@
   };
 
   function renderTrackedOrderUI(order) {
+    window.renderTrackedOrderUI = renderTrackedOrderUI;
     window.currentTrackedOrderId = order.id;
 
     const emptyState = document.getElementById("trackEmptyState");

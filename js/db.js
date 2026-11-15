@@ -1068,11 +1068,22 @@ class KasedKarimDB {
       throw new Error("سلة الطلبات فارغة");
     }
 
+    const activeCust = this.getCustomer();
+    const custId = customerData.customerId || (activeCust ? activeCust.id : null);
+    const custEmail = (customerData.email || customerData.customerEmail || (activeCust ? activeCust.email : "") || "").trim().toLowerCase();
+
     const payload = {
+      customerId: custId,
+      email: custEmail || undefined,
+      deliveryArea: customerData.deliveryArea,
       customer: {
+        id: custId,
+        email: custEmail || undefined,
         name: (customerData.name || "").trim(),
         phone: (customerData.phone || "").trim(),
         city: customerData.city || "الشيخ زايد",
+        deliveryArea: customerData.deliveryArea,
+        deliveryAreaName: customerData.deliveryAreaName,
         address: (customerData.address || "").trim(),
         notes: (customerData.notes || "").trim()
       },
@@ -1087,11 +1098,15 @@ class KasedKarimDB {
       }))
     };
 
+    const headers = { "Content-Type": "application/json" };
+    const custToken = this.getCustomerToken();
+    if (custToken) headers["Authorization"] = `Bearer ${custToken}`;
+
     // Submit order to secure server endpoint and await persistence confirmation
     const res = await fetch("/api/orders", {
       method: "POST",
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload)
     });
 
@@ -1218,7 +1233,12 @@ class KasedKarimDB {
 
   getUnreadOrdersCount() {
     const orders = this.getOrders();
-    return orders.filter(o => o.status === "pending" || !o.isRead).length;
+    // Only orders in status "received", "confirmed", or "pending" (تم الاستلام والتوثيق) that are unread
+    return orders.filter(o => {
+      const st = (o.status || "").toLowerCase().trim();
+      const isReceivedOrConfirmed = st === "received" || st === "confirmed" || st === "pending";
+      return isReceivedOrConfirmed && (!o.isRead || o.isRead === false);
+    }).length;
   }
 
   incrementSales(cartItems) {
@@ -2051,17 +2071,45 @@ class KasedKarimDB {
 
   async getCustomerOrders() {
     const token = this.getCustomerToken();
-    if (!token) return [];
-    try {
-      const res = await fetch("/api/customer?action=orders", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        return data.orders || [];
-      }
-    } catch (e) {}
-    return [];
+    const customer = this.getCustomer();
+    let cloudOrders = [];
+
+    if (token) {
+      try {
+        const res = await fetch("/api/customer?action=orders", {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.orders)) {
+            cloudOrders = data.orders;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Merge with local orders matching customer email, id or phone so orders are never lost
+    const localOrders = this.getOrders();
+    const custEmail = customer?.email?.toLowerCase().trim();
+    const custPhone = customer?.phone?.replace(/[^0-9]/g, "");
+    const custId = customer?.id;
+
+    const matchedLocal = localOrders.filter(o => {
+      if (!o || !o.id) return false;
+      if (custId && o.customerId === custId) return true;
+      const oEmail = (o.customer?.email || o.email || "").toLowerCase().trim();
+      if (custEmail && oEmail && oEmail === custEmail) return true;
+      const oPhone = (o.customer?.phone || "").replace(/[^0-9]/g, "");
+      if (custPhone && oPhone && (oPhone === custPhone || oPhone.endsWith(custPhone) || custPhone.endsWith(oPhone))) return true;
+      return false;
+    });
+
+    const map = new Map();
+    matchedLocal.forEach(o => map.set(o.id, o));
+    cloudOrders.forEach(o => map.set(o.id, o));
+    const combined = Array.from(map.values());
+    combined.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    return combined;
   }
 
   // --------------------------------------------------------------------------

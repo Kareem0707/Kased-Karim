@@ -292,10 +292,17 @@ export default async function handler(req, res) {
       // STRICT ISOLATION FILTER: Only orders belonging to this customer
       const customerPhone = auth.phone ? auth.phone.replace(/[^0-9]/g, "") : "";
       const customerId = auth.sub;
+      const customerEmail = (auth.email || "").trim().toLowerCase();
 
       const myOrders = allOrders.filter(o => {
         if (!o || !o.id) return false;
-        if (o.customerId && o.customerId === customerId) return true;
+        if (customerId && o.customerId && o.customerId === customerId) return true;
+        
+        // Permanent Email Linkage (Google OAuth & Customer Email Persistence)
+        const ordEmail = (o.customer?.email || o.email || "").trim().toLowerCase();
+        if (customerEmail && ordEmail && ordEmail === customerEmail) return true;
+
+        // Match by phone number
         const ordPhone = (o.customer?.phone || "").replace(/[^0-9]/g, "");
         if (customerPhone && ordPhone && (ordPhone === customerPhone || ordPhone.endsWith(customerPhone) || customerPhone.endsWith(ordPhone))) {
           return true;

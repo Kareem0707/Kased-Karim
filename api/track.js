@@ -3,6 +3,8 @@
 // Protects customer privacy by requiring Order ID + Customer Phone match
 // Strips all sensitive personal information (address, notes, full phone) from public response
 
+import { verifyCustomerRequest } from "./_auth.js";
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -137,10 +139,28 @@ export default async function handler(req, res) {
       });
     }
 
-    // Two-factor verification: If phone is provided, it must match.
-    // If phone is missing and order has a customer phone, require phone verification!
+    // Check if customer is authenticated via JWT session
+    const customerAuth = verifyCustomerRequest(req);
+    let isAuthenticatedOwner = false;
+    if (customerAuth) {
+      const authEmail = (customerAuth.email || "").trim().toLowerCase();
+      const authSub = customerAuth.sub || "";
+      const authPhone = (customerAuth.phone || "").replace(/[^0-9]/g, "");
+
+      const orderEmail = (targetOrder.customer?.email || targetOrder.email || "").trim().toLowerCase();
+      const orderCustId = targetOrder.customerId || (targetOrder.customer && targetOrder.customer.id) || "";
+      const orderPhone = (targetOrder.customer?.phone || "").replace(/[^0-9]/g, "");
+
+      if ((authEmail && orderEmail && authEmail === orderEmail) ||
+          (authSub && orderCustId && authSub === orderCustId) ||
+          (authPhone && orderPhone && (orderPhone.endsWith(authPhone) || authPhone.endsWith(orderPhone)))) {
+        isAuthenticatedOwner = true;
+      }
+    }
+
+    // Two-factor verification: If not authenticated owner, require matching phone verification
     const storedPhone = (targetOrder.customer?.phone || "").replace(/[^0-9]/g, "");
-    if (storedPhone && storedPhone.length >= 10) {
+    if (!isAuthenticatedOwner && storedPhone && storedPhone.length >= 10) {
       if (!cleanPhone || cleanPhone.length < 4) {
         return res.status(400).json({
           success: false,

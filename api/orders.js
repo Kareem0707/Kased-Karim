@@ -463,6 +463,9 @@ export default async function handler(req, res) {
         minute: "2-digit"
       });
 
+      const customerEmail = (order.customer?.email || order.email || order.customerEmail || "").trim().toLowerCase();
+      const customerId = order.customerId || (order.customer && order.customer.id) || null;
+
       const finalizedOrder = {
         id: highEntropyId,
         orderNumber: highEntropyId,
@@ -474,9 +477,11 @@ export default async function handler(req, res) {
           { status: "received", timestamp: now, note: "تم استلام الطلب وحجزه سحابياً" }
         ],
         isRead: false,
-        customerId: order.customerId || (order.customer && order.customer.id) || null,
+        customerId: customerId,
+        email: customerEmail || null,
         customer: {
-          id: order.customerId || null,
+          id: customerId,
+          email: customerEmail || null,
           name: name,
           phone: phone,
           city: selectedArea ? selectedArea.nameAr : (order.customer.city || "الشيخ زايد"),
