@@ -304,17 +304,21 @@ function applyDynamicSettings() {
   const settings = window.KK_DB ? window.KK_DB.getSettings() : (typeof SHOWROOM_INFO !== "undefined" ? SHOWROOM_INFO : {});
   if (!settings) return;
 
+  const isEn = isCurrentEn();
   const phone = settings.phone || "01006367690";
   const whatsapp = settings.whatsapp || "201006367690";
-  const location = settings.location || "الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة";
-  const hours = settings.workingHours || "يومياً من 11:00 صباحاً حتى 11:00 مساءً";
+  const location = isEn ? "Sheikh Zayed - 1st District, University Center, Giza, Egypt" : (settings.location || "الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة");
+  const hours = isEn ? "Daily: 10:00 AM – 10:00 PM" : (settings.workingHours || "يومياً من 11:00 صباحاً حتى 11:00 مساءً");
   const mapUrl = settings.mapUrl || "https://maps.app.goo.gl/EzzitFCzNSpQc7w77?g_st=ic";
   const mapEmbed = settings.mapEmbedUrl || "https://maps.google.com/maps?q=%D9%82%D8%A7%D8%B5%D8%AF%20%D9%83%D8%B1%D9%8A%D9%85%202%20%D9%84%D9%84%D8%A7%D8%AF%D9%88%D8%A7%D8%AA%20%D8%A7%D9%84%D9%83%D9%87%D8%B1%D8%A8%D8%A7%D8%A6%D9%8A%D8%A9%2C%20%D8%B1%D9%82%D9%85%2039%D8%8C%20%D8%A3%D9%88%D9%84%20%D8%A7%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B2%D8%A7%D9%8A%D8%AF%D8%8C%20%D9%85%D8%AD%D8%A7%D9%81%D8%B8%D8%A9%20%D8%A7%D9%84%D8%AC%D9%8A%D8%B2%D8%A9&t=&z=14&ie=UTF8&iwloc=&output=embed";
   const social = settings.social || {};
 
-  // Top bar phone
+  // Top bar phone & location
   const topPhone = document.getElementById("topBarPhone");
-  if (topPhone) topPhone.textContent = `معرض الشيخ زايد • ${phone}`;
+  if (topPhone) topPhone.textContent = isEn ? `Sheikh Zayed Flagship • ${phone}` : `معرض الشيخ زايد • ${phone}`;
+
+  const topPill = document.querySelector(".top-bar-pill");
+  if (topPill) topPill.textContent = isEn ? "Sheikh Zayed - University Center" : "الشيخ زايد - سنتر الطاهرة";
 
   // Header WhatsApp
   const headerWa = document.getElementById("headerWhatsappBtn");
@@ -323,7 +327,7 @@ function applyDynamicSettings() {
   // Floating WhatsApp
   const floatingWa = document.getElementById("floatingWhatsappBtn");
   if (floatingWa) {
-    const waText = encodeURIComponent("مرحباً معرض قاصد كريم للإضاءة بالشيخ زايد، أود الاستفسار عن وحدات الإضاءة.");
+    const waText = encodeURIComponent(isEn ? "Hello Kased Karim Luxury Lighting, I would like to inquire about your collections." : "مرحباً معرض قاصد كريم للإضاءة بالشيخ زايد، أود الاستفسار عن وحدات الإضاءة.");
     floatingWa.href = `https://wa.me/${whatsapp}?text=${waText}`;
   }
 
@@ -360,7 +364,7 @@ function applyDynamicSettings() {
   const footerWaLnk = document.getElementById("footerWhatsappLink");
   const footerWaSpn = document.getElementById("footerWhatsappSpan");
   if (footerWaLnk) footerWaLnk.href = `https://wa.me/${whatsapp}`;
-  if (footerWaSpn) footerWaSpn.textContent = `واتساب المعرض المباشر (${phone})`;
+  if (footerWaSpn) footerWaSpn.textContent = isEn ? `Direct WhatsApp Inquiries (${phone})` : `واتساب المعرض المباشر (${phone})`;
 
   // Footer Socials
   const footerInsta = document.getElementById("footerInstagramBtn");
@@ -440,23 +444,88 @@ function renderProducts() {
   const initialLimit = STATE.visibleCount || 6;
   const visibleItems = filtered.slice(0, initialLimit);
 
+  const isEn = isCurrentEn();
+  const currencyStr = window.KK_I18N ? window.KK_I18N.t("currency") : "ج.م";
+
+  const CAT_EN_MAP = {
+    "table-lamps": "Table Lamps",
+    "pendants": "Luxury Chandeliers",
+    "wall-sconces": "Wall Sconces",
+    "spotlights": "Spotlights",
+    "floor-lamps": "Floor Lamps",
+    "track-lights": "Magnetic Tracks",
+    "bollards-lanterns": "Bollards & Lanterns",
+    "spike-lights": "Garden Spikes",
+    "led-panels": "LED Panels",
+    "floodlights": "Floodlights",
+    "led-profiles": "LED Profiles",
+    "stair-lights": "Stair Lights",
+    "indoor": "Indoor Lighting",
+    "outdoor": "Outdoor Lighting",
+    "architectural": "Architectural",
+    "decorative": "Decorative",
+    "all": "All Collections"
+  };
+
+  const CAT_AR_EN_MAP = {
+    "أباجورات": "Table Lamps",
+    "دلايات": "Chandeliers",
+    "دلايات فاخرة": "Luxury Chandeliers",
+    "أباليك": "Wall Sconces",
+    "إضاءة جدارية": "Wall Sconces",
+    "أبليك": "Wall Sconce",
+    "سبوت لايت": "Spotlights",
+    "سبوت لايت معماري": "Architectural Spots",
+    "لمباديرات": "Floor Lamps",
+    "تراك لايت": "Magnetic Tracks",
+    "فوانيس سور، بولارد": "Bollards & Lanterns",
+    "فوانيس سور وبولارد": "Bollards & Lanterns",
+    "حربة": "Garden Spikes",
+    "بانلات": "LED Panels",
+    "كشافات": "Floodlights",
+    "أعواد البروفايل": "LED Profiles",
+    "درج سلم": "Stair Lights",
+    "إضاءات": "Lighting",
+    "إضاءة": "Lighting"
+  };
+
+  const STYLE_EN_MAP = {
+    "إيطالي معاصر": "Contemporary Italian",
+    "إيطالي فاخر": "Italian Luxury",
+    "مودرن فاخر": "Luxury Modern",
+    "مودرن معاصر": "Modern Contemporary",
+    "كلاسيك راقي": "Refined Classic",
+    "معماري داخلي": "Architectural Interior",
+    "معماري خارجي فائق التحمل": "Heavy-Duty Exterior",
+    "أوروجواي فاخر": "Luxury Natural Stone",
+    "مودرن نيو كلاسيك": "Neoclassical Modern",
+    "مينيمال معاصر": "Contemporary Minimal",
+    "مقاوم للعوامل الجوية": "Weatherproof IP65",
+    "إنارة غائرة": "Recessed Lighting"
+  };
+
   if (countBadge) {
     if (totalCount <= initialLimit) {
-      countBadge.textContent = `${totalCount} وحدة إضاءة فاخرة`;
+      countBadge.textContent = isEn ? `${totalCount} Luxury Lighting Units` : `${totalCount} وحدة إضاءة فاخرة`;
     } else {
-      countBadge.textContent = `عرض ${visibleItems.length} من أصل ${totalCount} وحدة إضاءة`;
+      countBadge.textContent = isEn ? `Showing ${visibleItems.length} of ${totalCount} units` : `عرض ${visibleItems.length} من أصل ${totalCount} وحدة إضاءة`;
     }
   }
 
   const loadMoreContainer = document.getElementById("loadMoreContainer");
   const loadMoreRemaining = document.getElementById("loadMoreRemaining");
+  const loadMoreBtnText = document.querySelector(".btn-load-more-text");
+
+  if (loadMoreBtnText) {
+    loadMoreBtnText.textContent = isEn ? "Load More Products" : "عرض المزيد من المنتجات";
+  }
 
   if (loadMoreContainer) {
     if (totalCount > visibleItems.length) {
       loadMoreContainer.style.display = "flex";
       if (loadMoreRemaining) {
         const remaining = totalCount - visibleItems.length;
-        loadMoreRemaining.textContent = `(${remaining} إضافية)`;
+        loadMoreRemaining.textContent = isEn ? `(${remaining} remaining)` : `(${remaining} إضافية)`;
       }
     } else {
       loadMoreContainer.style.display = "none";
@@ -468,22 +537,29 @@ function renderProducts() {
     grid.innerHTML = `
       <div class="catalog-empty">
         <div class="catalog-empty-icon"><i class="fas fa-lightbulb"></i></div>
-        <h3>لم يتم العثور على وحدات إضاءة مطابقة</h3>
-        <p class="text-muted" style="margin-top: 0.5rem;">جرب البحث بكلمات أخرى أو اختر تصنيفاً آخر من القائمة أعلاه.</p>
-        <button class="btn-primary" style="margin-top: 1.5rem;" onclick="resetFilters()">عرض كافة المجموعات</button>
+        <h3>${isEn ? 'No matching lighting units found' : 'لم يتم العثور على وحدات إضاءة مطابقة'}</h3>
+        <p class="text-muted" style="margin-top: 0.5rem;">${isEn ? 'Try adjusting your search terms or select another category.' : 'جرب البحث بكلمات أخرى أو اختر تصنيفاً آخر من القائمة أعلاه.'}</p>
+        <button class="btn-primary" style="margin-top: 1.5rem;" onclick="resetFilters()">${isEn ? 'View All Collections' : 'عرض كافة المجموعات'}</button>
       </div>
     `;
     return;
   }
 
-  const isEn = isCurrentEn();
-  const currencyStr = window.KK_I18N ? window.KK_I18N.t("currency") : "ج.م";
-
   grid.innerHTML = visibleItems.map(item => {
     const stock = item.stock !== undefined ? item.stock : 10;
     const isAvailable = stock > 0;
     const displayName = (isEn && item.enName) ? item.enName : item.name;
-    const displayCategory = (isEn && item.enCategory) ? item.enCategory : item.categoryName;
+    const displayCategory = isEn 
+      ? (item.enCategory || CAT_EN_MAP[item.category] || CAT_AR_EN_MAP[item.categoryName] || "Lighting")
+      : (item.categoryName || "إضاءة");
+
+    const displayStyle = (isEn && item.style) ? (STYLE_EN_MAP[item.style] || item.style) : item.style;
+
+    // Subtitle under product name: in English mode show enDescription snippet or specs, hide Arabic
+    let subtitleText = "";
+    if (!isEn) {
+      subtitleText = item.enName || "";
+    }
 
     return `
     <article class="product-card ${!isAvailable ? 'is-out-of-stock' : ''}" data-id="${escapeHtml(item.id)}">
@@ -514,12 +590,12 @@ function renderProducts() {
         </div>
 
         <h3 class="product-name" onclick="openQuickView('${escapeHtml(item.id)}')">${escapeHtml(displayName)}</h3>
-        <p class="product-en-name">${escapeHtml(isEn ? item.name : item.enName)}</p>
+        ${subtitleText ? `<p class="product-en-name">${escapeHtml(subtitleText)}</p>` : ''}
 
         <div class="product-specs-pills">
           ${item.specs?.cri ? `<span class="spec-pill">${escapeHtml(item.specs.cri)}</span>` : ''}
           ${item.specs?.colorTemp ? `<span class="spec-pill">${escapeHtml(item.specs.colorTemp.split(' ')[0])}</span>` : ''}
-          ${item.style ? `<span class="spec-pill">${escapeHtml(item.style)}</span>` : ''}
+          ${displayStyle ? `<span class="spec-pill">${escapeHtml(displayStyle)}</span>` : ''}
         </div>
 
         <div class="product-footer">
@@ -1098,6 +1174,7 @@ function setupEventListeners() {
     renderMobileAccordionCategories();
     renderFooterCategories();
     renderProducts();
+    applyDynamicSettings();
     if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
     if (window.KK_I18N) window.KK_I18N.applyLanguageToDOM();
   });
@@ -1860,11 +1937,23 @@ async function openCustomerProfileModal() {
   const listEl = document.getElementById("customerOrdersHistoryList");
 
   if (detailsEl) {
+    const avatarHtml = customer.avatar 
+      ? `<img src="${escapeHtml(customer.avatar)}" alt="${escapeHtml(customer.name)}" style="width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent); box-shadow: 0 4px 12px rgba(0,0,0,0.12); flex-shrink: 0;">`
+      : `<div style="width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #9A7B2C); color: #0F172A; font-weight: 800; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">${escapeHtml((customer.name || 'U').charAt(0).toUpperCase())}</div>`;
+
     detailsEl.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-        <span style="font-weight: 800; color: var(--text-main); font-size: 1.05rem;">${escapeHtml(customer.name)}</span>
-        <span style="color: var(--text-muted); font-size: 0.82rem;">• ${escapeHtml(customer.phone)}</span>
-        ${customer.email ? `<span style="color: var(--text-muted); font-size: 0.82rem;">• ${escapeHtml(customer.email)}</span>` : ''}
+      <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        ${avatarHtml}
+        <div>
+          <div style="font-weight: 800; color: var(--text-main); font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span>${escapeHtml(customer.name)}</span>
+            ${customer.authProvider === 'google' ? '<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(66,133,244,0.1); color: #1a73e8; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fab fa-google"></i> Google</span>' : ''}
+          </div>
+          <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 3px; display: flex; gap: 0.65rem; flex-wrap: wrap;">
+            ${customer.email ? `<span dir="ltr">${escapeHtml(customer.email)}</span>` : ''}
+            ${customer.phone ? `<span>• ${escapeHtml(customer.phone)}</span>` : ''}
+          </div>
+        </div>
       </div>
     `;
   }
@@ -1957,9 +2046,29 @@ function updateCustomerButtonUI() {
   if (!btn) return;
 
   if (customer) {
-    btn.innerHTML = `<i class="fas fa-user-check" style="color: #10B981;"></i>`;
-    btn.setAttribute("title", customer.name);
+    const name = customer.name || "عميل";
+    const avatar = customer.avatar || "";
+    const monogram = name.trim().charAt(0).toUpperCase() || "U";
+    btn.style.padding = "0";
+    btn.style.overflow = "hidden";
+    btn.style.display = "inline-flex";
+    btn.style.alignItems = "center";
+    btn.style.justifyContent = "center";
+    btn.style.width = "38px";
+    btn.style.height = "38px";
+    btn.style.borderRadius = "50%";
+
+    if (avatar) {
+      btn.innerHTML = `<img src="${escapeHtml(avatar)}" alt="${escapeHtml(name)}" class="customer-avatar-header" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; border: 2px solid var(--accent); box-shadow: 0 0 8px rgba(212,175,55,0.35);" onerror="this.onerror=null; this.parentElement.innerHTML='<span style=\\'width:100%;height:100%;border-radius:50%;background:linear-gradient(135deg,var(--accent),#9A7B2C);color:#0F172A;font-weight:800;font-size:0.85rem;display:flex;align-items:center;justify-content:center;\\'>${escapeHtml(monogram)}</span>';">`;
+    } else {
+      btn.innerHTML = `<span style="width: 100%; height: 100%; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #9A7B2C); color: #0F172A; font-weight: 800; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; border: 2px solid #FDFBF7;">${escapeHtml(monogram)}</span>`;
+    }
+    btn.setAttribute("title", isEn ? `Signed in as: ${name}` : `تم تسجيل الدخول: ${name} (${customer.email || customer.phone || ''})`);
   } else {
+    btn.style.padding = "";
+    btn.style.overflow = "";
+    btn.style.width = "";
+    btn.style.height = "";
     btn.innerHTML = `<i class="fas fa-user-circle"></i>`;
     btn.setAttribute("title", isEn ? "Sign in / Register" : "تسجيل الدخول / إنشاء حساب");
   }

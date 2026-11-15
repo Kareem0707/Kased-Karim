@@ -357,6 +357,28 @@ export default async function handler(req, res) {
       });
     }
 
+    // -------------------------------------------------------------------------
+    // 6. GET ALL REGISTERED CUSTOMERS (ADMIN DIRECTORY)
+    // -------------------------------------------------------------------------
+    if (req.method === "GET" && action === "list") {
+      const allCustomers = await fetchCustomers(firebaseUrl);
+      allCustomers.sort((a, b) => (b.createdAt || b.updatedAt || 0) - (a.createdAt || a.updatedAt || 0));
+      return res.status(200).json({
+        success: true,
+        count: allCustomers.length,
+        customers: allCustomers.map(c => ({
+          id: c.id,
+          googleId: c.googleId || null,
+          name: c.name || "عميل",
+          email: c.email || "",
+          phone: c.phone || "",
+          avatar: c.avatar || "",
+          authProvider: c.authProvider || "email",
+          createdAt: c.createdAt || c.updatedAt || Date.now()
+        }))
+      });
+    }
+
     return res.status(400).json({ success: false, error: "إجراء غير معروف" });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });

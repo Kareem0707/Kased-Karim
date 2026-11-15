@@ -377,11 +377,6 @@
           <span class="badge-count admin-badge-count" id="adminHeaderBadge" style="display: none;">0</span>
         </a>
 
-        <!-- WhatsApp Header Button -->
-        <a href="https://wa.me/201006367690" target="_blank" class="action-circle-btn hide-on-mobile" id="headerWhatsappBtn" title="تواصل مباشر عبر واتساب">
-          <i class="fab fa-whatsapp"></i>
-        </a>
-
         <!-- Cart Button (Minimalist Circle Outline) -->
         <button class="action-circle-btn" onclick="toggleCartDrawer(true)" title="سلة الطلبات والمشتريات">
           <i class="fas fa-shopping-cart"></i>
@@ -499,7 +494,7 @@
   <!-- ========================================================================
        HERO SECTION (Asymmetric RTL Editorial Layout - Neoclassical Palace)
        ======================================================================== -->
-  <section class="architectural-hero" dir="rtl">
+  <section class="architectural-hero" id="heroSection">
     <!-- صورة الخلفية المعمارية للقصر الرخامي والإضاءة الملكية -->
     <img 
       src="assets/images/hero-white-palace.jpg" 
@@ -514,15 +509,15 @@
     <div class="container hero-editorial-container">
       <div class="hero-editorial-block">
         <h2 class="hero-editorial-brand lighting-reveal-item lighting-reveal-brand">KASED KARIM</h2>
-        <h1 class="hero-editorial-heading lighting-reveal-item lighting-reveal-heading">
+        <h1 class="hero-editorial-heading lighting-reveal-item lighting-reveal-heading" id="heroEditorialHeading" data-i18n-html="heroEditorialHeadingHtml">
           قاصد كريم <span class="highlight-champagne">للإضاءة</span> الفاخرة
         </h1>
-        <p class="hero-editorial-desc lighting-reveal-item lighting-reveal-desc">
+        <p class="hero-editorial-desc lighting-reveal-item lighting-reveal-desc" id="heroEditorialDesc" data-i18n="heroEditorialDesc">
           نصيغ الضوء ليتحول إلى تحفة فنية تليق بقصوركم وفيلاتكم الراقية. تشكيلات إيطالية حصرية من الدلايات الفاخرة، أنظمة المسارات المغناطيسية، وتنسيق متكامل يبرز فخامة المكان وأناقته.
         </p>
-        <a href="#catalog" class="btn-architectural-cta lighting-reveal-item lighting-reveal-cta">
-          <span>استكشف الكتالوج الفاخر</span>
-          <span class="cta-arrow-icon">&larr;</span>
+        <a href="#catalog" class="btn-architectural-cta lighting-reveal-item lighting-reveal-cta" id="heroBtnExplore">
+          <span data-i18n="heroBtnExplore">استكشف الكتالوج الفاخر</span>
+          <span class="cta-arrow-icon" id="heroCtaArrow">&larr;</span>
         </a>
       </div>
     </div>
@@ -548,8 +543,8 @@
     <div class="container">
       <!-- Section Header (Asymmetric Right Editorial Header) -->
       <div class="catalog-editorial-header">
-        <span class="editorial-tag-gold">EXCLUSIVE COLLECTIONS</span>
-        <h2 class="editorial-title-charcoal">المجموعات الحصرية</h2>
+        <span class="editorial-tag-gold" data-i18n="exclusiveCollectionsTag">EXCLUSIVE COLLECTIONS</span>
+        <h2 class="editorial-title-charcoal" data-i18n="exclusiveCollectionsTitle">المجموعات الحصرية</h2>
       </div>
 
       <!-- Category Filter Tabs -->
@@ -577,7 +572,7 @@
         <div class="search-input-wrap">
           <label for="searchInput" class="visually-hidden" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;">البحث عن وحدات الإضاءة</label>
           <i class="fas fa-search search-icon"></i>
-          <input type="text" class="search-input" id="searchInput" placeholder="ابحث باسم وحدة الإضاءة، الطراز، أو الكود..." aria-label="البحث عن وحدات الإضاءة">
+          <input type="text" class="search-input" id="searchInput" data-i18n-placeholder="searchPlaceholder" placeholder="ابحث باسم وحدة الإضاءة، الطراز، أو الكود..." aria-label="البحث عن وحدات الإضاءة">
         </div>
 
         <div class="controls-right">
@@ -627,7 +622,7 @@
       <!-- Load More Products / زر عرض المزيد لمنع السكرول الطويل -->
       <div class="load-more-wrapper" id="loadMoreContainer" style="display: none;">
         <button type="button" class="btn-load-more" id="loadMoreBtn" onclick="loadMoreProducts()">
-          <span class="btn-load-more-text">عرض المزيد من المنتجات</span>
+          <span class="btn-load-more-text" data-i18n="loadMoreProducts">عرض المزيد من المنتجات</span>
           <span class="btn-load-more-counter" id="loadMoreRemaining"></span>
           <i class="fas fa-chevron-down btn-load-more-icon"></i>
         </button>

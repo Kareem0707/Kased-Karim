@@ -48,15 +48,21 @@
       // Hero Section
       heroTag: "صُنعت لقصور وفيلات الشيخ زايد",
       heroTitle: "فخامة النور في أبهى تجلياتها",
+      heroEditorialHeadingHtml: `قاصد كريم <span class="highlight-champagne">للإضاءة</span> الفاخرة`,
+      heroEditorialDesc: "نصيغ الضوء ليتحول إلى تحفة فنية تليق بقصوركم وفيلاتكم الراقية. تشكيلات إيطالية حصرية من الدلايات الفاخرة، أنظمة المسارات المغناطيسية، وتنسيق متكامل يبرز فخامة المكان وأناقته.",
       heroSubtitle: "المعرض الأول للإضاءة الإيطالية الفاخرة، المسارات المغناطيسية المعمارية، وحلول الإنارة المتكاملة لكبار مهندسي الديكور وأصحاب الذوق الرفيع.",
       heroBtnExplore: "استكشف الكتالوج الفاخر",
       heroBtnVisit: "تفضل بزيارة صالة العرض",
+      exclusiveCollectionsTag: "تشكيلات حصرية",
+      exclusiveCollectionsTitle: "المجموعات الحصرية",
+      loadMoreProducts: "عرض المزيد من المنتجات",
 
       // Filter & Sort
+      sortFeatured: "المعروضات المميزة",
       sortDefault: "الترتيب الافتراضي (الأعلى تقييماً)",
       sortPriceAsc: "السعر: من الأقل للأعلى",
       sortPriceDesc: "السعر: من الأعلى للأقل",
-      sortNewest: "الأحدث وصولاً للمعرض",
+      sortNewest: "أحدث الوصولات 2026",
       filterAll: "جميع الوحدات",
 
       // Cart Drawer
@@ -210,15 +216,21 @@
       // Hero Section
       heroTag: "Crafted for Sheikh Zayed Palaces & Villas",
       heroTitle: "The Pure Splendor of Masterpiece Lighting",
+      heroEditorialHeadingHtml: `KASED KARIM <span class="highlight-champagne">LUXURY</span> LIGHTING`,
+      heroEditorialDesc: "Crafting light into an artistic masterpiece worthy of prestigious estates and villas. Exclusive Italian chandeliers, architectural magnetic tracks, and bespoke luxury illuminations.",
       heroSubtitle: "Egypt's premier destination for Italian luxury luminaires, architectural magnetic tracks, and complete lighting solutions for distinguished architects and homeowners.",
       heroBtnExplore: "Explore Luxury Catalog",
       heroBtnVisit: "Visit Sheikh Zayed Showroom",
+      exclusiveCollectionsTag: "EXCLUSIVE COLLECTIONS",
+      exclusiveCollectionsTitle: "Exclusive Collections",
+      loadMoreProducts: "Load More Products",
 
       // Filter & Sort
+      sortFeatured: "Featured Collections",
       sortDefault: "Default Sorting (Highest Rated)",
       sortPriceAsc: "Price: Low to High",
       sortPriceDesc: "Price: High to Low",
-      sortNewest: "Newest Arrivals",
+      sortNewest: "Newest Arrivals 2026",
       filterAll: "All Lighting Units",
 
       // Cart Drawer
@@ -413,6 +425,40 @@
           el.textContent = val;
         }
       });
+
+      // Update HTML nodes with data-i18n-html attribute
+      const htmlElements = document.querySelectorAll("[data-i18n-html]");
+      htmlElements.forEach(el => {
+        const key = el.getAttribute("data-i18n-html");
+        const val = this.t(key);
+        if (val) {
+          el.innerHTML = val;
+        }
+      });
+
+      // Update CTA arrow direction
+      const ctaArrow = document.getElementById("heroCtaArrow");
+      if (ctaArrow) {
+        ctaArrow.innerHTML = isEn ? "&rarr;" : "&larr;";
+      }
+
+      // Update sort dropdown labels
+      const sortMap = {
+        "featured": isEn ? "Featured Collections" : "المعروضات المميزة",
+        "price-desc": isEn ? "Price: High to Low" : "السعر: من الأعلى للأقل",
+        "price-asc": isEn ? "Price: Low to High" : "السعر: من الأقل للأعلى",
+        "newest": isEn ? "Newest Arrivals 2026" : "أحدث الوصولات 2026"
+      };
+      document.querySelectorAll(".luxury-sort-option").forEach(opt => {
+        const v = opt.getAttribute("data-value");
+        const sp = opt.querySelector("span");
+        if (v && sp && sortMap[v]) sp.textContent = sortMap[v];
+      });
+      const sortTriggerLabel = document.getElementById("sortTriggerLabel");
+      const sortSelect = document.getElementById("sortSelect");
+      if (sortTriggerLabel && sortSelect && sortMap[sortSelect.value || "featured"]) {
+        sortTriggerLabel.textContent = sortMap[sortSelect.value || "featured"];
+      }
 
       // Update placeholders with data-i18n-placeholder attribute
       const placeholders = document.querySelectorAll("[data-i18n-placeholder]");

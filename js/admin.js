@@ -470,6 +470,7 @@ function initAdminSystem() {
 
   updateAdminHeaderBadge();
   updateCustomerTrackingBadge();
+  if (typeof updateAdminUsersCountBadge === "function") updateAdminUsersCountBadge();
   setupAdminListeners();
 
   // Listen to DB events
@@ -727,6 +728,7 @@ function switchAdminTab(tabKey, element) {
 
   if (tabKey === "overview") renderAdminOverview();
   if (tabKey === "orders") renderAdminOrders();
+  if (tabKey === "googleUsers") renderAdminGoogleUsers();
   if (tabKey === "inventory") renderAdminInventory();
   if (tabKey === "addProduct") populateAdminCategorySelect();
   if (tabKey === "bulkImport" && typeof clearBulkCsvForm === "function") clearBulkCsvForm();
@@ -3874,5 +3876,272 @@ async function executeBulkCsvImport() {
   renderAdminOverview();
 }
 window.executeBulkCsvImport = executeBulkCsvImport;
+
+// ----------------------------------------------------------------------------
+// GOOGLE & REGISTERED WEB USERS DIRECTORY (دليل عملاء الويب ومستخدمي Google)
+// ----------------------------------------------------------------------------
+let currentAdminUsersFilter = "all";
+let adminCustomersCache = [];
+
+async function updateAdminUsersCountBadge() {
+  const badge = document.getElementById("adminUsersCountBadge");
+  if (!badge) return;
+  try {
+    const list = window.KK_DB ? await window.KK_DB.getCustomersList() : [];
+    if (list && list.length > 0) {
+      badge.textContent = list.length;
+      badge.style.display = "inline-flex";
+    } else {
+      badge.style.display = "none";
+    }
+  } catch (e) {}
+}
+window.updateAdminUsersCountBadge = updateAdminUsersCountBadge;
+
+async function renderAdminGoogleUsers() {
+  const container = document.getElementById("adminGoogleUsersListContainer");
+  if (!container) return;
+
+  container.innerHTML = `
+    <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-muted);">
+      <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 0.75rem; color: #4285F4;"></i>
+      <div>جاري تحميل سجل العملاء وحسابات Google المتصلة...</div>
+    </div>
+  `;
+
+  try {
+    const customers = window.KK_DB ? await window.KK_DB.getCustomersList() : [];
+    adminCustomersCache = Array.isArray(customers) ? customers : [];
+  } catch (e) {
+    adminCustomersCache = [];
+  }
+
+  updateGoogleUsersKPIs();
+  displayFilteredGoogleUsers();
+}
+window.renderAdminGoogleUsers = renderAdminGoogleUsers;
+
+function updateGoogleUsersKPIs() {
+  const totalEl = document.getElementById("kpiGoogleUsersTotal");
+  const verifiedEl = document.getElementById("kpiGoogleUsersVerified");
+  const todayEl = document.getElementById("kpiGoogleUsersToday");
+
+  const total = adminCustomersCache.length;
+  const verified = adminCustomersCache.filter(c => c.authProvider === "google" || c.googleId).length;
+  
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const today = adminCustomersCache.filter(c => {
+    const t = c.createdAt || c.updatedAt || 0;
+    return t >= startOfDay;
+  }).length;
+
+  if (totalEl) totalEl.textContent = total;
+  if (verifiedEl) verifiedEl.textContent = verified;
+  if (todayEl) todayEl.textContent = today;
+
+  const badge = document.getElementById("adminUsersCountBadge");
+  if (badge) {
+    badge.textContent = total;
+    badge.style.display = total > 0 ? "inline-flex" : "none";
+  }
+}
+
+function setAdminGoogleUsersFilter(filterKey) {
+  currentAdminUsersFilter = filterKey;
+  document.querySelectorAll("[data-user-filter]").forEach(btn => {
+    if (btn.getAttribute("data-user-filter") === filterKey) {
+      btn.classList.add("is-active-user-filter");
+      btn.style.background = "#0F172A";
+      btn.style.color = "#FFFFFF";
+      btn.style.fontWeight = "800";
+    } else {
+      btn.classList.remove("is-active-user-filter");
+      btn.style.background = "";
+      btn.style.color = "";
+      btn.style.fontWeight = "500";
+    }
+  });
+  displayFilteredGoogleUsers();
+}
+window.setAdminGoogleUsersFilter = setAdminGoogleUsersFilter;
+
+function filterAdminGoogleUsers() {
+  displayFilteredGoogleUsers();
+}
+window.filterAdminGoogleUsers = filterAdminGoogleUsers;
+
+function displayFilteredGoogleUsers() {
+  const container = document.getElementById("adminGoogleUsersListContainer");
+  if (!container) return;
+
+  const searchInput = document.getElementById("adminGoogleUsersSearchInput");
+  const q = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+  let filtered = adminCustomersCache.filter(c => {
+    // Filter by type
+    if (currentAdminUsersFilter === "google" && c.authProvider !== "google" && !c.googleId) return false;
+    if (currentAdminUsersFilter === "local" && (c.authProvider === "google" || c.googleId)) return false;
+
+    // Filter by search query
+    if (q) {
+      const name = (c.name || "").toLowerCase();
+      const email = (c.email || "").toLowerCase();
+      const phone = (c.phone || "").toLowerCase();
+      return name.includes(q) || email.includes(q) || phone.includes(q);
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1.5rem; background: #F8FAFC; border: 1px dashed var(--border-light); border-radius: 12px;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(66,133,244,0.1); color: #4285F4; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; font-size: 1.5rem;">
+          <i class="fab fa-google"></i>
+        </div>
+        <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.35rem;">لم يتم العثور على عملاء مسجلين</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted); max-width: 480px; margin: 0 auto;">
+          ${q ? "لا توجد نتائج مطابقة لبحثك، جرب البحث بكلمات أخرى." : "ستظهر هنا كافة حسابات Google والإيميلات التي قامت بتسجيل الدخول أو إتمام الطلبات على الموقع فور ربطها."}
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(user => {
+    const isGoogle = user.authProvider === "google" || !!user.googleId;
+    const name = user.name || "عميل غير معروف";
+    const email = user.email || "";
+    const phone = user.phone || "";
+    const avatar = user.avatar || "";
+    const monogram = name.trim().charAt(0).toUpperCase() || "U";
+    
+    // Format timestamp
+    let dateStr = "غير محدد";
+    const ts = user.createdAt || user.updatedAt;
+    if (ts) {
+      try {
+        const d = new Date(ts);
+        dateStr = d.toLocaleDateString("ar-EG", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      } catch (e) {
+        dateStr = String(ts);
+      }
+    }
+
+    const avatarHtml = avatar 
+      ? `<img src="${escapeHtml(avatar)}" alt="${escapeHtml(name)}" style="width: 54px; height: 54px; border-radius: 50%; object-fit: cover; border: 2px solid ${isGoogle ? '#4285F4' : 'var(--accent)'}; box-shadow: 0 4px 10px rgba(0,0,0,0.1); flex-shrink: 0;" onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg, #1e293b, #0f172a);color:#D4AF37;font-weight:800;font-size:1.3rem;display:flex;align-items:center;justify-content:center;border:2px solid var(--accent);\\'>${escapeHtml(monogram)}</div>';">`
+      : `<div style="width: 54px; height: 54px; border-radius: 50%; background: linear-gradient(135deg, ${isGoogle ? '#4285F4' : 'var(--accent)'}, ${isGoogle ? '#1a73e8' : '#9A7B2C'}); color: #FFFFFF; font-weight: 800; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); flex-shrink: 0;">${escapeHtml(monogram)}</div>`;
+
+    return `
+      <div class="admin-user-card" style="background: #FFFFFF; border: 1px solid var(--border-light); border-radius: 12px; padding: 1.35rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: transform 0.2s ease, box-shadow 0.2s ease; display: flex; flex-direction: column; justify-content: space-between;">
+        
+        <div>
+          <!-- Card Header: Avatar & Info -->
+          <div style="display: flex; align-items: center; gap: 0.9rem; margin-bottom: 1rem;">
+            ${avatarHtml}
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-weight: 800; color: var(--text-main); font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(name)}">
+                ${escapeHtml(name)}
+              </div>
+              <div style="margin-top: 3px;">
+                ${isGoogle 
+                  ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(66,133,244,0.1); color: #1a73e8; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fab fa-google"></i> Google Verified</span>`
+                  : `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(16,185,129,0.1); color: #059669; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-user-check"></i> تسجيل محلي</span>`
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- User Details List -->
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem; padding: 0.75rem 0; border-top: 1px solid #F1F5F9; border-bottom: 1px solid #F1F5F9; margin-bottom: 0.85rem;">
+            ${email ? `
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                <span style="color: var(--text-muted); font-size: 0.78rem;"><i class="fas fa-envelope" style="width: 14px;"></i> البريد:</span>
+                <span style="font-weight: 600; color: #1E293B; direction: ltr; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(email)}">${escapeHtml(email)}</span>
+              </div>
+            ` : ''}
+
+            ${phone ? `
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                <span style="color: var(--text-muted); font-size: 0.78rem;"><i class="fas fa-phone" style="width: 14px;"></i> الهاتف:</span>
+                <span style="font-weight: 600; color: #1E293B; direction: ltr;">${escapeHtml(phone)}</span>
+              </div>
+            ` : ''}
+
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+              <span style="color: var(--text-muted); font-size: 0.78rem;"><i class="fas fa-calendar-check" style="width: 14px;"></i> تاريخ الانضمام:</span>
+              <span style="color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(dateStr)}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card Actions -->
+        <div style="display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center; margin-top: 0.5rem;">
+          ${email ? `
+            <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;" onclick="copyToClipboard('${escapeHtml(email)}', 'تم نسخ البريد الإلكتروني')">
+              <i class="fas fa-copy"></i> <span>نسخ الإيميل</span>
+            </button>
+          ` : ''}
+          ${phone ? `
+            <a href="https://wa.me/${phone.replace(/[^0-9]/g, '')}" target="_blank" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem; color: #10B981; border-color: rgba(16,185,129,0.3);">
+              <i class="fab fa-whatsapp"></i> <span>واتساب</span>
+            </a>
+          ` : ''}
+          <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;" onclick="filterOrdersByCustomer('${escapeHtml(email || phone)}')">
+            <i class="fas fa-receipt"></i> <span>الطلبات</span>
+          </button>
+        </div>
+
+      </div>
+    `;
+  }).join("");
+}
+
+async function refreshAdminGoogleUsers() {
+  showToast("⏳ جاري تحديث سجل عملاء Google والويب...");
+  await renderAdminGoogleUsers();
+  showToast("✅ تم تحديث سجل العملاء");
+}
+window.refreshAdminGoogleUsers = refreshAdminGoogleUsers;
+
+function filterOrdersByCustomer(query) {
+  if (!query) return;
+  switchAdminTab("orders", document.querySelector('[onclick*="orders"]'));
+  const input = document.getElementById("adminOrdersSearchInput");
+  if (input) {
+    input.value = query;
+    input.dispatchEvent(new Event("input"));
+  }
+}
+window.filterOrdersByCustomer = filterOrdersByCustomer;
+
+function exportAdminGoogleUsersCSV() {
+  if (!adminCustomersCache || adminCustomersCache.length === 0) {
+    showToast("⚠️ لا يوجد عملاء مسجلون للتصدير");
+    return;
+  }
+
+  const headers = ["ID", "Name", "Email", "Phone", "AuthProvider", "RegistrationDate"];
+  const rows = adminCustomersCache.map(u => [
+    `"${(u.id || '').replace(/"/g, '""')}"`,
+    `"${(u.name || '').replace(/"/g, '""')}"`,
+    `"${(u.email || '').replace(/"/g, '""')}"`,
+    `"${(u.phone || '').replace(/"/g, '""')}"`,
+    `"${(u.authProvider || 'local').replace(/"/g, '""')}"`,
+    `"${new Date(u.createdAt || u.updatedAt || Date.now()).toISOString()}"`
+  ]);
+
+  const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `kased_karim_customers_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast("📥 تم تصدير بيانات العملاء إلى ملف CSV");
+}
+window.exportAdminGoogleUsersCSV = exportAdminGoogleUsersCSV;
 
 

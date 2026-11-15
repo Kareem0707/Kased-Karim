@@ -1941,8 +1941,57 @@ class KasedKarimDB {
       localStorage.setItem("kk_customer_account", JSON.stringify(customer));
       if (customer.name) localStorage.setItem("kk_customer_name", customer.name);
       if (customer.phone) localStorage.setItem("kk_customer_phone", customer.phone);
+      if (customer.email) localStorage.setItem("kk_customer_email", customer.email);
+      if (customer.avatar) localStorage.setItem("kk_customer_avatar", customer.avatar);
+
+      // Local customers directory cache
+      let list = [];
+      try {
+        const raw = localStorage.getItem("kased_karim_db_customers_v1");
+        if (raw) list = JSON.parse(raw);
+      } catch(e) {}
+      if (!Array.isArray(list)) list = [];
+      const idx = list.findIndex(c => (customer.id && c.id === customer.id) || (customer.email && c.email === customer.email));
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], ...customer };
+      } else {
+        list.unshift(customer);
+      }
+      localStorage.setItem("kased_karim_db_customers_v1", JSON.stringify(list));
       window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: customer }));
     } catch (e) {}
+  }
+
+  async getCustomersList() {
+    try {
+      const res = await fetch(`/api/customer?action=list&t=${Date.now()}`, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.customers)) {
+          localStorage.setItem("kased_karim_db_customers_v1", JSON.stringify(data.customers));
+          return data.customers;
+        }
+      }
+    } catch (e) {}
+    // Fallback directly to Firebase RTDB if API is bypassed
+    try {
+      const cloudUrl = this.getCustomCloudUrl() || "https://kased-karim-default-rtdb.firebaseio.com";
+      const res = await fetch(`${cloudUrl}/customers.json?t=${Date.now()}`, { cache: "no-store" });
+      if (res.ok) {
+        const raw = await res.json();
+        if (raw && typeof raw === "object") {
+          const list = Object.values(raw).filter(Boolean);
+          list.sort((a, b) => (b.createdAt || b.updatedAt || 0) - (a.createdAt || a.updatedAt || 0));
+          localStorage.setItem("kased_karim_db_customers_v1", JSON.stringify(list));
+          return list;
+        }
+      }
+    } catch (e) {}
+    try {
+      const local = localStorage.getItem("kased_karim_db_customers_v1");
+      if (local) return JSON.parse(local);
+    } catch (e) {}
+    return [];
   }
 
   getCustomerToken() {

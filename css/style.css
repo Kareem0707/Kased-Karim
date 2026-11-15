@@ -2842,7 +2842,29 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
   .hide-on-mobile {
     display: none !important;
   }
-  .top-bar-badge {
+  .top-bar-lang-link {
+  background: none;
+  border: none;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  padding: 0 0.35rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+.top-bar-lang-link i {
+  font-family: "Font Awesome 6 Free" !important;
+  font-weight: 900 !important;
+  font-style: normal !important;
+}
+.top-bar-lang-link:hover {
+  color: var(--accent);
+  transform: scale(1.08);
+}
+
+.top-bar-badge {
     font-size: 0.68rem;
     padding: 0.1rem 0.5rem;
   }
@@ -3077,7 +3099,6 @@ html[dir="ltr"] .floating-circle-whatsapp {
   right: 1.5rem;
 }
 
-html[dir="ltr"] .top-bar-lang-link i,
 html[dir="ltr"] .brand-title-ar {
   font-family: 'Cairo', sans-serif;
 }
@@ -3090,6 +3111,57 @@ html[dir="ltr"] .card-hover-actions {
 html[dir="ltr"] .product-price-current .product-currency {
   margin-right: 0;
   margin-left: 0.25rem;
+}
+
+html[dir="ltr"] .hero-architectural-overlay {
+  background: linear-gradient(
+    to right,
+    rgba(248, 248, 250, 0.95) 0%,
+    rgba(248, 248, 250, 0.88) 30%,
+    rgba(248, 248, 250, 0.55) 55%,
+    rgba(248, 248, 250, 0.1) 75%,
+    transparent 100%
+  );
+}
+
+html[dir="ltr"] .hero-editorial-block {
+  text-align: left;
+}
+
+html[dir="ltr"] .hero-bento-strip {
+  left: auto;
+  right: 5rem;
+}
+
+html[dir="ltr"] .catalog-editorial-header {
+  text-align: left;
+}
+
+html[dir="ltr"] .search-input-wrap .search-icon {
+  right: auto;
+  left: 1.15rem;
+}
+
+html[dir="ltr"] .search-input {
+  padding-right: 1.25rem;
+  padding-left: 2.85rem;
+}
+
+html[dir="ltr"] .sub-bar-lead {
+  border-left: 1px solid rgba(0, 0, 0, 0.08);
+  border-right: none;
+  padding-left: 0;
+  padding-right: 1rem;
+}
+
+html[dir="ltr"] .luxury-sort-trigger .sort-leading-icon {
+  margin-left: 0;
+  margin-right: 0.5rem;
+}
+
+html[dir="ltr"] .luxury-sort-trigger .sort-trigger-icon {
+  margin-right: 0;
+  margin-left: 0.5rem;
 }
 
 /* Stock Badges (PRD Section 6) */
