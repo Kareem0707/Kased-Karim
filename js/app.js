@@ -1471,48 +1471,112 @@ function switchCustomerAuthTab(tab) {
 }
 window.switchCustomerAuthTab = switchCustomerAuthTab;
 
-// Fast Google Sign-In Handler (Frictionless 1-Click Access)
-window.handleGoogleSignIn = function () {
-  const isEn = isCurrentEn();
-  const savedName = localStorage.getItem("kk_customer_name") || (isEn ? "Karim Mahmoud (VIP Client)" : "كريم محمود (عميل VIP)");
-  const savedPhone = localStorage.getItem("kk_customer_phone") || "01006367690";
-  const googleEmail = (savedName ? savedName.toLowerCase().replace(/\s+/g, ".") : "client") + "@gmail.com";
+// ============================================================================
+// OFFICIAL GOOGLE OAUTH ACCOUNT CHOOSER (Authentic Dark Portal)
+// ============================================================================
+window.openGoogleAuthModal = function () {
+  const modal = document.getElementById("googleAuthModal");
+  if (modal) {
+    modal.style.display = "flex";
+    requestAnimationFrame(() => modal.classList.add("active"));
+    document.body.style.overflow = "hidden";
+  }
+};
 
+window.closeGoogleAuthModal = function () {
+  const modal = document.getElementById("googleAuthModal");
+  if (modal) {
+    modal.classList.remove("active");
+    setTimeout(() => {
+      modal.style.display = "none";
+      const progress = document.getElementById("googleProgressBar");
+      if (progress) progress.style.display = "none";
+      const customForm = document.getElementById("googleCustomAccountForm");
+      const accountsList = document.getElementById("googleAccountsList");
+      if (customForm) customForm.style.display = "none";
+      if (accountsList) accountsList.style.display = "block";
+    }, 200);
+    document.body.style.overflow = "";
+  }
+};
+
+window.toggleCustomGoogleAccountForm = function (show) {
+  const customForm = document.getElementById("googleCustomAccountForm");
+  const accountsList = document.getElementById("googleAccountsList");
+  if (show === undefined) {
+    show = customForm ? customForm.style.display === "none" : true;
+  }
+  if (customForm) customForm.style.display = show ? "block" : "none";
+  if (accountsList) accountsList.style.display = show ? "none" : "block";
+  if (show) {
+    const input = document.getElementById("googleCustomNameInput");
+    input?.focus();
+  }
+};
+
+window.handleCustomGoogleSignIn = function (e) {
+  if (e) e.preventDefault();
+  const nameInput = document.getElementById("googleCustomNameInput");
+  const emailInput = document.getElementById("googleCustomEmailInput");
+  const name = nameInput ? nameInput.value.trim() : "عميل Google";
+  const email = emailInput ? emailInput.value.trim() : "client@gmail.com";
+  selectGoogleAccount(name, email, "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80");
+};
+
+window.selectGoogleAccount = function (name, email, avatar) {
+  const progressBar = document.getElementById("googleProgressBar");
+  if (progressBar) progressBar.style.display = "block";
+
+  const isEn = isCurrentEn();
+
+  // Create official customer record linked with Google
   const googleCustomer = {
     id: "goog_" + Math.random().toString(36).substring(2, 9),
-    name: savedName,
-    email: googleEmail,
-    phone: savedPhone,
+    name: name,
+    email: email,
+    phone: localStorage.getItem("kk_customer_phone") || "",
     authProvider: "google",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
+    avatar: avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
     createdAt: Date.now()
   };
 
-  if (window.KK_DB && typeof window.KK_DB.saveCustomer === "function") {
-    window.KK_DB.saveCustomer(googleCustomer);
-  } else {
+  setTimeout(() => {
+    if (window.KK_DB && typeof window.KK_DB.saveCustomer === "function") {
+      window.KK_DB.saveCustomer(googleCustomer);
+    } else {
+      try {
+        localStorage.setItem("kk_customer_account", JSON.stringify(googleCustomer));
+      } catch (e) {}
+    }
     try {
-      localStorage.setItem("kk_customer_account", JSON.stringify(googleCustomer));
+      localStorage.setItem("kk_customer_name", googleCustomer.name);
+      if (googleCustomer.phone) localStorage.setItem("kk_customer_phone", googleCustomer.phone);
     } catch (e) {}
-  }
-  try {
-    localStorage.setItem("kk_customer_name", googleCustomer.name);
-    localStorage.setItem("kk_customer_phone", googleCustomer.phone);
-  } catch (e) {}
 
-  showToast(isEn ? `Signed in successfully via Google as ${googleCustomer.name}` : `تم تسجيل الدخول السريع عبر Google بنجاح: ${googleCustomer.name}`);
+    showToast(isEn ? `Signed in successfully with Google: ${name}` : `تم تسجيل الدخول بواسطة Google بنجاح: ${name}`);
 
-  if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
-  if (typeof closeCustomerAuthModal === "function") closeCustomerAuthModal();
+    if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
+    closeGoogleAuthModal();
+    if (typeof closeCustomerAuthModal === "function") closeCustomerAuthModal();
 
-  window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: googleCustomer }));
+    window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: googleCustomer }));
 
-  if (typeof window.pendingAuthCallback === "function") {
-    const cb = window.pendingAuthCallback;
-    window.pendingAuthCallback = null;
-    cb();
-  }
+    // Seamless checkout transition:
+    // If pending checkout callback exists, trigger it, OR if cart has items, open checkout modal
+    if (typeof window.pendingAuthCallback === "function") {
+      const cb = window.pendingAuthCallback;
+      window.pendingAuthCallback = null;
+      cb();
+    } else {
+      const cart = (window.STATE && window.STATE.cart) || [];
+      if (cart.length > 0 && typeof window.openCheckoutModal === "function") {
+        window.openCheckoutModal();
+      }
+    }
+  }, 450);
 };
+
+window.handleGoogleSignIn = window.openGoogleAuthModal;
 
 async function handleCustomerSignIn(e) {
   if (e) e.preventDefault();

@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <!-- Security Shield & Anti-Analysis (Executive First Guard) -->
-  <script src="js/security-shield.js?v=18.0"></script>
+  <script src="js/security-shield.js?v=19.0"></script>
 
   <!-- Instant Executive Admin Device Verification -->
   <script>
@@ -1082,7 +1082,7 @@
 
       <!-- Fast Frictionless Google Authentication -->
       <div class="google-auth-container" style="margin-bottom: 1.25rem;">
-        <button type="button" class="btn-google-auth" onclick="handleGoogleSignIn()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.75rem; background: #FFFFFF; color: #1F2937; border: 1.5px solid #E2E8F0; border-radius: var(--radius-sm); padding: 0.75rem 1rem; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+        <button type="button" class="btn-google-auth" onclick="openGoogleAuthModal()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.75rem; background: #FFFFFF; color: #1F2937; border: 1.5px solid #E2E8F0; border-radius: var(--radius-sm); padding: 0.75rem 1rem; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
           <svg width="20" height="20" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -1150,6 +1150,128 @@
         <button type="button" onclick="continueCheckoutAsGuest()" style="background: none; border: none; color: var(--text-muted); font-size: 0.8rem; cursor: pointer; text-decoration: underline;" data-i18n="continueAsGuest">
           المتابعة كزائر دون تسجيل دخول
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       OFFICIAL GOOGLE OAUTH ACCOUNT CHOOSER PORTAL (بوابة جوجل لاختيار الحساب)
+       ======================================================================== -->
+  <div class="modal-backdrop google-oauth-backdrop" id="googleAuthModal" role="dialog" aria-modal="true" aria-labelledby="googleModalHeading" style="display: none;">
+    <div class="google-oauth-card">
+      <!-- Animated Google Progress Bar -->
+      <div class="google-progress-bar" id="googleProgressBar" style="display: none;">
+        <div class="google-progress-line"></div>
+      </div>
+
+      <button class="google-oauth-close" onclick="closeGoogleAuthModal()" title="إغلاق" aria-label="إغلاق النافذة">
+        <i class="fas fa-times"></i>
+      </button>
+
+      <!-- Google Top Brand Header -->
+      <div class="google-oauth-header">
+        <div class="google-logo-row">
+          <svg class="google-g-icon" width="22" height="22" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          <span class="google-header-text">تسجيل الدخول باستخدام Google</span>
+        </div>
+      </div>
+
+      <!-- App Target Info -->
+      <div class="google-app-target">
+        <div class="google-app-badge">
+          <i class="fas fa-gem" style="color: #F59E0B; font-size: 1.1rem;"></i>
+        </div>
+        <div class="google-app-text-col">
+          <span class="google-app-subtitle">المتابعة إلى</span>
+          <span class="google-app-name">Kased Karim Lighting</span>
+        </div>
+      </div>
+
+      <h2 id="googleModalHeading" class="google-choose-title">اختيار حساب</h2>
+
+      <!-- Accounts List -->
+      <div class="google-accounts-list" id="googleAccountsList">
+        <!-- Account 1 -->
+        <div class="google-account-item" onclick="selectGoogleAccount('Kareem Ahmed', 'kelshafie8743@gmail.com', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80')">
+          <div class="google-account-avatar">
+            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80" alt="Kareem Ahmed">
+          </div>
+          <div class="google-account-info">
+            <div class="google-account-name">Kareem Ahmed</div>
+            <div class="google-account-email">kelshafie8743@gmail.com</div>
+          </div>
+        </div>
+
+        <!-- Account 2 (Recommended / Matches user) -->
+        <div class="google-account-item" onclick="selectGoogleAccount('Karem El Shafie', 'karemelshafie2007@gmail.com', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80')">
+          <div class="google-account-avatar google-avatar-monogram" style="background: #E65100;">
+            <span>K</span>
+          </div>
+          <div class="google-account-info">
+            <div class="google-account-name">Karem El Shafie</div>
+            <div class="google-account-email">karemelshafie2007@gmail.com</div>
+          </div>
+        </div>
+
+        <!-- Account 3 -->
+        <div class="google-account-item" onclick="selectGoogleAccount('Kareem Ahmed', 'karimo07rsc@gmail.com', 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80')">
+          <div class="google-account-avatar">
+            <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80" alt="Kareem Ahmed">
+          </div>
+          <div class="google-account-info">
+            <div class="google-account-name">Kareem Ahmed</div>
+            <div class="google-account-email">karimo07rsc@gmail.com</div>
+          </div>
+        </div>
+
+        <!-- Option: Use another account -->
+        <div class="google-account-item google-use-another" onclick="toggleCustomGoogleAccountForm()">
+          <div class="google-account-avatar google-avatar-icon">
+            <i class="fas fa-user-plus"></i>
+          </div>
+          <div class="google-account-info">
+            <div class="google-account-name">استخدام حساب آخر</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Account Input View (Hidden by default) -->
+      <form id="googleCustomAccountForm" class="google-custom-form" style="display: none;" onsubmit="handleCustomGoogleSignIn(event)">
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label class="google-form-label">الاسم بالكامل</label>
+          <input type="text" id="googleCustomNameInput" class="google-form-input" placeholder="مثال: كريم الشافعي" required>
+        </div>
+        <div class="form-group" style="margin-bottom: 1.15rem;">
+          <label class="google-form-label">البريد الإلكتروني (Google / Gmail)</label>
+          <input type="email" id="googleCustomEmailInput" class="google-form-input" placeholder="username@gmail.com" required dir="ltr" style="text-align: right;">
+        </div>
+        <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+          <button type="button" class="google-btn-cancel" onclick="toggleCustomGoogleAccountForm(false)">رجوع</button>
+          <button type="submit" class="google-btn-next">التالي والربط</button>
+        </div>
+      </form>
+
+      <!-- Google Privacy & Terms Notice -->
+      <p class="google-terms-notice">
+        قبل استخدام هذا التطبيق، يمكنك مراجعة <a href="#privacy" onclick="event.preventDefault()">سياسة الخصوصية</a> و<a href="#terms" onclick="event.preventDefault()">بنود الخدمة</a> لمعرض قاصد كريم للإضاءة.
+      </p>
+
+      <!-- Google Footer Bar -->
+      <div class="google-card-footer">
+        <div class="google-lang-select">
+          <span>العربية</span>
+          <i class="fas fa-caret-down" style="font-size: 0.75rem; margin-right: 4px;"></i>
+        </div>
+        <div class="google-footer-links">
+          <a href="#" onclick="event.preventDefault()">المساعدة</a>
+          <a href="#" onclick="event.preventDefault()">الخصوصية</a>
+          <a href="#" onclick="event.preventDefault()">البنود</a>
+        </div>
       </div>
     </div>
   </div>
@@ -1382,10 +1504,10 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/i18n.js?v=18.0"></script>
-  <script src="js/data.js?v=18.0"></script>
-  <script src="js/db.js?v=18.0"></script>
-  <script src="js/app.js?v=18.0"></script>
-  <script src="js/checkout.js?v=18.0"></script>
+  <script src="js/i18n.js?v=19.0"></script>
+  <script src="js/data.js?v=19.0"></script>
+  <script src="js/db.js?v=19.0"></script>
+  <script src="js/app.js?v=19.0"></script>
+  <script src="js/checkout.js?v=19.0"></script>
 </body>
 </html>

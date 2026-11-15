@@ -178,8 +178,10 @@
     // Auto-fill logged in customer data or saved details
     const nameInput = document.getElementById("custNameInput") || document.getElementById("checkoutCustomerName");
     const phoneInput = document.getElementById("custPhoneInput") || document.getElementById("checkoutCustomerPhone");
+    const addressInput = document.getElementById("custAddressInput") || document.getElementById("checkoutCustomerAddress");
+
     if (isCustomerLoggedIn) {
-      if (nameInput && !nameInput.value) nameInput.value = isCustomerLoggedIn.name || "";
+      if (nameInput) nameInput.value = isCustomerLoggedIn.name || nameInput.value || "";
       if (phoneInput && !phoneInput.value) phoneInput.value = isCustomerLoggedIn.phone || "";
     } else {
       try {
@@ -199,9 +201,16 @@
       modal.classList.add("active");
       document.body.style.overflow = "hidden";
       setTimeout(() => {
-        const firstInput = document.getElementById("custNameInput") || document.getElementById("checkoutCustomerName");
-        firstInput?.focus();
-      }, 100);
+        if (nameInput && nameInput.value.trim().length >= 3) {
+          if (phoneInput && !phoneInput.value.trim()) {
+            phoneInput.focus();
+          } else if (addressInput) {
+            addressInput.focus();
+          }
+        } else if (nameInput) {
+          nameInput.focus();
+        }
+      }, 120);
     }
   };
 
