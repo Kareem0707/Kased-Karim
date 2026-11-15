@@ -115,7 +115,13 @@
     }
 
     // PRD Section 4: Customer account check before checkout (Guest cart preserved)
-    const isCustomerLoggedIn = window.KK_DB && typeof window.KK_DB.getCustomer === "function" && window.KK_DB.getCustomer();
+    const isCustomerLoggedIn = (window.KK_DB && typeof window.KK_DB.getCustomer === "function" && window.KK_DB.getCustomer()) ||
+      (() => {
+        try {
+          const u = localStorage.getItem("kk_customer_user") || localStorage.getItem("kk_customer_account");
+          return u ? JSON.parse(u) : null;
+        } catch(e) { return null; }
+      })();
     const isGuestApproved = sessionStorage.getItem("kk_guest_checkout") === "true";
 
     if (!isCustomerLoggedIn && !isGuestApproved && typeof window.openCustomerAuthModal === "function") {

@@ -1921,11 +1921,22 @@ class KasedKarimDB {
   // --------------------------------------------------------------------------
   getCustomer() {
     try {
-      const data = localStorage.getItem(DB_KEYS.CUSTOMER_USER);
+      const data = localStorage.getItem(DB_KEYS.CUSTOMER_USER) || localStorage.getItem("kk_customer_account");
       return data ? JSON.parse(data) : null;
     } catch (e) {
       return null;
     }
+  }
+
+  saveCustomer(customer) {
+    if (!customer) return;
+    try {
+      localStorage.setItem(DB_KEYS.CUSTOMER_USER, JSON.stringify(customer));
+      localStorage.setItem("kk_customer_account", JSON.stringify(customer));
+      if (customer.name) localStorage.setItem("kk_customer_name", customer.name);
+      if (customer.phone) localStorage.setItem("kk_customer_phone", customer.phone);
+      window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: customer }));
+    } catch (e) {}
   }
 
   getCustomerToken() {
@@ -1950,6 +1961,7 @@ class KasedKarimDB {
     if (data.token && data.customer) {
       localStorage.setItem(DB_KEYS.CUSTOMER_TOKEN, data.token);
       localStorage.setItem(DB_KEYS.CUSTOMER_USER, JSON.stringify(data.customer));
+      localStorage.setItem("kk_customer_account", JSON.stringify(data.customer));
       window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: data.customer }));
     }
     return data.customer;
@@ -1969,6 +1981,7 @@ class KasedKarimDB {
     if (data.token && data.customer) {
       localStorage.setItem(DB_KEYS.CUSTOMER_TOKEN, data.token);
       localStorage.setItem(DB_KEYS.CUSTOMER_USER, JSON.stringify(data.customer));
+      localStorage.setItem("kk_customer_account", JSON.stringify(data.customer));
       window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: data.customer }));
     }
     return data.customer;
@@ -1977,6 +1990,7 @@ class KasedKarimDB {
   customerLogout() {
     localStorage.removeItem(DB_KEYS.CUSTOMER_TOKEN);
     localStorage.removeItem(DB_KEYS.CUSTOMER_USER);
+    localStorage.removeItem("kk_customer_account");
     window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: null }));
   }
 

@@ -1541,17 +1541,16 @@ window.selectGoogleAccount = function (name, email, avatar) {
   };
 
   setTimeout(() => {
-    if (window.KK_DB && typeof window.KK_DB.saveCustomer === "function") {
-      window.KK_DB.saveCustomer(googleCustomer);
-    } else {
-      try {
-        localStorage.setItem("kk_customer_account", JSON.stringify(googleCustomer));
-      } catch (e) {}
-    }
     try {
+      localStorage.setItem("kk_customer_account", JSON.stringify(googleCustomer));
+      localStorage.setItem("kk_customer_user", JSON.stringify(googleCustomer));
       localStorage.setItem("kk_customer_name", googleCustomer.name);
       if (googleCustomer.phone) localStorage.setItem("kk_customer_phone", googleCustomer.phone);
     } catch (e) {}
+
+    if (window.KK_DB && typeof window.KK_DB.saveCustomer === "function") {
+      window.KK_DB.saveCustomer(googleCustomer);
+    }
 
     showToast(isEn ? `Signed in successfully with Google: ${name}` : `تم تسجيل الدخول بواسطة Google بنجاح: ${name}`);
 
