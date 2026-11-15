@@ -390,6 +390,14 @@ function applyDynamicSettings() {
   // Footer Designer link
   const designerLink = document.getElementById("footerDesignerLink");
   if (designerLink && social.designerUrl) designerLink.href = social.designerUrl;
+
+  // Initialize Google Identity Services if client ID is configured
+  if (settings.googleClientId) {
+    window.GOOGLE_CLIENT_ID = settings.googleClientId;
+  }
+  if (typeof initGoogleIdentityServices === "function") {
+    setTimeout(initGoogleIdentityServices, 600);
+  }
 }
 
 // 4. Render Product Cards Grid (With Luxury Pagination / Load More)
@@ -1472,110 +1480,273 @@ function switchCustomerAuthTab(tab) {
 window.switchCustomerAuthTab = switchCustomerAuthTab;
 
 // ============================================================================
-// OFFICIAL GOOGLE OAUTH ACCOUNT CHOOSER (Authentic Dark Portal)
+// AUTHENTIC GOOGLE IDENTITY SERVICES (GIS) & OAUTH 2.0 INTEGRATION
 // ============================================================================
-window.openGoogleAuthModal = function () {
-  const modal = document.getElementById("googleAuthModal");
+window.GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || "";
+
+function getActiveGoogleClientId() {
+  if (window.GOOGLE_CLIENT_ID && window.GOOGLE_CLIENT_ID.trim()) {
+    return window.GOOGLE_CLIENT_ID.trim();
+  }
+  const dbSettings = window.KK_DB ? window.KK_DB.getSettings() : null;
+  if (dbSettings && dbSettings.googleClientId && dbSettings.googleClientId.trim()) {
+    return dbSettings.googleClientId.trim();
+  }
+  try {
+    const local = localStorage.getItem("kk_google_client_id");
+    if (local && local.trim()) return local.trim();
+  } catch (e) {}
+  return "";
+}
+
+function parseJwt(token) {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map(c => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error("JWT parse error:", e);
+    return null;
+  }
+}
+
+window.initGoogleIdentityServices = function () {
+  const clientId = getActiveGoogleClientId();
+  if (!clientId || typeof google === "undefined" || !google.accounts || !google.accounts.id) {
+    return;
+  }
+
+  try {
+    google.accounts.id.initialize({
+      client_id: clientId,
+      callback: async function (response) {
+        if (!response || !response.credential) return;
+        const profile = parseJwt(response.credential);
+        if (profile) {
+          await completeGoogleCustomerSignIn({
+            sub: profile.sub,
+            name: profile.name,
+            email: profile.email,
+            picture: profile.picture
+          });
+        }
+      },
+      auto_select: false,
+      cancel_on_tap_outside: true
+    });
+
+    const slot = document.getElementById("googleOfficialBtnSlot");
+    if (slot) {
+      slot.innerHTML = "";
+      slot.style.display = "flex";
+      google.accounts.id.renderButton(slot, {
+        theme: "outline",
+        size: "large",
+        type: "standard",
+        shape: "rectangular",
+        text: "continue_with",
+        logo_alignment: "left",
+        width: 320
+      });
+    }
+  } catch (err) {
+    console.warn("Google ID init note:", err);
+  }
+};
+
+window.completeGoogleCustomerSignIn = async function (profile) {
+  if (!profile || !profile.email) {
+    showToast(isCurrentEn() ? "Invalid Google account data" : "بيانات حساب Google غير مكتملة", "error");
+    return;
+  }
+
+  const isEn = isCurrentEn();
+  const name = profile.name || profile.given_name || "عميل Google";
+  const email = profile.email;
+  const avatar = profile.picture || "";
+  const googleId = profile.sub || profile.id || ("g_" + Date.now());
+
+  let customerData = {
+    id: "goog_" + googleId,
+    googleId: googleId,
+    name: name,
+    email: email,
+    avatar: avatar,
+    phone: localStorage.getItem("kk_customer_phone") || "",
+    authProvider: "google",
+    createdAt: Date.now()
+  };
+
+  // Sync with backend API
+  try {
+    const res = await fetch("/api/customer?action=google", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sub: googleId,
+        googleId: googleId,
+        name: name,
+        email: email,
+        picture: avatar,
+        phone: customerData.phone
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && data.customer) {
+        customerData = { ...customerData, ...data.customer };
+        if (data.token) {
+          localStorage.setItem("kk_customer_token", data.token);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Backend Google auth sync note:", err);
+  }
+
+  // Store in LocalStorage and Local DB
+  try {
+    localStorage.setItem("kk_customer_account", JSON.stringify(customerData));
+    localStorage.setItem("kk_customer_user", JSON.stringify(customerData));
+    localStorage.setItem("kk_customer_name", customerData.name);
+    if (customerData.phone) localStorage.setItem("kk_customer_phone", customerData.phone);
+    if (customerData.email) localStorage.setItem("kk_customer_email", customerData.email);
+  } catch (e) {}
+
+  if (window.KK_DB && typeof window.KK_DB.saveCustomer === "function") {
+    window.KK_DB.saveCustomer(customerData);
+  }
+
+  showToast(isEn ? `Signed in successfully with Google: ${name}` : `تم تسجيل الدخول بحساب Google الحقيقي بنجاح: ${name}`);
+
+  if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
+  if (typeof closeCustomerAuthModal === "function") closeCustomerAuthModal();
+
+  window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: customerData }));
+
+  // Seamless checkout transition
+  if (typeof window.pendingAuthCallback === "function") {
+    const cb = window.pendingAuthCallback;
+    window.pendingAuthCallback = null;
+    cb();
+  } else {
+    const cart = (window.STATE && window.STATE.cart) || [];
+    if (cart.length > 0 && typeof window.openCheckoutModal === "function") {
+      window.openCheckoutModal();
+    }
+  }
+};
+
+window.openGoogleConfigModal = function () {
+  const modal = document.getElementById("googleConfigModal");
   if (modal) {
     modal.style.display = "flex";
     requestAnimationFrame(() => modal.classList.add("active"));
+    const input = document.getElementById("googleClientIdInput");
+    if (input) {
+      input.value = getActiveGoogleClientId();
+      input.focus();
+    }
     document.body.style.overflow = "hidden";
   }
 };
 
-window.closeGoogleAuthModal = function () {
-  const modal = document.getElementById("googleAuthModal");
+window.closeGoogleConfigModal = function () {
+  const modal = document.getElementById("googleConfigModal");
   if (modal) {
     modal.classList.remove("active");
-    setTimeout(() => {
-      modal.style.display = "none";
-      const progress = document.getElementById("googleProgressBar");
-      if (progress) progress.style.display = "none";
-      const customForm = document.getElementById("googleCustomAccountForm");
-      const accountsList = document.getElementById("googleAccountsList");
-      if (customForm) customForm.style.display = "none";
-      if (accountsList) accountsList.style.display = "block";
-    }, 200);
+    setTimeout(() => { modal.style.display = "none"; }, 200);
     document.body.style.overflow = "";
   }
 };
 
-window.toggleCustomGoogleAccountForm = function (show) {
-  const customForm = document.getElementById("googleCustomAccountForm");
-  const accountsList = document.getElementById("googleAccountsList");
-  if (show === undefined) {
-    show = customForm ? customForm.style.display === "none" : true;
-  }
-  if (customForm) customForm.style.display = show ? "block" : "none";
-  if (accountsList) accountsList.style.display = show ? "none" : "block";
-  if (show) {
-    const input = document.getElementById("googleCustomNameInput");
-    input?.focus();
-  }
-};
-
-window.handleCustomGoogleSignIn = function (e) {
+window.handleSaveGoogleClientId = function (e) {
   if (e) e.preventDefault();
-  const nameInput = document.getElementById("googleCustomNameInput");
-  const emailInput = document.getElementById("googleCustomEmailInput");
-  const name = nameInput ? nameInput.value.trim() : "عميل Google";
-  const email = emailInput ? emailInput.value.trim() : "client@gmail.com";
-  selectGoogleAccount(name, email, "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80");
-};
+  const input = document.getElementById("googleClientIdInput");
+  const val = (input?.value || "").trim();
+  if (!val) {
+    showToast(isCurrentEn() ? "Please enter a valid Google Client ID" : "يرجى كتابة معرف Google Client ID صحيح", "error");
+    return;
+  }
 
-window.selectGoogleAccount = function (name, email, avatar) {
-  const progressBar = document.getElementById("googleProgressBar");
-  if (progressBar) progressBar.style.display = "block";
+  window.GOOGLE_CLIENT_ID = val;
+  try {
+    localStorage.setItem("kk_google_client_id", val);
+  } catch (e) {}
 
-  const isEn = isCurrentEn();
+  if (window.KK_DB && typeof window.KK_DB.updateSettings === "function") {
+    const curr = window.KK_DB.getSettings() || {};
+    window.KK_DB.updateSettings({ ...curr, googleClientId: val });
+  }
 
-  // Create official customer record linked with Google
-  const googleCustomer = {
-    id: "goog_" + Math.random().toString(36).substring(2, 9),
-    name: name,
-    email: email,
-    phone: localStorage.getItem("kk_customer_phone") || "",
-    authProvider: "google",
-    avatar: avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
-    createdAt: Date.now()
-  };
+  closeGoogleConfigModal();
+  showToast(isCurrentEn() ? "Google Client ID saved successfully!" : "تم حفظ معرف عميل Google بنجاح!");
 
+  window.initGoogleIdentityServices();
   setTimeout(() => {
-    try {
-      localStorage.setItem("kk_customer_account", JSON.stringify(googleCustomer));
-      localStorage.setItem("kk_customer_user", JSON.stringify(googleCustomer));
-      localStorage.setItem("kk_customer_name", googleCustomer.name);
-      if (googleCustomer.phone) localStorage.setItem("kk_customer_phone", googleCustomer.phone);
-    } catch (e) {}
-
-    if (window.KK_DB && typeof window.KK_DB.saveCustomer === "function") {
-      window.KK_DB.saveCustomer(googleCustomer);
-    }
-
-    showToast(isEn ? `Signed in successfully with Google: ${name}` : `تم تسجيل الدخول بواسطة Google بنجاح: ${name}`);
-
-    if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
-    closeGoogleAuthModal();
-    if (typeof closeCustomerAuthModal === "function") closeCustomerAuthModal();
-
-    window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: googleCustomer }));
-
-    // Seamless checkout transition:
-    // If pending checkout callback exists, trigger it, OR if cart has items, open checkout modal
-    if (typeof window.pendingAuthCallback === "function") {
-      const cb = window.pendingAuthCallback;
-      window.pendingAuthCallback = null;
-      cb();
-    } else {
-      const cart = (window.STATE && window.STATE.cart) || [];
-      if (cart.length > 0 && typeof window.openCheckoutModal === "function") {
-        window.openCheckoutModal();
-      }
-    }
-  }, 450);
+    window.handleGoogleSignIn();
+  }, 300);
 };
 
-window.handleGoogleSignIn = window.openGoogleAuthModal;
+window.handleGoogleSignIn = function () {
+  const isEn = isCurrentEn();
+  const clientId = getActiveGoogleClientId();
+
+  if (!clientId) {
+    openGoogleConfigModal();
+    return;
+  }
+
+  if (typeof google === "undefined" || !google.accounts) {
+    showToast(isEn ? "Loading Google Sign-In SDK, please retry in a second..." : "جارٍ تحميل خدمات Google، يرجى المحاولة بعد ثوانٍ...", "info");
+    return;
+  }
+
+  // Authentic Google OAuth 2.0 Popup Flow
+  try {
+    const tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: "openid profile email",
+      callback: async (tokenResponse) => {
+        if (tokenResponse.error) {
+          console.error("Google OAuth Error:", tokenResponse);
+          if (tokenResponse.error !== "popup_closed_by_user") {
+            showToast(isEn ? `Google sign-in error: ${tokenResponse.error}` : `خطأ أثناء تسجيل الدخول من Google: ${tokenResponse.error}`, "error");
+          }
+          return;
+        }
+
+        try {
+          showToast(isEn ? "Connecting your Google Account..." : "جارٍ التحقق من حسابك واستيراد بياناتك من Google...", "info");
+          const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+            headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+          });
+          if (!userRes.ok) throw new Error("Failed to fetch Google profile");
+          const profile = await userRes.json();
+          await completeGoogleCustomerSignIn(profile);
+        } catch (fetchErr) {
+          console.error("Error fetching Google profile:", fetchErr);
+          showToast(isEn ? "Could not retrieve profile from Google" : "تعذر استلام بيانات الحساب من Google", "error");
+        }
+      }
+    });
+
+    tokenClient.requestAccessToken({ prompt: "select_account" });
+  } catch (err) {
+    console.error("Failed to initialize Google OAuth popup:", err);
+    if (google.accounts && google.accounts.id) {
+      google.accounts.id.prompt();
+    } else {
+      showToast(isEn ? "Failed to launch Google Sign-In" : "تعذر فتح نافذة تسجيل دخول Google", "error");
+    }
+  }
+};
 
 async function handleCustomerSignIn(e) {
   if (e) e.preventDefault();

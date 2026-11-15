@@ -132,6 +132,69 @@ export default async function handler(req, res) {
     }
 
     // -------------------------------------------------------------------------
+    // 1.5 AUTHENTIC GOOGLE OAUTH SIGN-IN
+    // -------------------------------------------------------------------------
+    if (req.method === "POST" && (action === "google" || action === "google-login")) {
+      const email = (body.email || "").trim().toLowerCase().replace(/[<>]/g, "");
+      const name = (body.name || "").trim().replace(/[<>]/g, "");
+      const googleId = (body.sub || body.googleId || "").trim();
+      const avatar = (body.picture || body.avatar || "").trim();
+      const phone = (body.phone || "").replace(/[^0-9]/g, "");
+
+      if (!email || !googleId) {
+        return res.status(400).json({ success: false, error: "بيانات حساب Google غير مكتملة" });
+      }
+
+      const allCustomers = await fetchCustomers(firebaseUrl);
+      let customer = allCustomers.find(c => c.googleId === googleId || (c.email && c.email.toLowerCase() === email));
+
+      if (customer) {
+        customer.name = name || customer.name;
+        customer.googleId = googleId;
+        if (avatar) customer.avatar = avatar;
+        if (phone && !customer.phone) customer.phone = phone;
+        customer.authProvider = "google";
+        customer.updatedAt = Date.now();
+        await saveCustomer(firebaseUrl, customer);
+      } else {
+        const customerId = "CUST-G-" + crypto.randomInt(1000, 9999) + "-" + crypto.randomBytes(2).toString("hex").toUpperCase();
+        customer = {
+          id: customerId,
+          googleId,
+          name: name || "عميل Google",
+          email,
+          phone: phone || "",
+          avatar: avatar || "",
+          authProvider: "google",
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        await saveCustomer(firebaseUrl, customer);
+      }
+
+      const token = createCustomerToken({
+        sub: customer.id,
+        phone: customer.phone || "",
+        name: customer.name,
+        email: customer.email
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "تم تسجيل الدخول بواسطة Google بنجاح",
+        token,
+        customer: {
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          email: customer.email,
+          avatar: customer.avatar,
+          authProvider: "google"
+        }
+      });
+    }
+
+    // -------------------------------------------------------------------------
     // 2. SIGN IN / LOGIN CUSTOMER
     // -------------------------------------------------------------------------
     if (req.method === "POST" && action === "login") {

@@ -2951,6 +2951,7 @@ function loadAdminSettingsValues() {
   const emailEl = document.getElementById("settingsEmail");
   const mapEl = document.getElementById("settingsMapUrl");
   const mapEmbedEl = document.getElementById("settingsMapEmbedUrl");
+  const googleClientIdEl = document.getElementById("settingsGoogleClientId");
   const fbEl = document.getElementById("settingsFacebook");
   const igEl = document.getElementById("settingsInstagram");
   const ttEl = document.getElementById("settingsTiktok");
@@ -2962,6 +2963,7 @@ function loadAdminSettingsValues() {
   if (emailEl) emailEl.value = s.email || "";
   if (mapEl) mapEl.value = s.mapUrl || "";
   if (mapEmbedEl) mapEmbedEl.value = s.mapEmbedUrl || "";
+  if (googleClientIdEl) googleClientIdEl.value = s.googleClientId || localStorage.getItem("kk_google_client_id") || "";
 
   const social = s.social || {};
   if (fbEl) fbEl.value = social.facebook || "";
@@ -2980,10 +2982,15 @@ function handleAdminSettingsSubmit(e) {
   const email = (document.getElementById("settingsEmail")?.value || "").trim();
   const mapUrl = (document.getElementById("settingsMapUrl")?.value || "").trim();
   const mapEmbedUrl = (document.getElementById("settingsMapEmbedUrl")?.value || "").trim();
+  const googleClientId = (document.getElementById("settingsGoogleClientId")?.value || "").trim();
 
   const facebook = (document.getElementById("settingsFacebook")?.value || "").trim();
   const instagram = (document.getElementById("settingsInstagram")?.value || "").trim();
   const tiktok = (document.getElementById("settingsTiktok")?.value || "").trim();
+
+  if (googleClientId) {
+    try { localStorage.setItem("kk_google_client_id", googleClientId); } catch(e) {}
+  }
 
   const newSettings = {
     phone,
@@ -2993,6 +3000,7 @@ function handleAdminSettingsSubmit(e) {
     email,
     mapUrl,
     mapEmbedUrl,
+    googleClientId,
     social: {
       facebook,
       instagram,
