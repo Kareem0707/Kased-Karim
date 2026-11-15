@@ -172,6 +172,7 @@ class KasedKarimDB {
       email: "vip@kasedkarim.com",
       workingHours: "يومياً من 11:00 صباحاً حتى 11:00 مساءً",
       consultationFee: "مجاناً للمشاريع والفيلات السكنية عند التعاقد",
+      googleClientId: "910456482507-6mr7uag968b7cmkadrru1ptjac3cfocs.apps.googleusercontent.com",
       social: {
         facebook: "https://facebook.com",
         instagram: "https://instagram.com",
@@ -181,7 +182,12 @@ class KasedKarimDB {
     };
 
     if (cachedSettings && typeof cachedSettings === "object") {
-      const mergedSettings = { ...defaultSettings, ...cachedSettings, social: { ...defaultSettings.social, ...(cachedSettings.social || {}) } };
+      const mergedSettings = {
+        ...defaultSettings,
+        ...cachedSettings,
+        googleClientId: (cachedSettings && cachedSettings.googleClientId) || defaultSettings.googleClientId,
+        social: { ...defaultSettings.social, ...(cachedSettings.social || {}) }
+      };
       localStorage.setItem(DB_KEYS.SETTINGS, JSON.stringify(mergedSettings));
       window.SHOWROOM_INFO = mergedSettings;
       if (typeof SHOWROOM_INFO !== "undefined") SHOWROOM_INFO = mergedSettings;

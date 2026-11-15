@@ -1482,7 +1482,7 @@ window.switchCustomerAuthTab = switchCustomerAuthTab;
 // ============================================================================
 // AUTHENTIC GOOGLE IDENTITY SERVICES (GIS) & OAUTH 2.0 INTEGRATION
 // ============================================================================
-window.GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || "";
+window.GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || "910456482507-6mr7uag968b7cmkadrru1ptjac3cfocs.apps.googleusercontent.com";
 
 function getActiveGoogleClientId() {
   if (window.GOOGLE_CLIENT_ID && window.GOOGLE_CLIENT_ID.trim()) {
