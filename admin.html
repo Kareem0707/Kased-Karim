@@ -1284,30 +1284,30 @@
            TAB: DELIVERY AREAS & FEES (مناطق ورسوم التوصيل - PRD Sections 4 & 5)
            ==================================================================== -->
       <section class="admin-tab-pane" id="adminPane_deliveryAreas">
-        <div style="max-width: 960px; margin: 0 auto; background: #FFFFFF; padding: 2.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <div class="delivery-areas-card-container">
+          <div class="delivery-areas-header-row">
             <div>
               <span class="section-tag">LOGISTICS & DELIVERY</span>
-              <h2 style="font-size: 1.35rem; font-weight: 800; color: var(--text-main); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.5rem;">
+              <h2 class="delivery-areas-title">
                 <i class="fas fa-truck-ramp-box" style="color: var(--accent);"></i>
                 <span>إدارة مناطق ورسوم الشحن والتوصيل</span>
               </h2>
-              <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+              <p class="delivery-areas-subtitle">
                 تحديد مناطق التغطية المعتمدة، رسوم الشحن لكل منطقة، ومدة التوصيل. الطلبات خارج المناطق المدعومة تُرفض تلقائياً.
               </p>
             </div>
-            <div style="display: flex; gap: 0.65rem; align-items: center; flex-wrap: wrap;">
-              <button type="button" class="btn-secondary" style="font-size: 0.82rem; padding: 0.55rem 1rem; font-weight: 700;" onclick="addNewDeliveryAreaRow()">
+            <div class="delivery-areas-action-buttons">
+              <button type="button" class="btn-secondary btn-add-delivery-zone" onclick="addNewDeliveryAreaRow()">
                 <i class="fas fa-plus"></i> <span>إضافة نطاق مناطق جديد</span>
               </button>
-              <button type="button" class="btn-primary" style="font-size: 0.82rem; padding: 0.55rem 1.15rem; font-weight: 700;" onclick="saveDeliveryAreasChanges()">
+              <button type="button" class="btn-primary btn-save-delivery-zones" onclick="saveDeliveryAreasChanges()">
                 <i class="fas fa-save"></i> <span>حفظ تعديلات التوصيل</span>
               </button>
             </div>
           </div>
 
-          <div class="table-responsive" style="margin-top: 1rem;">
-            <table class="admin-table">
+          <div class="table-responsive delivery-table-responsive">
+            <table class="admin-table admin-delivery-table">
               <thead>
                 <tr>
                   <th style="min-width: 260px;">المناطق والمدن المشمولة (اكتب أكثر من منطقة مفصولة بفواصل)</th>

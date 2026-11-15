@@ -973,24 +973,34 @@ function renderAdminOrders(statusFilter = null) {
           </thead>
           <tbody>
             ${items.length > 0 ? items.map(item => `
-              <tr>
-                <td>
+              <tr class="order-item-tr">
+                <td class="col-product">
                   <div class="item-cell-with-img">
                     <img class="item-table-img" src="${escapeHtml(item.image || '')}" alt="${escapeHtml(item.name || 'وحدة إضاءة')}" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
-                    <div>
-                      <div style="font-weight: 700; color: var(--text-main);">${escapeHtml(item.name || 'وحدة إضاءة فاخرة')}</div>
-                      <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-brand);">${escapeHtml(item.enName || '')}</div>
+                    <div class="item-info-meta">
+                      <div class="item-name-ar">${escapeHtml(item.name || 'وحدة إضاءة فاخرة')}</div>
+                      <div class="item-name-en">${escapeHtml(item.enName || '')}</div>
+                      <span class="item-cat-badge">${escapeHtml(item.categoryName || 'إضاءة فاخرة')}</span>
                     </div>
                   </div>
                 </td>
-                <td style="color: var(--text-muted);">${escapeHtml(item.categoryName || 'إضاءة فاخرة')}</td>
-                <td style="font-weight: 700;">${item.qty || 1} وحدة</td>
-                <td>${formatPrice(item.price || 0)} ج.م</td>
-                <td><strong style="color: var(--text-main);">${formatPrice((item.price || 0) * (item.qty || 1))} ج.م</strong></td>
+                <td class="col-category">${escapeHtml(item.categoryName || 'إضاءة فاخرة')}</td>
+                <td class="col-qty">
+                  <span class="mobile-stat-label">الكمية</span>
+                  <span class="qty-val">${item.qty || 1} وحدة</span>
+                </td>
+                <td class="col-price">
+                  <span class="mobile-stat-label">سعر القطعة</span>
+                  <span class="price-val">${formatPrice(item.price || 0)} ج.م</span>
+                </td>
+                <td class="col-total">
+                  <span class="mobile-stat-label">الإجمالي</span>
+                  <span class="total-val">${formatPrice((item.price || 0) * (item.qty || 1))} ج.م</span>
+                </td>
               </tr>
             `).join("") : `
               <tr>
-                <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1.25rem;">
+                <td colspan="5" class="order-no-items-cell" style="text-align: center; color: var(--text-muted); padding: 1.25rem;">
                   <i class="fas fa-boxes-stacked" style="margin-left: 0.45rem; color: var(--accent);"></i>
                   وحدات إضاءة تم اختيارها من الكتالوج بقيمة إجمالية ${formatPrice(order.total)} جنيه مصري
                 </td>
@@ -3361,37 +3371,49 @@ function renderAdminDeliveryAreas() {
   if (!tbody || !window.KK_DB) return;
 
   const areas = window.KK_DB.getDeliveryAreas();
-  tbody.innerHTML = areas.map(area => {
+  tbody.innerHTML = areas.map((area, index) => {
     const areaNamesDisplay = Array.isArray(area.names) && area.names.length > 0
       ? area.names.join("، ")
       : (area.name || area.nameAr || "");
+    const isActive = area.active !== false;
 
     return `
-      <tr data-area-id="${escapeHtml(area.id)}">
-        <td>
-          <textarea class="form-input area-names-input" rows="2" style="width: 100%; min-width: 250px; font-size: 0.85rem; font-weight: 700; padding: 0.45rem; line-height: 1.5; resize: vertical;" placeholder="أدخل أسماء المناطق مفصولة بفواصل (مثال: الشيخ زايد، بيفرلي هيلز، الربوة، 6 أكتوبر)">${escapeHtml(areaNamesDisplay)}</textarea>
-          <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">اكتب أكثر من منطقة مفصولة بفاصلة (،) لتطبيق نفس رسوم الشحن عليها</div>
+      <tr data-area-id="${escapeHtml(area.id)}" class="delivery-area-tr">
+        <td class="del-col-names">
+          <div class="del-card-header-mobile">
+            <span class="del-zone-badge"><i class="fas fa-map-marker-alt"></i> نطاق توصيل #${index + 1}</span>
+            <button type="button" class="del-delete-btn-mobile" onclick="deleteDeliveryAreaRow('${escapeHtml(area.id)}')" title="حذف نطاق التوصيل">
+              <i class="fas fa-trash-alt"></i> <span>حذف النطاق</span>
+            </button>
+          </div>
+          <label class="del-field-label">المناطق والمدن المشمولة (مفصولة بفواصل):</label>
+          <textarea class="form-input area-names-input" rows="2" placeholder="أدخل أسماء المناطق مفصولة بفواصل (مثال: الشيخ زايد، بيفرلي هيلز، الربوة، 6 أكتوبر)">${escapeHtml(areaNamesDisplay)}</textarea>
+          <div class="del-field-hint"><i class="fas fa-info-circle"></i> اكتب أكثر من منطقة مفصولة بفاصلة (،) لتطبيق نفس رسوم الشحن ومدة التوصيل عليها</div>
         </td>
-        <td>
-          <input type="text" class="form-input area-enname-input" value="${escapeHtml(area.enName || area.nameEn || '')}" style="width: 100%; min-width: 140px; font-size: 0.82rem; font-family: var(--font-brand); padding: 0.4rem 0.5rem;" placeholder="e.g. Sheikh Zayed Zones">
+        <td class="del-col-enname">
+          <label class="del-field-label">الاسم بالإنجليزية (English Name):</label>
+          <input type="text" class="form-input area-enname-input" value="${escapeHtml(area.enName || area.nameEn || '')}" placeholder="e.g. Sheikh Zayed Zones">
         </td>
-        <td>
-          <div style="display: flex; align-items: center; gap: 0.35rem;">
-            <input type="number" class="form-input area-fee-input" value="${Number(area.fee) || 0}" style="width: 85px; padding: 0.35rem 0.45rem; font-weight: 700; text-align: center;" min="0">
-            <span style="font-size: 0.8rem; color: var(--text-muted);">ج.م</span>
+        <td class="del-col-fee">
+          <label class="del-field-label">رسوم الشحن:</label>
+          <div class="del-fee-input-group">
+            <input type="number" class="form-input area-fee-input" value="${Number(area.fee) || 0}" min="0">
+            <span class="del-fee-unit">ج.م</span>
           </div>
         </td>
-        <td>
-          <input type="text" class="form-input area-days-input" value="${escapeHtml(area.days || '1-3 أيام عمل')}" style="width: 135px; padding: 0.35rem 0.5rem; font-size: 0.82rem;">
+        <td class="del-col-days">
+          <label class="del-field-label">مدة التوصيل التقديرية:</label>
+          <input type="text" class="form-input area-days-input" value="${escapeHtml(area.days || '1-3 أيام عمل')}" placeholder="1-3 أيام عمل">
         </td>
-        <td>
-          <label style="display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;">
-            <input type="checkbox" class="area-active-checkbox" ${area.active !== false ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: var(--accent);">
-            <span style="font-size: 0.8rem; font-weight: 700;">${area.active !== false ? 'مدعومة' : 'غير مدعومة'}</span>
+        <td class="del-col-status">
+          <label class="del-field-label">حالة التغطية:</label>
+          <label class="del-status-toggle-label">
+            <input type="checkbox" class="area-active-checkbox" ${isActive ? 'checked' : ''} onchange="this.closest('.del-col-status').querySelector('.del-status-text').textContent = this.checked ? 'مدعومة للتوصيل' : 'غير مدعومة حالياً'">
+            <span class="del-status-text ${isActive ? 'is-active' : 'is-inactive'}">${isActive ? 'مدعومة للتوصيل' : 'غير مدعومة حالياً'}</span>
           </label>
         </td>
-        <td style="text-align: center;">
-          <button type="button" class="btn-secondary" style="color: #EF4444; border-color: rgba(239,68,68,0.25); padding: 0.35rem 0.6rem; font-size: 0.75rem;" onclick="deleteDeliveryAreaRow('${escapeHtml(area.id)}')" title="حذف نطاق التوصيل">
+        <td class="del-col-actions">
+          <button type="button" class="btn-secondary del-delete-btn-desktop" onclick="deleteDeliveryAreaRow('${escapeHtml(area.id)}')" title="حذف نطاق التوصيل">
             <i class="fas fa-trash-alt"></i>
           </button>
         </td>

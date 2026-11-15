@@ -406,6 +406,7 @@
   text-align: right;
   color: var(--text-muted);
   font-size: 0.78rem;
+  font-weight: 700;
 }
 .order-items-table td {
   padding: 0.75rem 0.85rem;
@@ -418,11 +419,164 @@
   gap: 0.75rem;
 }
 .item-table-img {
-  width: 54px;
-  height: 54px;
-  border-radius: var(--radius-xs);
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-xs, 6px);
   object-fit: cover;
   border: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+.item-info-meta {
+  flex: 1;
+  min-width: 0;
+}
+.item-name-ar {
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.35;
+}
+.item-name-en {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--font-brand);
+}
+.item-cat-badge {
+  display: none; /* Shown on mobile */
+}
+.mobile-stat-label {
+  display: none; /* Shown on mobile */
+}
+.price-val, .total-val {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   DELIVERY AREAS & FEES MANAGER STYLES (إدارة مناطق ورسوم الشحن)
+   ========================================================================== */
+.delivery-areas-card-container {
+  max-width: 960px;
+  margin: 0 auto;
+  background: #FFFFFF;
+  padding: 2.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-subtle);
+}
+.delivery-areas-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.delivery-areas-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.delivery-areas-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+  line-height: 1.5;
+}
+.delivery-areas-action-buttons {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.admin-delivery-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.admin-delivery-table th {
+  background: #F8FAFC;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: right;
+  border-bottom: 1px solid var(--border-light);
+}
+.admin-delivery-table td {
+  padding: 0.85rem;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: top;
+}
+.area-names-input {
+  width: 100%;
+  min-width: 250px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.45rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+.area-enname-input {
+  width: 100%;
+  min-width: 140px;
+  font-size: 0.82rem;
+  font-family: var(--font-brand);
+  padding: 0.4rem 0.5rem;
+}
+.del-fee-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.area-fee-input {
+  width: 85px;
+  padding: 0.35rem 0.45rem;
+  font-weight: 700;
+  text-align: center;
+}
+.del-fee-unit {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.area-days-input {
+  width: 135px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+}
+.del-status-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+.area-active-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.del-status-text {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.del-status-text.is-active {
+  color: #059669;
+}
+.del-status-text.is-inactive {
+  color: #94A3B8;
+}
+.del-field-label,
+.del-card-header-mobile,
+.del-delete-btn-mobile {
+  display: none;
+}
+.del-field-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+  line-height: 1.4;
 }
 
 /* Order Footer Actions */
@@ -818,26 +972,407 @@
   .admin-kpi-card .kpi-value {
     font-size: 1.25rem;
   }
+  /* Mobile Phone Optimization for Orders & Order Items */
   .order-card-detailed {
-    padding: 1.25rem 1rem;
+    padding: 1.15rem 0.85rem !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+    overflow: hidden !important;
   }
   .order-header-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.6rem;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
   }
-  .order-header-row > div {
-    width: 100%;
-    justify-content: space-between;
+  .order-header-row > div:first-child {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    justify-content: flex-start !important;
   }
+  .order-header-row > div:last-child {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+  }
+  .order-header-row .custom-select {
+    width: 100% !important;
+    min-height: 42px;
+    font-size: 0.82rem;
+  }
+  .order-id-tag {
+    font-size: 0.8rem;
+    word-break: break-all;
+    max-width: 100%;
+  }
+
+  /* Order Items Mobile Card Layout (Fixes Column Squishing & Number Overflow) */
+  .order-items-table {
+    display: block !important;
+    width: 100% !important;
+    margin-bottom: 1rem !important;
+    overflow: hidden !important;
+  }
+  .order-items-table thead {
+    display: none !important;
+  }
+  .order-items-table tbody {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+  }
+  .order-item-tr {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    background: #FAF7F2 !important; /* Luxury Warm Ivory */
+    border: 1px solid #EFEAE1 !important;
+    border-radius: 8px !important;
+    padding: 0.85rem !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
+  }
+  .order-item-tr td {
+    padding: 0 !important;
+    border: none !important;
+    box-sizing: border-box !important;
+  }
+  .order-item-tr td.col-product {
+    width: 100% !important;
+    flex: 0 0 100% !important;
+    display: block !important;
+    padding-bottom: 0.65rem !important;
+    border-bottom: 1px dashed #E2DDD5 !important;
+    margin-bottom: 0.5rem !important;
+  }
+  .order-item-tr td.col-product .item-cell-with-img {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+  }
+  .order-item-tr td.col-product .item-table-img {
+    width: 50px !important;
+    height: 50px !important;
+    border-radius: 6px !important;
+    object-fit: cover !important;
+    flex-shrink: 0 !important;
+  }
+  .order-item-tr td.col-product .item-name-ar {
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    color: var(--text-main) !important;
+    line-height: 1.35 !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+  }
+  .order-item-tr td.col-product .item-name-en {
+    font-size: 0.72rem !important;
+    color: var(--text-muted) !important;
+    font-family: var(--font-brand) !important;
+    margin-top: 2px !important;
+  }
+  .order-item-tr td.col-product .item-cat-badge {
+    display: inline-block !important;
+    background: #EAE4D9 !important;
+    color: #57534E !important;
+    font-size: 0.7rem !important;
+    font-weight: 600 !important;
+    padding: 2px 7px !important;
+    border-radius: 4px !important;
+    margin-top: 4px !important;
+  }
+  .order-item-tr td.col-category {
+    display: none !important;
+  }
+  .order-item-tr td.col-qty,
+  .order-item-tr td.col-price,
+  .order-item-tr td.col-total {
+    flex: 1 1 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0.35rem 0.2rem !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+  }
+  .order-item-tr td.col-qty {
+    border-left: 1px solid #E5E0D8 !important;
+  }
+  .order-item-tr td.col-price {
+    border-left: 1px solid #E5E0D8 !important;
+  }
+  .order-item-tr .mobile-stat-label {
+    display: block !important;
+    font-size: 0.68rem !important;
+    font-weight: 700 !important;
+    color: var(--text-muted) !important;
+    margin-bottom: 2px !important;
+    white-space: nowrap !important;
+  }
+  .order-item-tr .qty-val {
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+    color: var(--text-main) !important;
+    white-space: nowrap !important;
+  }
+  .order-item-tr .price-val {
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+    color: var(--text-main) !important;
+    white-space: nowrap !important;
+    direction: ltr !important;
+    unicode-bidi: embed !important;
+  }
+  .order-item-tr .total-val {
+    font-size: 0.88rem !important;
+    font-weight: 800 !important;
+    color: var(--accent-hover, #B38A49) !important;
+    white-space: nowrap !important;
+    direction: ltr !important;
+    unicode-bidi: embed !important;
+  }
+  .order-no-items-cell {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Order Footer & Actions on Mobile */
   .order-footer-actions {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.75rem;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.85rem !important;
+    padding-top: 1rem !important;
+    border-top: 1px solid var(--border-light) !important;
   }
+  .order-footer-actions > div:first-child {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    gap: 0.65rem !important;
+  }
+  .order-total-sum {
+    font-size: 1.05rem !important;
+    font-weight: 900 !important;
+    background: #FAF7F2 !important;
+    padding: 0.75rem 1rem !important;
+    border-radius: 8px !important;
+    border: 1px solid #EFEAE1 !important;
+    text-align: center !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+  .order-total-sum span {
+    display: inline-block !important;
+    white-space: nowrap !important;
+  }
+  .order-action-buttons {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+  }
+  .order-footer-actions button,
+  .order-action-buttons button,
   .order-footer-actions .btn-whatsapp-customer {
-    width: 100%;
-    justify-content: center;
+    width: 100% !important;
+    min-height: 44px !important;
+    justify-content: center !important;
+    font-size: 0.85rem !important;
+    box-sizing: border-box !important;
+  }
+
+  /* ==========================================================================
+     MOBILE DELIVERY AREAS & SHIPPING FEES MANAGEMENT
+     ========================================================================== */
+  .delivery-areas-card-container {
+    padding: 1.25rem 0.85rem !important;
+    border-radius: 10px !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+  }
+  .delivery-areas-header-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 1rem !important;
+  }
+  .delivery-areas-title {
+    font-size: 1.15rem !important;
+  }
+  .delivery-areas-action-buttons {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.6rem !important;
+    width: 100% !important;
+  }
+  .delivery-areas-action-buttons button {
+    width: 100% !important;
+    min-height: 44px !important;
+    justify-content: center !important;
+    font-size: 0.88rem !important;
+    padding: 0.7rem 1rem !important;
+    box-sizing: border-box !important;
+  }
+  .delivery-table-responsive {
+    overflow-x: visible !important;
+    margin-top: 1rem !important;
+    width: 100% !important;
+  }
+  .admin-delivery-table {
+    display: block !important;
+    width: 100% !important;
+  }
+  .admin-delivery-table thead {
+    display: none !important;
+  }
+  .admin-delivery-table tbody {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+    width: 100% !important;
+  }
+  .delivery-area-tr {
+    display: flex !important;
+    flex-direction: column !important;
+    background: #FFFFFF !important;
+    border: 1.5px solid #E2DDD5 !important;
+    border-radius: 10px !important;
+    padding: 1.15rem 0.9rem !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03) !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    gap: 0.85rem !important;
+  }
+  .delivery-area-tr td {
+    display: block !important;
+    width: 100% !important;
+    padding: 0 !important;
+    border: none !important;
+    box-sizing: border-box !important;
+  }
+  .del-card-header-mobile {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding-bottom: 0.65rem !important;
+    margin-bottom: 0.35rem !important;
+    border-bottom: 1px solid #EFEAE1 !important;
+  }
+  .del-zone-badge {
+    background: #FAF7F2 !important;
+    color: var(--accent, #B38A49) !important;
+    font-weight: 800 !important;
+    font-size: 0.82rem !important;
+    padding: 4px 10px !important;
+    border-radius: 6px !important;
+    border: 1px solid #EAE5DC !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+  }
+  .del-delete-btn-mobile {
+    background: #FFF1F2 !important;
+    color: #E11D48 !important;
+    border: 1px solid #FECDD3 !important;
+    padding: 5px 12px !important;
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    border-radius: 6px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    cursor: pointer !important;
+  }
+  .del-delete-btn-desktop {
+    display: none !important;
+  }
+  .del-col-actions {
+    display: none !important;
+  }
+  .del-field-label {
+    display: block !important;
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    color: #475569 !important;
+    margin-bottom: 0.35rem !important;
+  }
+  .del-field-hint {
+    font-size: 0.72rem !important;
+    color: #94A3B8 !important;
+    margin-top: 0.35rem !important;
+    line-height: 1.4 !important;
+  }
+  .delivery-area-tr .area-names-input {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 0.88rem !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
+  }
+  .delivery-area-tr .area-enname-input {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 0.85rem !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
+  }
+  .delivery-area-tr .area-fee-input {
+    width: 100% !important;
+    max-width: 140px !important;
+    font-size: 0.95rem !important;
+    font-weight: 800 !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
+  }
+  .delivery-area-tr .area-days-input {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 0.85rem !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
+  }
+  .delivery-area-tr .del-fee-input-group {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+  }
+  .delivery-area-tr .del-fee-unit {
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
+    color: #64748B !important;
+  }
+  .delivery-area-tr .del-status-toggle-label {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.6rem !important;
+    cursor: pointer !important;
+    background: #FAF7F2 !important;
+    padding: 0.5rem 0.85rem !important;
+    border-radius: 8px !important;
+    border: 1px solid #EFEAE1 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .delivery-area-tr .area-active-checkbox {
+    width: 20px !important;
+    height: 20px !important;
+    accent-color: var(--accent) !important;
+  }
+  .delivery-area-tr .del-status-text {
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
   }
   .drop-zone-container {
     padding: 1.5rem 1rem;
