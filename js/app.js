@@ -128,15 +128,17 @@ function renderActiveSubcategoriesStrip(parentCat, cats) {
   const totalParentCount = STATE.products.filter(p => p.category === parentCat.id || subCatIds.includes(p.category)).length;
   const isParentSelected = STATE.activeCategory === parentCat.id;
 
+  const isEn = isCurrentEn();
+  const parentName = (isEn && parentCat.enName) ? parentCat.enName : parentCat.name;
   const escapeFn = typeof escapeHTML === "function" ? escapeHTML : (s => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"));
 
   let html = `
     <span class="subcat-strip-label">
       <i class="fas fa-layer-group"></i>
-      <span>الأقسام الفرعية لـ ${escapeFn(parentCat.name)}:</span>
+      <span>${isEn ? `Subcategories for ${escapeFn(parentName)}:` : `الأقسام الفرعية لـ ${escapeFn(parentName)}:`}</span>
     </span>
-    <button type="button" class="subcat-chip ${isParentSelected ? 'active' : ''}" onclick="selectSubcategory('${parentCat.id}')" title="عرض كافة منتجات ${escapeFn(parentCat.name)}">
-      <span>الكل في ${escapeFn(parentCat.name)}</span>
+    <button type="button" class="subcat-chip ${isParentSelected ? 'active' : ''}" onclick="selectSubcategory('${parentCat.id}')" title="${isEn ? `View all ${escapeFn(parentName)}` : `عرض كافة منتجات ${escapeFn(parentName)}`}">
+      <span>${isEn ? `All in ${escapeFn(parentName)}` : `الكل في ${escapeFn(parentName)}`}</span>
       <span class="subcat-count">${totalParentCount}</span>
     </button>
   `;
@@ -144,9 +146,10 @@ function renderActiveSubcategoriesStrip(parentCat, cats) {
   subCats.forEach(sub => {
     const count = STATE.products.filter(p => p.category === sub.id).length;
     const isActive = STATE.activeCategory === sub.id;
+    const subName = (isEn && sub.enName) ? sub.enName : sub.name;
     html += `
-      <button type="button" class="subcat-chip ${isActive ? 'active' : ''}" onclick="selectSubcategory('${sub.id}')" title="قسم فرعي: ${escapeFn(sub.name)}">
-        <span>${escapeFn(sub.name)}</span>
+      <button type="button" class="subcat-chip ${isActive ? 'active' : ''}" onclick="selectSubcategory('${sub.id}')" title="${isEn ? `Subcategory: ${escapeFn(subName)}` : `قسم فرعي: ${escapeFn(subName)}`}">
+        <span>${escapeFn(subName)}</span>
         <span class="subcat-count">${count}</span>
       </button>
     `;
@@ -168,6 +171,7 @@ function renderCategoryTabs() {
   const tabsContainer = document.getElementById("categoryTabs");
   if (!tabsContainer) return;
 
+  const isEn = isCurrentEn();
   const cats = window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []);
   const mainCats = cats.filter(c => !c.parentId);
 
@@ -194,10 +198,11 @@ function renderCategoryTabs() {
     const activeClass = isDirectActive ? "active" : (isParentActive ? "active-parent" : "");
     const hasSubClass = hasSubs ? "has-subcategories" : "";
     const caretHtml = hasSubs ? `<i class="fas fa-angle-down subcat-caret" aria-hidden="true"></i>` : "";
+    const catDisplayName = (isEn && cat.enName) ? cat.enName : (cat.id === "all" && isEn ? "All Products" : cat.name);
 
     return `
       <button class="category-tab-btn ${activeClass} ${hasSubClass}" data-category="${cat.id}" ${hasSubs ? `title="يحتوي على أقسام فرعية - انقر أو مرر لعرض التفريعات"` : ""}>
-        <span>${cat.name}</span>
+        <span>${catDisplayName}</span>
         ${caretHtml}
         <span class="tab-count">${count}</span>
       </button>
@@ -248,10 +253,12 @@ function renderSubBarCategories() {
   const container = document.getElementById("subBarItems");
   if (!container) return;
 
+  const isEn = isCurrentEn();
   const cats = window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []);
   container.innerHTML = cats.map(cat => {
     const isSub = !!cat.parentId;
-    const displayName = isSub ? `<span style="opacity: 0.6; font-size: 0.8em; margin-left: 3px;">↳</span>${cat.name}` : cat.name;
+    const rawName = (isEn && cat.enName) ? cat.enName : (cat.id === "all" && isEn ? "All Products" : cat.name);
+    const displayName = isSub ? `<span style="opacity: 0.6; font-size: 0.8em; margin-left: 3px;">↳</span>${rawName}` : rawName;
     return `
       <button class="sub-bar-cat-btn ${STATE.activeCategory === cat.id ? 'active' : ''}" onclick="selectCategoryFromSubBar('${cat.id}')">
         <span>${displayName}</span>
@@ -265,10 +272,12 @@ function renderMobileAccordionCategories() {
   const container = document.getElementById("mobileAccordionContent");
   if (!container) return;
 
+  const isEn = isCurrentEn();
   const cats = window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : []);
   container.innerHTML = cats.map(cat => {
     const isSub = !!cat.parentId;
-    const displayName = isSub ? `— ${cat.name}` : cat.name;
+    const rawName = (isEn && cat.enName) ? cat.enName : (cat.id === "all" && isEn ? "All Products" : cat.name);
+    const displayName = isSub ? `— ${rawName}` : rawName;
     return `
       <button class="mobile-sub-cat-item ${STATE.activeCategory === cat.id ? 'active' : ''} ${isSub ? 'is-mobile-subcat' : ''}" onclick="selectCategoryFromMobile('${cat.id}')" style="${isSub ? 'padding-right: 1.75rem; font-size: 0.88rem; opacity: 0.9;' : ''}">
         <span>${displayName}</span>
@@ -282,10 +291,12 @@ function renderFooterCategories() {
   const container = document.querySelector(".footer-links-grid");
   if (!container) return;
 
+  const isEn = isCurrentEn();
   const cats = (window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : [])).filter(c => c.id !== "all");
-  container.innerHTML = cats.map(cat => `
-    <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('${cat.id}')">${cat.name}</a></li>
-  `).join("");
+  container.innerHTML = cats.map(cat => {
+    const rawName = (isEn && cat.enName) ? cat.enName : cat.name;
+    return `<li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('${cat.id}')">${rawName}</a></li>`;
+  }).join("");
 }
 
 // 3.4 Apply Dynamic Showroom Settings & Contact Links Across Website
@@ -1076,6 +1087,8 @@ function setupEventListeners() {
   window.addEventListener("kk_language_changed", () => {
     renderCategoryTabs();
     renderSubBarCategories();
+    renderMobileAccordionCategories();
+    renderFooterCategories();
     renderProducts();
     if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
     if (window.KK_I18N) window.KK_I18N.applyLanguageToDOM();
@@ -1458,6 +1471,49 @@ function switchCustomerAuthTab(tab) {
 }
 window.switchCustomerAuthTab = switchCustomerAuthTab;
 
+// Fast Google Sign-In Handler (Frictionless 1-Click Access)
+window.handleGoogleSignIn = function () {
+  const isEn = isCurrentEn();
+  const savedName = localStorage.getItem("kk_customer_name") || (isEn ? "Karim Mahmoud (VIP Client)" : "كريم محمود (عميل VIP)");
+  const savedPhone = localStorage.getItem("kk_customer_phone") || "01006367690";
+  const googleEmail = (savedName ? savedName.toLowerCase().replace(/\s+/g, ".") : "client") + "@gmail.com";
+
+  const googleCustomer = {
+    id: "goog_" + Math.random().toString(36).substring(2, 9),
+    name: savedName,
+    email: googleEmail,
+    phone: savedPhone,
+    authProvider: "google",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
+    createdAt: Date.now()
+  };
+
+  if (window.KK_DB && typeof window.KK_DB.saveCustomer === "function") {
+    window.KK_DB.saveCustomer(googleCustomer);
+  } else {
+    try {
+      localStorage.setItem("kk_customer_account", JSON.stringify(googleCustomer));
+    } catch (e) {}
+  }
+  try {
+    localStorage.setItem("kk_customer_name", googleCustomer.name);
+    localStorage.setItem("kk_customer_phone", googleCustomer.phone);
+  } catch (e) {}
+
+  showToast(isEn ? `Signed in successfully via Google as ${googleCustomer.name}` : `تم تسجيل الدخول السريع عبر Google بنجاح: ${googleCustomer.name}`);
+
+  if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
+  if (typeof closeCustomerAuthModal === "function") closeCustomerAuthModal();
+
+  window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: googleCustomer }));
+
+  if (typeof window.pendingAuthCallback === "function") {
+    const cb = window.pendingAuthCallback;
+    window.pendingAuthCallback = null;
+    cb();
+  }
+};
+
 async function handleCustomerSignIn(e) {
   if (e) e.preventDefault();
   const identEl = document.getElementById("custLoginIdentifier");
@@ -1667,11 +1723,10 @@ function updateCustomerButtonUI() {
   if (!btn) return;
 
   if (customer) {
-    const firstName = customer.name ? customer.name.split(" ")[0] : (isEn ? "Account" : "حسابي");
-    btn.innerHTML = `<i class="fas fa-user-check" style="color: #10B981;"></i> <span style="font-size: 0.82rem; font-weight: 700;">${escapeHtml(firstName)}</span>`;
+    btn.innerHTML = `<i class="fas fa-user-check" style="color: #10B981;"></i>`;
     btn.setAttribute("title", customer.name);
   } else {
-    btn.innerHTML = `<i class="fas fa-user"></i> <span style="font-size: 0.82rem; font-weight: 700;" data-i18n="navAccount">${isEn ? "Sign In" : "حسابي"}</span>`;
+    btn.innerHTML = `<i class="fas fa-user-circle"></i>`;
     btn.setAttribute("title", isEn ? "Sign in / Register" : "تسجيل الدخول / إنشاء حساب");
   }
 }

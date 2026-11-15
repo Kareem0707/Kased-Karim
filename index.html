@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <!-- Security Shield & Anti-Analysis (Executive First Guard) -->
-  <script src="js/security-shield.js?v=17.0"></script>
+  <script src="js/security-shield.js?v=18.0"></script>
 
   <!-- Instant Executive Admin Device Verification -->
   <script>
@@ -320,15 +320,14 @@
        TOP UTILITY BAR (الشريط العلوي المينيمالي)
        ======================================================================== -->
   <div class="top-bar">
-    <div class="header-container top-bar-inner" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="header-container top-bar-inner">
       <div class="top-bar-right-info">
         <span id="topBarPhone" data-i18n="showroomCity">معرض الشيخ زايد • 01006367690</span>
       </div>
-      <div class="top-bar-left-actions" style="display: flex; align-items: center; gap: 0.85rem;">
-        <span class="top-bar-pill" style="font-size: 0.72rem; color: #F59E0B; background: rgba(245,158,11,0.12); padding: 2px 8px; border-radius: 4px; font-weight: 700;" data-i18n="locationBadge">الشيخ زايد - سنتر الطاهرة</span>
-        <button class="top-bar-lang-link" onclick="toggleLanguage()" style="background: none; border: none; color: #CBD5E1; font-size: 0.76rem; cursor: pointer; display: flex; align-items: center; gap: 0.35rem; font-weight: 700;">
-          <i class="fas fa-globe" style="color: var(--accent);"></i>
-          <span class="lang-switcher-text">English</span>
+      <div class="top-bar-left-actions">
+        <span class="top-bar-pill hide-on-mobile" data-i18n="locationBadge">الشيخ زايد - سنتر الطاهرة</span>
+        <button class="top-bar-lang-link" onclick="toggleLanguage()" title="تغيير اللغة / Switch Language (العربية / English)">
+          <i class="fas fa-globe"></i>
         </button>
       </div>
     </div>
@@ -362,27 +361,21 @@
         </ul>
       </nav>
 
-      <!-- Minimalist Outline Action Buttons (As shown in Reference) -->
+      <!-- Minimalist Outline Action Buttons -->
       <div class="header-actions">
-        <!-- Language Switcher Button (PRD Section 7) -->
-        <button class="action-circle-btn btn-lang-header" onclick="toggleLanguage()" title="تغيير اللغة / Switch Language (العربية / English)">
-          <i class="fas fa-globe"></i>
-          <span class="lang-current-tag" style="font-size: 0.65rem; font-weight: 800; line-height: 1;">EN</span>
-        </button>
-
-        <!-- Customer Account / Profile Button (PRD Section 3) -->
+        <!-- Customer Account / Profile Button (Icon only) -->
         <button class="action-circle-btn btn-customer-account" id="customerAccountBtn" onclick="handleCustomerAccountClick()" title="حساب العميل والطلبات السابقة">
           <i class="fas fa-user-circle"></i>
         </button>
 
-        <!-- Admin Dashboard Icon (Only for linked admin device, right next to WhatsApp) -->
+        <!-- Admin Dashboard Icon (Only for linked admin device) -->
         <a href="admin.html" class="action-circle-btn btn-admin-header" id="adminHeaderBtn" title="لوحة تحكم المعرض (جهاز إدارة معتمد)">
           <i class="fas fa-shield-halved"></i>
           <span class="badge-count admin-badge-count" id="adminHeaderBadge" style="display: none;">0</span>
         </a>
 
-        <!-- WhatsApp Header Button (Minimalist Circle Outline) -->
-        <a href="https://wa.me/201006367690" target="_blank" class="action-circle-btn" id="headerWhatsappBtn" title="تواصل مباشر عبر واتساب">
+        <!-- WhatsApp Header Button -->
+        <a href="https://wa.me/201006367690" target="_blank" class="action-circle-btn hide-on-mobile" id="headerWhatsappBtn" title="تواصل مباشر عبر واتساب">
           <i class="fab fa-whatsapp"></i>
         </a>
 
@@ -393,7 +386,7 @@
         </button>
 
         <!-- Customer Order Tracking Icon -->
-        <button class="action-circle-btn btn-track-header" id="trackOrderHeaderBtn" onclick="openTrackOrderModal()" title="تتبع حالة ومسار طلبك">
+        <button class="action-circle-btn btn-track-header hide-on-mobile" id="trackOrderHeaderBtn" onclick="openTrackOrderModal()" title="تتبع حالة ومسار طلبك">
           <i class="fas fa-truck-fast"></i>
           <span class="track-count-badge" id="customerOrdersBadge" style="display: none;">0</span>
         </button>
@@ -646,31 +639,31 @@
     <div class="container">
       <div class="showroom-banner">
         <div class="showroom-content">
-          <span class="showroom-tag">SHEIKH ZAYED FLAGSHIP</span>
-          <h2 class="showroom-title">معرض قاصد كريم في قلب الشيخ زايد</h2>
-          <p class="showroom-desc">
+          <span class="showroom-tag" data-i18n="showroomSectionTag">SHEIKH ZAYED FLAGSHIP</span>
+          <h2 class="showroom-title" data-i18n="showroomTitle">معرض قاصد كريم في قلب الشيخ زايد</h2>
+          <p class="showroom-desc" data-i18n="showroomDesc">
             تفضل بزيارة صالة العرض الخاصة بنا واستمتع بتجربة حسية غامرة تجمع أرقى نماذج الإضاءة المعمارية والديكورية، مع استشارة مجانية لاختيار أرقى التصاميم التي تناسب منزلك.
           </p>
 
           <div class="showroom-info-items">
             <div class="showroom-info-row">
               <i class="fas fa-map-marker-alt"></i>
-              <span id="showroomLocationText">الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة</span>
+              <span id="showroomLocationText" data-i18n="showroomLocation">الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة</span>
             </div>
             <div class="showroom-info-row">
               <i class="fas fa-clock"></i>
-              <span id="showroomHoursText">يومياً من 11:00 صباحاً حتى 11:00 مساءً</span>
+              <span id="showroomHoursText" data-i18n="showroomHours">يومياً من 11:00 صباحاً حتى 11:00 مساءً</span>
             </div>
           </div>
 
           <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
             <a href="https://wa.me/201006367690" target="_blank" class="btn-primary" id="showroomWhatsappBtn">
               <i class="fab fa-whatsapp"></i>
-              <span>تواصل مع المعرض مباشرة</span>
+              <span data-i18n="showroomWhatsapp">تواصل مع المعرض مباشرة</span>
             </a>
             <a href="https://maps.app.goo.gl/EzzitFCzNSpQc7w77?g_st=ic" target="_blank" class="btn-secondary" id="showroomMapBtn" style="background: rgba(255,255,255,0.1); color: #FFFFFF; border-color: rgba(255,255,255,0.2);">
               <i class="fas fa-location-arrow"></i>
-              <span>الاتجاهات على الخريطة</span>
+              <span data-i18n="showroomMap">الاتجاهات على الخريطة</span>
             </a>
           </div>
         </div>
@@ -691,7 +684,7 @@
         <!-- Brand Col -->
         <div class="footer-brand-col">
           <div class="brand-title-en" style="font-size: 1.6rem; letter-spacing: 2px; color: #FFFFFF; margin-bottom: 0.75rem;">KASED KARIM</div>
-          <p class="footer-desc">
+          <p class="footer-desc" data-i18n="footerDesc">
             المعرض الأول للإضاءة الفاخرة والمعمارية في الشيخ زايد. شركاء الإبداع لأصحاب القصور والفيلات والباحثين عن التميز والفرادة.
           </p>
           <div class="footer-socials">
@@ -705,7 +698,7 @@
 
         <!-- Collections (12 Categories in 2 Compact Columns) -->
         <div class="footer-collections-col">
-          <h4 class="footer-title">مجموعات الإضاءة</h4>
+          <h4 class="footer-title" data-i18n="footerCollectionsTitle">مجموعات الإضاءة</h4>
           <ul class="footer-links footer-links-grid">
             <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('table-lamps')">أباجورات</a></li>
             <li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('pendants')">دلايات</a></li>
@@ -724,12 +717,12 @@
 
         <!-- Showroom & Direct Contact -->
         <div>
-          <h4 class="footer-title">معرض الشيخ زايد والتواصل</h4>
+          <h4 class="footer-title" data-i18n="footerContactTitle">معرض الشيخ زايد والتواصل</h4>
           
           <div class="footer-location-block">
             <p class="footer-location-text">
               <i class="fas fa-map-marker-alt" style="color: var(--accent); margin-left: 6px;"></i>
-              <span id="footerLocationText">الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة</span>
+              <span id="footerLocationText" data-i18n="showroomLocation">الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة</span>
             </p>
 
             <!-- Dark Map Card Widget exactly like reference (Red Pizza style) -->
@@ -1087,6 +1080,24 @@
         <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0;" data-i18n="authModalSubtitle">سجل بياناتك لمتابعة طلباتك، حفظ سلتك، وتسهيل حجزك</p>
       </div>
 
+      <!-- Fast Frictionless Google Authentication -->
+      <div class="google-auth-container" style="margin-bottom: 1.25rem;">
+        <button type="button" class="btn-google-auth" onclick="handleGoogleSignIn()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.75rem; background: #FFFFFF; color: #1F2937; border: 1.5px solid #E2E8F0; border-radius: var(--radius-sm); padding: 0.75rem 1rem; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          <span data-i18n="continueWithGoogle">المتابعة السريعة بحساب Google</span>
+        </button>
+        <div style="display: flex; align-items: center; margin: 1rem 0; color: var(--text-muted); font-size: 0.75rem;">
+          <div style="flex: 1; height: 1px; background: var(--border-light);"></div>
+          <span style="padding: 0 0.75rem;" data-i18n="orUseForm">أو عبر رقم الهاتف / البريد</span>
+          <div style="flex: 1; height: 1px; background: var(--border-light);"></div>
+        </div>
+      </div>
+
       <!-- Tabs Switcher -->
       <div style="display: flex; border-bottom: 2px solid var(--border-light); margin-bottom: 1.25rem;">
         <button type="button" id="tabBtnSignIn" onclick="switchCustomerAuthTab('signin')" style="flex: 1; padding: 0.6rem; border: none; background: none; font-weight: 800; font-size: 0.88rem; color: var(--accent); border-bottom: 2px solid var(--accent); cursor: pointer;" data-i18n="tabSignIn">
@@ -1101,11 +1112,11 @@
       <form id="customerSignInForm" onsubmit="handleCustomerSignIn(event)">
         <div class="form-group" style="margin-bottom: 0.85rem;">
           <label class="form-label" for="custLoginIdentifier" data-i18n="labelPhone">رقم الهاتف أو البريد الإلكتروني</label>
-          <input type="text" id="custLoginIdentifier" class="form-input" placeholder="010XXXXXXXX أو your@email.test" required autocomplete="username">
+          <input type="text" id="custLoginIdentifier" class="form-input" placeholder="010XXXXXXXX أو your@email.test" data-i18n-placeholder="ph_loginIdentifier" required autocomplete="username">
         </div>
         <div class="form-group" style="margin-bottom: 1.25rem;">
           <label class="form-label" for="custLoginPassword" data-i18n="labelPassword">كلمة المرور</label>
-          <input type="password" id="custLoginPassword" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+          <input type="password" id="custLoginPassword" class="form-input" placeholder="••••••••" data-i18n-placeholder="ph_password" required autocomplete="current-password">
         </div>
         <button type="submit" id="btnCustomerSignInSubmit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem; font-weight: 700;" data-i18n="btnSignIn">
           <span>دخول لحسابي</span>
@@ -1116,19 +1127,19 @@
       <form id="customerRegisterForm" style="display: none;" onsubmit="handleCustomerRegister(event)">
         <div class="form-group" style="margin-bottom: 0.85rem;">
           <label class="form-label" for="custRegName" data-i18n="labelFullName">الاسم بالكامل</label>
-          <input type="text" id="custRegName" class="form-input" placeholder="مثال: كريم محمود" required autocomplete="name">
+          <input type="text" id="custRegName" class="form-input" placeholder="مثال: كريم محمود" data-i18n-placeholder="ph_fullName" required autocomplete="name">
         </div>
         <div class="form-group" style="margin-bottom: 0.85rem;">
           <label class="form-label" for="custRegPhone" data-i18n="labelPhone">رقم الهاتف المحمول</label>
-          <input type="tel" id="custRegPhone" class="form-input" placeholder="010XXXXXXXX (11 رقماً)" required dir="ltr" style="text-align: right;" autocomplete="tel">
+          <input type="tel" id="custRegPhone" class="form-input" placeholder="010XXXXXXXX (11 رقماً)" data-i18n-placeholder="ph_phone" required dir="ltr" style="text-align: right;" autocomplete="tel">
         </div>
         <div class="form-group" style="margin-bottom: 0.85rem;">
           <label class="form-label" for="custRegEmail" data-i18n="labelEmail">البريد الإلكتروني (اختياري)</label>
-          <input type="email" id="custRegEmail" class="form-input" placeholder="example@kasedkarim.test" autocomplete="email">
+          <input type="email" id="custRegEmail" class="form-input" placeholder="example@kasedkarim.test" data-i18n-placeholder="ph_email" autocomplete="email">
         </div>
         <div class="form-group" style="margin-bottom: 1.25rem;">
           <label class="form-label" for="custRegPassword" data-i18n="labelPassword">كلمة المرور (6 خانات على الأقل)</label>
-          <input type="password" id="custRegPassword" class="form-input" placeholder="••••••••" required minlength="6" autocomplete="new-password">
+          <input type="password" id="custRegPassword" class="form-input" placeholder="••••••••" data-i18n-placeholder="ph_password" required minlength="6" autocomplete="new-password">
         </div>
         <button type="submit" id="btnCustomerRegSubmit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem; font-weight: 700;" data-i18n="btnRegister">
           <span>إنشاء حساب جديد</span>
@@ -1371,10 +1382,10 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/i18n.js?v=17.0"></script>
-  <script src="js/data.js?v=17.0"></script>
-  <script src="js/db.js?v=17.0"></script>
-  <script src="js/app.js?v=17.0"></script>
-  <script src="js/checkout.js?v=17.0"></script>
+  <script src="js/i18n.js?v=18.0"></script>
+  <script src="js/data.js?v=18.0"></script>
+  <script src="js/db.js?v=18.0"></script>
+  <script src="js/app.js?v=18.0"></script>
+  <script src="js/checkout.js?v=18.0"></script>
 </body>
 </html>

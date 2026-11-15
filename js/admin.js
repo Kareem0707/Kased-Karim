@@ -3336,31 +3336,73 @@ function renderAdminDeliveryAreas() {
   if (!tbody || !window.KK_DB) return;
 
   const areas = window.KK_DB.getDeliveryAreas();
-  tbody.innerHTML = areas.map(area => `
-    <tr data-area-id="${escapeHtml(area.id)}">
-      <td>
-        <strong style="color: var(--text-main);">${escapeHtml(area.name)}</strong>
-      </td>
-      <td style="font-family: var(--font-brand); color: var(--text-muted);">${escapeHtml(area.enName || '')}</td>
-      <td>
-        <div style="display: flex; align-items: center; gap: 0.35rem;">
-          <input type="number" class="form-input area-fee-input" value="${Number(area.fee) || 0}" style="width: 100px; padding: 0.3rem 0.5rem; font-weight: 700; text-align: center;" min="0">
-          <span style="font-size: 0.8rem; color: var(--text-muted);">ج.م</span>
-        </div>
-      </td>
-      <td>
-        <input type="text" class="form-input area-days-input" value="${escapeHtml(area.days || '1-3 أيام')}" style="width: 150px; padding: 0.3rem 0.5rem; font-size: 0.82rem;">
-      </td>
-      <td>
-        <label style="display: inline-flex; align-items: center; gap: 0.45rem; cursor: pointer;">
-          <input type="checkbox" class="area-active-checkbox" ${area.active !== false ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: var(--accent);">
-          <span style="font-size: 0.82rem; font-weight: 700;">${area.active !== false ? 'مدعومة' : 'غير مدعومة'}</span>
-        </label>
-      </td>
-    </tr>
-  `).join("");
+  tbody.innerHTML = areas.map(area => {
+    const areaNamesDisplay = Array.isArray(area.names) && area.names.length > 0
+      ? area.names.join("، ")
+      : (area.name || area.nameAr || "");
+
+    return `
+      <tr data-area-id="${escapeHtml(area.id)}">
+        <td>
+          <textarea class="form-input area-names-input" rows="2" style="width: 100%; min-width: 250px; font-size: 0.85rem; font-weight: 700; padding: 0.45rem; line-height: 1.5; resize: vertical;" placeholder="أدخل أسماء المناطق مفصولة بفواصل (مثال: الشيخ زايد، بيفرلي هيلز، الربوة، 6 أكتوبر)">${escapeHtml(areaNamesDisplay)}</textarea>
+          <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">اكتب أكثر من منطقة مفصولة بفاصلة (،) لتطبيق نفس رسوم الشحن عليها</div>
+        </td>
+        <td>
+          <input type="text" class="form-input area-enname-input" value="${escapeHtml(area.enName || area.nameEn || '')}" style="width: 100%; min-width: 140px; font-size: 0.82rem; font-family: var(--font-brand); padding: 0.4rem 0.5rem;" placeholder="e.g. Sheikh Zayed Zones">
+        </td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 0.35rem;">
+            <input type="number" class="form-input area-fee-input" value="${Number(area.fee) || 0}" style="width: 85px; padding: 0.35rem 0.45rem; font-weight: 700; text-align: center;" min="0">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">ج.م</span>
+          </div>
+        </td>
+        <td>
+          <input type="text" class="form-input area-days-input" value="${escapeHtml(area.days || '1-3 أيام عمل')}" style="width: 135px; padding: 0.35rem 0.5rem; font-size: 0.82rem;">
+        </td>
+        <td>
+          <label style="display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+            <input type="checkbox" class="area-active-checkbox" ${area.active !== false ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: var(--accent);">
+            <span style="font-size: 0.8rem; font-weight: 700;">${area.active !== false ? 'مدعومة' : 'غير مدعومة'}</span>
+          </label>
+        </td>
+        <td style="text-align: center;">
+          <button type="button" class="btn-secondary" style="color: #EF4444; border-color: rgba(239,68,68,0.25); padding: 0.35rem 0.6rem; font-size: 0.75rem;" onclick="deleteDeliveryAreaRow('${escapeHtml(area.id)}')" title="حذف نطاق التوصيل">
+            <i class="fas fa-trash-alt"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
 }
 window.renderAdminDeliveryAreas = renderAdminDeliveryAreas;
+
+function addNewDeliveryAreaRow() {
+  const currentAreas = window.KK_DB.getDeliveryAreas();
+  const newId = "zone-" + Date.now().toString().slice(-5);
+  currentAreas.push({
+    id: newId,
+    name: "منطقة جديدة",
+    names: ["منطقة جديدة"],
+    enName: "New Delivery Zone",
+    fee: 50,
+    days: "1 - 3 أيام عمل",
+    active: true
+  });
+  window.KK_DB.updateDeliveryAreas(currentAreas);
+  renderAdminDeliveryAreas();
+  showToast("تمت إضافة نطاق توصيل جديد - اكتب أسماء المناطق ورسوم الشحن ثم احفظ التعديلات");
+}
+window.addNewDeliveryAreaRow = addNewDeliveryAreaRow;
+
+function deleteDeliveryAreaRow(id) {
+  if (!confirm("هل أنت متأكد من حذف نطاق التوصيل هذا؟")) return;
+  let currentAreas = window.KK_DB.getDeliveryAreas();
+  currentAreas = currentAreas.filter(a => a.id !== id);
+  window.KK_DB.updateDeliveryAreas(currentAreas);
+  renderAdminDeliveryAreas();
+  showToast("تم حذف نطاق التوصيل بنجاح");
+}
+window.deleteDeliveryAreaRow = deleteDeliveryAreaRow;
 
 function saveDeliveryAreasChanges() {
   const tbody = document.getElementById("adminDeliveryAreasTableBody");
@@ -3373,12 +3415,23 @@ function saveDeliveryAreasChanges() {
   rows.forEach(row => {
     const id = row.getAttribute("data-area-id");
     const existing = currentAreas.find(a => a.id === id) || { id };
+    const namesInput = row.querySelector(".area-names-input");
+    const enNameInput = row.querySelector(".area-enname-input");
     const feeInput = row.querySelector(".area-fee-input");
     const daysInput = row.querySelector(".area-days-input");
     const activeCb = row.querySelector(".area-active-checkbox");
 
+    const rawNamesStr = namesInput ? namesInput.value.trim() : "";
+    const namesArr = rawNamesStr.split(/[،,]/).map(s => s.trim()).filter(Boolean);
+    const mainName = namesArr.length > 0 ? namesArr.join("، ") : (existing.name || "نطاق توصيل");
+
     updatedAreas.push({
       ...existing,
+      id: id,
+      name: mainName,
+      names: namesArr.length > 0 ? namesArr : [mainName],
+      nameAr: namesArr[0] || mainName,
+      enName: enNameInput ? enNameInput.value.trim() : (existing.enName || ""),
       fee: feeInput ? Math.max(0, parseInt(feeInput.value, 10) || 0) : existing.fee,
       days: daysInput ? daysInput.value.trim() : existing.days,
       active: activeCb ? activeCb.checked : true

@@ -1322,14 +1322,29 @@ class KasedKarimDB {
   // CATEGORIES MANAGEMENT (إدارة وتخصيص الأقسام والأقسام الفرعية ديناميكياً)
   // --------------------------------------------------------------------------
   getCategories() {
+    let cats = [];
     try {
       const raw = localStorage.getItem(DB_KEYS.CATEGORIES);
       const parsed = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      return typeof INITIAL_CATEGORIES !== "undefined" ? [...INITIAL_CATEGORIES] : [];
-    } catch (e) {
-      return typeof INITIAL_CATEGORIES !== "undefined" ? [...INITIAL_CATEGORIES] : [];
+      if (Array.isArray(parsed) && parsed.length > 0) cats = parsed;
+    } catch (e) {}
+
+    if (!cats || cats.length === 0) {
+      cats = typeof INITIAL_CATEGORIES !== "undefined" ? [...INITIAL_CATEGORIES] : [];
     }
+
+    const defaultMap = new Map();
+    if (typeof INITIAL_CATEGORIES !== "undefined") {
+      INITIAL_CATEGORIES.forEach(c => defaultMap.set(c.id, c));
+    }
+
+    return cats.map(c => {
+      const def = defaultMap.get(c.id);
+      return {
+        ...c,
+        enName: c.enName || (def ? def.enName : c.name)
+      };
+    });
   }
 
   async addCategory(categoryData) {
@@ -2058,11 +2073,33 @@ class KasedKarimDB {
   // DELIVERY AREAS & STOCK RESERVATION (PRD Sections 5 & 6)
   // --------------------------------------------------------------------------
   getDeliveryAreas() {
+    let areas = [];
     try {
       const saved = localStorage.getItem(DB_KEYS.DELIVERY_AREAS);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) areas = parsed;
+      }
     } catch (e) {}
-    return typeof DELIVERY_AREAS !== "undefined" ? DELIVERY_AREAS : [];
+
+    if (!areas || areas.length === 0) {
+      areas = typeof DELIVERY_AREAS !== "undefined" ? [...DELIVERY_AREAS] : [];
+    }
+
+    // Ensure all areas have names array for multi-region support
+    return areas.map(a => {
+      let names = Array.isArray(a.names) && a.names.length > 0 
+        ? a.names 
+        : (a.name ? a.name.split(/[،,]/).map(s => s.trim()).filter(Boolean) : [a.nameAr || a.id]);
+      let name = a.name || names.join("، ") || a.nameAr || a.id;
+      return {
+        ...a,
+        name: name,
+        names: names,
+        fee: Number(a.fee) || 0,
+        active: a.active !== false
+      };
+    });
   }
 
   updateDeliveryAreas(areas) {

@@ -2798,13 +2798,49 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
 @media (max-width: 768px) {
   /* Top Notification Bar Mobile */
   .top-bar {
-    padding: 0.25rem 0;
-    font-size: 0.72rem;
+    padding: 0.2rem 0 !important;
+    font-size: 0.72rem !important;
+    height: 30px !important;
+    display: flex !important;
+    align-items: center !important;
   }
   .top-bar-inner {
-    padding: 0 0.85rem;
-    justify-content: center;
-    gap: 0.4rem;
+    padding: 0 0.75rem !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    white-space: nowrap !important;
+    gap: 0.5rem !important;
+  }
+  .top-bar-right-info {
+    font-size: 0.72rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex-shrink: 1 !important;
+  }
+  .top-bar-left-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+    flex-shrink: 0 !important;
+  }
+  .top-bar-lang-link {
+    background: none !important;
+    border: none !important;
+    color: var(--text-main) !important;
+    font-size: 0.88rem !important;
+    padding: 0 0.25rem !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  .hide-on-mobile {
+    display: none !important;
   }
   .top-bar-badge {
     font-size: 0.68rem;
@@ -2814,7 +2850,7 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
     display: none;
   }
 
-  /* Main Header Mobile */
+  /* Main Header Mobile - Clean, Spacious & Uncluttered */
   .header-container {
     padding-left: 0.6rem !important;
     padding-right: 0.6rem !important;
@@ -2846,20 +2882,25 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
     white-space: nowrap !important;
   }
 
-  /* Compact Action Buttons for Phone */
+  /* Compact Action Buttons for Phone - No Text, No Crowding */
   .header-actions {
     gap: 0.25rem !important;
     flex-shrink: 0 !important;
+    align-items: center !important;
   }
   .action-circle-btn, .action-icon-btn, .btn-admin-header {
-    width: 31px !important;
-    height: 31px !important;
-    font-size: 0.78rem !important;
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 0.82rem !important;
+  }
+  .btn-customer-account span,
+  .btn-lang-header {
+    display: none !important;
   }
   .mobile-menu-toggle {
     display: flex;
-    width: 31px !important;
-    height: 31px !important;
+    width: 32px !important;
+    height: 32px !important;
     font-size: 0.82rem !important;
   }
   .badge-count, .admin-badge-count {

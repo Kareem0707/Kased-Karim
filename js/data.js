@@ -760,19 +760,19 @@ const INITIAL_PRODUCTS = [
 
 // تصنيفات المعرض المعتمدة الأولية (12 قسماً رئيسياً قابلة للزيادة والتعديل وإضافة أقسام فرعية من الإدارة)
 const INITIAL_CATEGORIES = [
-  { id: "all", name: "الكل المعروض", parentId: null },
-  { id: "table-lamps", name: "أباجورات", parentId: null },
-  { id: "pendants", name: "دلايات", parentId: null },
-  { id: "wall-sconces", name: "أباليك", parentId: null },
-  { id: "spotlights", name: "سبوت لايت", parentId: null },
-  { id: "floor-lamps", name: "لمباديرات", parentId: null },
-  { id: "track-lights", name: "تراك لايت", parentId: null },
-  { id: "bollards-lanterns", name: "فوانيس سور، بولارد", parentId: null },
-  { id: "spike-lights", name: "حربة", parentId: null },
-  { id: "led-panels", name: "بانلات", parentId: null },
-  { id: "floodlights", name: "كشافات", parentId: null },
-  { id: "led-profiles", name: "أعواد البروفايل", parentId: null },
-  { id: "stair-lights", name: "درج سلم", parentId: null }
+  { id: "all", name: "الكل المعروض", enName: "All Products", parentId: null },
+  { id: "table-lamps", name: "أباجورات", enName: "Table Lamps", parentId: null },
+  { id: "pendants", name: "دلايات", enName: "Pendants & Chandeliers", parentId: null },
+  { id: "wall-sconces", name: "أباليك", enName: "Wall Sconces", parentId: null },
+  { id: "spotlights", name: "سبوت لايت", enName: "Spotlights", parentId: null },
+  { id: "floor-lamps", name: "لمباديرات", enName: "Floor Lamps", parentId: null },
+  { id: "track-lights", name: "تراك لايت", enName: "Magnetic Track Lights", parentId: null },
+  { id: "bollards-lanterns", name: "فوانيس سور، بولارد", enName: "Outdoor Bollards & Lanterns", parentId: null },
+  { id: "spike-lights", name: "حربة", enName: "Garden Spike Lights", parentId: null },
+  { id: "led-panels", name: "بانلات", enName: "LED Ceiling Panels", parentId: null },
+  { id: "floodlights", name: "كشافات", enName: "Floodlights & Projectors", parentId: null },
+  { id: "led-profiles", name: "أعواد البروفايل", enName: "Architectural LED Profiles", parentId: null },
+  { id: "stair-lights", name: "درج سلم", enName: "Step & Stair Lights", parentId: null }
 ];
 
 let CATEGORIES = [...INITIAL_CATEGORIES];
@@ -808,12 +808,12 @@ let SHOWROOM_INFO = { ...INITIAL_SHOWROOM_INFO };
 
 // مناطق التوصيل المعتمدة ورسوم الشحن (PRD Section 5)
 const INITIAL_DELIVERY_AREAS = [
-  { id: "sheikh-zayed", nameAr: "الشيخ زايد", nameEn: "Sheikh Zayed", fee: 0, days: "1 - 2 أيام عمل", daysEn: "1 - 2 Business Days", active: true },
-  { id: "october", nameAr: "السادس من أكتوبر", nameEn: "6th of October", fee: 50, days: "1 - 2 أيام عمل", daysEn: "1 - 2 Business Days", active: true },
-  { id: "new-cairo", nameAr: "القاهرة الجديدة والتجمع", nameEn: "New Cairo & Tagamoa", fee: 75, days: "2 - 3 أيام عمل", daysEn: "2 - 3 Business Days", active: true },
-  { id: "giza", nameAr: "الجيزة والدقي والمهندسين", nameEn: "Giza, Dokki & Mohandessin", fee: 60, days: "2 - 3 أيام عمل", daysEn: "2 - 3 Business Days", active: true },
-  { id: "cairo", nameAr: "وسط البلد ومدينة نصر ومصر الجديدة", nameEn: "Cairo, Nasr City & Heliopolis", fee: 70, days: "2 - 3 أيام عمل", daysEn: "2 - 3 Business Days", active: true },
-  { id: "alexandria", nameAr: "الإسكندرية والساحل الشمالي", nameEn: "Alexandria & North Coast", fee: 120, days: "3 - 5 أيام عمل", daysEn: "3 - 5 Business Days", active: true }
+  { id: "sheikh-zayed", name: "الشيخ زايد وبيفرلي هيلز والربوة", names: ["الشيخ زايد", "بيفرلي هيلز", "الربوة", "الخمائل", "جرين هيلز"], nameAr: "الشيخ زايد", nameEn: "Sheikh Zayed & Beverly Hills", fee: 0, days: "1 - 2 أيام عمل", daysEn: "1 - 2 Business Days", active: true },
+  { id: "october", name: "السادس من أكتوبر وحدائق الأهرام", names: ["السادس من أكتوبر", "أكتوبر الجديدة", "حدائق الأكتوبر", "حدائق الأهرام"], nameAr: "السادس من أكتوبر", nameEn: "6th of October & Hadayek", fee: 50, days: "1 - 2 أيام عمل", daysEn: "1 - 2 Business Days", active: true },
+  { id: "new-cairo", name: "القاهرة الجديدة والتجمع والرحاب ومدينتي", names: ["القاهرة الجديدة", "التجمع الخامس", "التجمع الأول", "الرحاب", "مدينتي", "المستقبل"], nameAr: "القاهرة الجديدة والتجمع", nameEn: "New Cairo & Tagamoa", fee: 75, days: "2 - 3 أيام عمل", daysEn: "2 - 3 Business Days", active: true },
+  { id: "giza", name: "الجيزة والدقي والمهندسين والزمالك", names: ["الجيزة", "الدقي", "المهندسين", "الزمالك", "العجوزة"], nameAr: "الجيزة والدقي والمهندسين", nameEn: "Giza, Dokki & Mohandessin", fee: 60, days: "2 - 3 أيام عمل", daysEn: "2 - 3 Business Days", active: true },
+  { id: "cairo", name: "وسط البلد ومدينة نصر ومصر الجديدة والمعادي", names: ["وسط البلد", "مدينة نصر", "مصر الجديدة", "المعادي", "المقطم", "الشروق"], nameAr: "وسط البلد ومدينة نصر ومصر الجديدة", nameEn: "Cairo, Nasr City & Heliopolis", fee: 70, days: "2 - 3 أيام عمل", daysEn: "2 - 3 Business Days", active: true },
+  { id: "alexandria", name: "الإسكندرية والساحل الشمالي والعلمين", names: ["الإسكندرية", "الساحل الشمالي", "العلمين الجديدة", "سيدي عبد الرحمن"], nameAr: "الإسكندرية والساحل الشمالي", nameEn: "Alexandria & North Coast", fee: 120, days: "3 - 5 أيام عمل", daysEn: "3 - 5 Business Days", active: true }
 ];
 
 let DELIVERY_AREAS = [...INITIAL_DELIVERY_AREAS];

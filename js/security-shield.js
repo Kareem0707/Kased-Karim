@@ -31,8 +31,6 @@
 
   // 2. Disable F12 and Developer Tools Keyboard Shortcuts (Capture Phase)
   function blockDevToolsKeys(e) {
-    if (isAuthorizedAdmin()) return; // Never restrict authorized administrator
-
     const key = e.key || "";
     const keyCode = e.keyCode || e.which || 0;
     const isCtrlOrMeta = e.ctrlKey || e.metaKey;
@@ -89,8 +87,6 @@
 
   // 3. Disable Context Menu (Right-Click Inspect)
   function blockContextMenu(e) {
-    if (isAuthorizedAdmin()) return; // Never restrict authorized administrator
-
     // Preserve normal interaction for inputs and textareas (e.g. paste phone number in checkout)
     const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
     if (tag === "input" || tag === "textarea") return;

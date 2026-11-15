@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <!-- Security Shield & Anti-Analysis (Executive First Guard) -->
-  <script src="js/security-shield.js?v=17.0"></script>
+  <script src="js/security-shield.js?v=18.0"></script>
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1275,20 +1275,26 @@
                 تحديد مناطق التغطية المعتمدة، رسوم الشحن لكل منطقة، ومدة التوصيل. الطلبات خارج المناطق المدعومة تُرفض تلقائياً.
               </p>
             </div>
-            <button type="button" class="btn-primary" style="font-size: 0.82rem; padding: 0.55rem 1.15rem; font-weight: 700;" onclick="saveDeliveryAreasChanges()">
-              <i class="fas fa-save"></i> <span>حفظ تعديلات التوصيل</span>
-            </button>
+            <div style="display: flex; gap: 0.65rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn-secondary" style="font-size: 0.82rem; padding: 0.55rem 1rem; font-weight: 700;" onclick="addNewDeliveryAreaRow()">
+                <i class="fas fa-plus"></i> <span>إضافة نطاق مناطق جديد</span>
+              </button>
+              <button type="button" class="btn-primary" style="font-size: 0.82rem; padding: 0.55rem 1.15rem; font-weight: 700;" onclick="saveDeliveryAreasChanges()">
+                <i class="fas fa-save"></i> <span>حفظ تعديلات التوصيل</span>
+              </button>
+            </div>
           </div>
 
           <div class="table-responsive" style="margin-top: 1rem;">
             <table class="admin-table">
               <thead>
                 <tr>
-                  <th>المنطقة / المحافظة</th>
-                  <th>الاسم بالإنجليزية</th>
-                  <th>رسوم الشحن (ج.م)</th>
-                  <th>مدة التوصيل التقديرية</th>
-                  <th>حالة التغطية</th>
+                  <th style="min-width: 260px;">المناطق والمدن المشمولة (اكتب أكثر من منطقة مفصولة بفواصل)</th>
+                  <th style="min-width: 150px;">الاسم بالإنجليزية</th>
+                  <th style="width: 125px;">رسوم الشحن (ج.م)</th>
+                  <th style="width: 140px;">مدة التوصيل التقديرية</th>
+                  <th style="width: 110px;">حالة التغطية</th>
+                  <th style="width: 60px; text-align: center;">إجراء</th>
                 </tr>
               </thead>
               <tbody id="adminDeliveryAreasTableBody"></tbody>
@@ -1369,9 +1375,9 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- JavaScript Scripts -->
-  <script src="js/i18n.js?v=17.0"></script>
-  <script src="js/data.js?v=17.0"></script>
-  <script src="js/db.js?v=17.0"></script>
-  <script src="js/admin.js?v=17.0"></script>
+  <script src="js/i18n.js?v=18.0"></script>
+  <script src="js/data.js?v=18.0"></script>
+  <script src="js/db.js?v=18.0"></script>
+  <script src="js/admin.js?v=18.0"></script>
 </body>
 </html>

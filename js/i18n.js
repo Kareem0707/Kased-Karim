@@ -144,7 +144,32 @@
       area_new_cairo: "القاهرة الجديدة والتجمع (75 ج.م - 2-3 أيام)",
       area_giza: "الجيزة والدقي والمهندسين (60 ج.م - 2-3 أيام)",
       area_cairo: "وسط البلد ومدينة نصر ومصر الجديدة (70 ج.م - 2-3 أيام)",
-      area_alexandria: "الإسكندرية والساحل الشمالي (120 ج.م - 3-5 أيام)"
+      area_alexandria: "الإسكندرية والساحل الشمالي (120 ج.م - 3-5 أيام)",
+
+      // Showroom & Location Section
+      showroomSectionTag: "صالة العرض بالشيخ زايد",
+      showroomTitle: "معرض قاصد كريم في قلب الشيخ زايد",
+      showroomDesc: "تفضل بزيارة صالة العرض الخاصة بنا واستمتع بتجربة حسية غامرة تجمع أرقى نماذج الإضاءة المعمارية والديكورية، مع استشارة مجانية لاختيار أرقى التصاميم التي تناسب منزلك.",
+      showroomLocation: "الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة",
+      showroomHours: "يومياً من 11:00 صباحاً حتى 11:00 مساءً",
+      showroomWhatsapp: "تواصل مع المعرض مباشرة",
+      showroomMap: "الاتجاهات على الخريطة",
+
+      // Footer
+      footerDesc: "المعرض الأول للإضاءة الفاخرة والمعمارية في الشيخ زايد. شركاء الإبداع لأصحاب القصور والفيلات والباحثين عن التميز والفرادة.",
+      footerCollectionsTitle: "مجموعات الإضاءة",
+      footerContactTitle: "معرض الشيخ زايد والتواصل",
+
+      // Google Sign In
+      continueWithGoogle: "المتابعة السريعة بحساب Google",
+      orUseForm: "أو عبر البريد ورقم الهاتف",
+
+      // Auth & Form Placeholders
+      ph_fullName: "مثال: كريم محمود",
+      ph_phone: "010XXXXXXXX (11 رقماً)",
+      ph_email: "example@kasedkarim.test",
+      ph_password: "•••••••• (6 خانات على الأقل)",
+      ph_loginIdentifier: "010XXXXXXXX أو your@email.test"
     },
 
     en: {
@@ -281,7 +306,32 @@
       area_new_cairo: "New Cairo & Tagamoa (75 EGP, 2-3 Business Days)",
       area_giza: "Giza, Dokki & Mohandessin (60 EGP, 2-3 Business Days)",
       area_cairo: "Cairo, Nasr City & Heliopolis (70 EGP, 2-3 Business Days)",
-      area_alexandria: "Alexandria & North Coast (120 EGP, 3-5 Business Days)"
+      area_alexandria: "Alexandria & North Coast (120 EGP, 3-5 Business Days)",
+
+      // Showroom & Location Section
+      showroomSectionTag: "SHEIKH ZAYED FLAGSHIP",
+      showroomTitle: "Kased Karim Flagship in the Heart of Sheikh Zayed",
+      showroomDesc: "Visit our dedicated showroom to experience an immersive sensory journey through the finest architectural and decorative lighting, with complimentary bespoke lighting consultations.",
+      showroomLocation: "Sheikh Zayed - District 1, Al-Tahirah Center, Giza",
+      showroomHours: "Daily from 11:00 AM to 11:00 PM",
+      showroomWhatsapp: "Direct WhatsApp Inquiries",
+      showroomMap: "Get Directions on Google Maps",
+
+      // Footer
+      footerDesc: "Egypt's premier flagship showroom for luxury and architectural lighting in Sheikh Zayed. Creative lighting partners for estates, luxury villas, and discerning spaces.",
+      footerCollectionsTitle: "Lighting Collections",
+      footerContactTitle: "Showroom & Direct Contact",
+
+      // Google Sign In
+      continueWithGoogle: "Continue with Google",
+      orUseForm: "Or with email & phone",
+
+      // Auth & Form Placeholders
+      ph_fullName: "e.g., Karim Mahmoud",
+      ph_phone: "010XXXXXXXX (11 digits)",
+      ph_email: "example@kasedkarim.test",
+      ph_password: "•••••••• (min 6 characters)",
+      ph_loginIdentifier: "010XXXXXXXX or your@email.test"
     }
   };
 
