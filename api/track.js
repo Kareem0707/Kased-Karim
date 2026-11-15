@@ -121,14 +121,35 @@ export default async function handler(req, res) {
     const cleanOrderId = orderId.toUpperCase().replace(/[#]/g, "").trim();
     const cleanPhone = phone.replace(/[^0-9]/g, "");
 
-    const orders = await fetchOrdersFromCloud(req);
+    let targetOrder = null;
+    const firebaseUrl = getFirebaseUrl(req);
 
-    // Search for order by ID
-    const targetOrder = orders.find(o => {
-      if (!o || !o.id) return false;
-      const oId = o.id.toString().toUpperCase().trim();
-      return oId === cleanOrderId || oId.replace("ORD-", "") === cleanOrderId.replace("ORD-", "");
-    });
+    // 1. Try Direct Fast Fetch by Order ID (Zero-lag real-time Firebase read)
+    if (firebaseUrl) {
+      try {
+        const safeId = encodeURIComponent(cleanOrderId);
+        const singleRes = await fetch(`${firebaseUrl}/orders/${safeId}.json?t=${Date.now()}`, {
+          cache: "no-store",
+          headers: { "Accept": "application/json" }
+        });
+        if (singleRes.ok) {
+          const directData = await singleRes.json();
+          if (directData && directData.id) {
+            targetOrder = directData;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 2. Fallback: Search in full orders list (from Firebase or KV)
+    if (!targetOrder) {
+      const orders = await fetchOrdersFromCloud(req);
+      targetOrder = orders.find(o => {
+        if (!o || !o.id) return false;
+        const oId = o.id.toString().toUpperCase().trim();
+        return oId === cleanOrderId || oId.replace("ORD-", "") === cleanOrderId.replace("ORD-", "");
+      });
+    }
 
     if (!targetOrder) {
       // Delay response slightly to prevent timing enumeration
@@ -192,16 +213,21 @@ export default async function handler(req, res) {
     }));
 
     const statusMessages = {
-      pending: "تم استلام الطلب بنجاح، وقيد المراجعة والتأكيد بمعرض قاصد كريم بالشيخ زايد.",
-      confirmed: "تم تأكيد طلبك وجارٍ تجهيز وحدات الإضاءة وفحص الجودة بالمعرض.",
-      processing: "جارٍ فحص المواصفات وتغليف وحدات الإضاءة بعناية فائقة.",
-      shipped: "الطلب في طريقه إليكم مع مندوب المعرض المعتمد.",
+      received: "تم استلام الطلب وتوثيقه سحابياً، وجارٍ مراجعته بمعرض قاصد كريم بالشيخ زايد.",
+      pending: "تم استلام الطلب وتوثيقه سحابياً، وجارٍ مراجعته بمعرض قاصد كريم بالشيخ زايد.",
+      confirmed: "تم تأكيد طلبك والتحقق من المواصفات الفنية وجارٍ البدء في التجهيز.",
+      preparing: "جارٍ تجهيز وفحص وحدات الإضاءة بعناية فائقة بصالة العرض.",
+      processing: "جارٍ تجهيز وفحص وحدات الإضاءة بعناية فائقة بصالة العرض.",
+      packed: "تم فحص وحدات الإضاءة وتغليفها بأمان تام وجاهزة للتسليم للمندوب.",
+      shipped: "الطلب في طريقه إليكم مع مندوب المعرض المعتمد بالشيخ زايد.",
       delivered: "تم تسليم الطلب بنجاح. شكراً لثقتكم بمعرض قاصد كريم للإضاءة الفاخرة.",
-      cancelled: "تم إلغاء هذا الطلب."
+      completed: "تم تسليم الطلب بنجاح بالضمان المعتمد.",
+      cancelled: "تم إلغاء هذا الطلب وإعادة المخزون.",
+      failed: "تعذر تسليم الطلب، يرجى التواصل مع المعرض عبر واتساب."
     };
 
-    const currentStatus = targetOrder.status || "pending";
-    const statusMessage = statusMessages[currentStatus] || statusMessages.pending;
+    const currentStatus = targetOrder.status || "received";
+    const statusMessage = statusMessages[currentStatus] || statusMessages.received;
 
     return res.status(200).json({
       success: true,

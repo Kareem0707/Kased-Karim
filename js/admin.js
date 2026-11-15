@@ -3180,6 +3180,9 @@ async function restoreWebPointById(pointId) {
       renderAdminCategories();
       loadAdminSettingsValues();
       renderAdminBackupView();
+      try {
+        localStorage.setItem("kk_sync_ping", Date.now().toString());
+      } catch (e) {}
     } else {
       showToast(`⚠️ ${res.error || "فشل الاسترجاع"}`);
     }
@@ -3268,6 +3271,9 @@ async function applyFileRestore(e) {
       renderAdminCategories();
       loadAdminSettingsValues();
       renderAdminBackupView();
+      try {
+        localStorage.setItem("kk_sync_ping", Date.now().toString());
+      } catch (e) {}
     } else {
       showToast(`⚠️ ${res.error || "فشل استرجاع الملف"}`);
     }
@@ -3299,6 +3305,9 @@ async function emergencyFactoryReset() {
       renderAdminCategories();
       loadAdminSettingsValues();
       renderAdminBackupView();
+      try {
+        localStorage.setItem("kk_sync_ping", Date.now().toString());
+      } catch (e) {}
     }
   } catch (err) {
     showToast(`⚠️ خطأ: ${err.message}`);

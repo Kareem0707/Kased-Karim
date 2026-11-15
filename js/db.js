@@ -396,6 +396,10 @@ class KasedKarimDB {
 
   // Sync Products from Cloud to Local (Cloud is Ground Truth)
   async syncProductsFromCloud(isBackground = false) {
+    if (this.isRestoring) {
+      // Temporarily suppress background sync while restore is in progress
+      return;
+    }
     try {
       let cloudProducts = null;
       const t = Date.now();
@@ -861,15 +865,27 @@ class KasedKarimDB {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(status)
         }).catch(() => null);
+
+        // Bump sync metadata
+        fetch(`${customUrl}/sync_meta.json`, {
+          method: "PUT",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: updatedAt, action: "order_status_patch", orderId, status })
+        }).catch(() => null);
       } catch (e) {}
     }
 
-    fetch("/api/orders", {
-      method: "PATCH",
-      cache: "no-store",
-      headers: this.getCloudHeaders(),
-      body: JSON.stringify({ id: orderId, status, updatedAt })
-    }).catch(() => null);
+    try {
+      await fetch("/api/orders", {
+        method: "PATCH",
+        cache: "no-store",
+        headers: this.getCloudHeaders(),
+        body: JSON.stringify({ id: orderId, status, updatedAt })
+      });
+    } catch (e) {}
+
+    window.dispatchEvent(new CustomEvent("kk_orders_updated", { detail: { orderId, status, updatedAt } }));
   }
 
   async deleteOrderFromCloud(orderId) {
@@ -1743,20 +1759,42 @@ class KasedKarimDB {
     const backupData = explicitData || this.generateBackupData(label);
     let points = this.getWebRestorePoints();
 
+    // Sanitize any gigantic base64 strings in products to avoid hitting localStorage 5MB limit
+    const safeProducts = (backupData.products || []).map(p => {
+      if (!p) return p;
+      let cleanImg = p.image || "";
+      if (typeof cleanImg === "string" && cleanImg.startsWith("data:") && cleanImg.length > 5000) {
+        cleanImg = "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=600&q=80";
+      }
+      return { ...p, image: cleanImg };
+    });
+
+    const safeBackupData = {
+      ...backupData,
+      products: safeProducts
+    };
+
     const newPoint = {
       id: "RST-" + Date.now().toString().slice(-7),
       timestamp: Date.now(),
-      dateFormatted: backupData.dateFormatted,
-      timeFormatted: backupData.timeFormatted,
+      dateFormatted: safeBackupData.dateFormatted,
+      timeFormatted: safeBackupData.timeFormatted,
       label: label,
-      counts: backupData.counts,
-      totalRevenue: backupData.analytics?.totalRevenue || 0,
-      data: backupData
+      counts: safeBackupData.counts,
+      totalRevenue: safeBackupData.analytics?.totalRevenue || 0,
+      data: safeBackupData
     };
 
-    // Prepend and limit to 15 points
-    points = [newPoint, ...points.filter(p => p.id !== newPoint.id)].slice(0, 15);
-    localStorage.setItem(DB_KEYS.BACKUPS, JSON.stringify(points));
+    // Prepend and limit to 10 points
+    points = [newPoint, ...points.filter(p => p.id !== newPoint.id)].slice(0, 10);
+    try {
+      localStorage.setItem(DB_KEYS.BACKUPS, JSON.stringify(points));
+    } catch (e) {
+      try {
+        points = [newPoint, ...points.slice(1, 4)];
+        localStorage.setItem(DB_KEYS.BACKUPS, JSON.stringify(points));
+      } catch (err) {}
+    }
 
     // Push latest restore point to cloud
     const customUrl = this.getCustomCloudUrl();
@@ -1799,22 +1837,27 @@ class KasedKarimDB {
       return { success: false, error: "بيانات النسخة الاحتياطية غير صالحة" };
     }
 
-    // Auto-save a restore point of current state before applying restore!
-    this.saveWebRestorePoint("نقطة أمان تلقائية (قبل الاسترجاع)");
+    // 1. Lock background sync so polling will NOT overwrite restored products!
+    this.isRestoring = true;
+    if (this._restoreLockTimer) clearTimeout(this._restoreLockTimer);
+    this._restoreLockTimer = setTimeout(() => {
+      this.isRestoring = false;
+    }, 15000);
+
+    // Auto-save safety backup of current state, safely guarded
+    try {
+      this.saveWebRestorePoint("نقطة أمان تلقائية (قبل الاسترجاع)");
+    } catch (e) {}
 
     // 1. Restore Products
     if (Array.isArray(backupData.products)) {
-      // Un-tombstone any restored product IDs so they won't be filtered out
-      const restoredIds = new Set(backupData.products.map(p => p.id));
+      // Clear all deleted product tombstones so all restored products display fully
       try {
-        const rawDel = localStorage.getItem("kk_deleted_product_ids_v1");
-        if (rawDel) {
-          const remainingDel = JSON.parse(rawDel).filter(id => !restoredIds.has(id));
-          localStorage.setItem("kk_deleted_product_ids_v1", JSON.stringify(remainingDel));
-        }
-      } catch(e) {}
+        localStorage.removeItem("kk_deleted_product_ids_v1");
+      } catch (e) {}
 
       localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(backupData.products));
+      localStorage.setItem("kased_karim_custom_products", JSON.stringify(backupData.products));
       window.dispatchEvent(new CustomEvent("kk_products_updated", { detail: { merged: false, products: backupData.products } }));
     }
 

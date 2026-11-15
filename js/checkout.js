@@ -752,6 +752,22 @@
     const resultBox = document.getElementById("trackResultContainer");
     const cleanId = orderId.toUpperCase().replace(/[#]/g, "").trim();
 
+    // 1. Instant Zero-Lag Local Render if available on this browser
+    if (window.KK_DB) {
+      try {
+        const localOrders = window.KK_DB.getOrders();
+        const localMatch = localOrders.find(o => 
+          o && o.id && (
+            o.id.toUpperCase().trim() === cleanId || 
+            o.id.replace("ORD-", "").toUpperCase().trim() === cleanId.replace("ORD-", "")
+          )
+        );
+        if (localMatch) {
+          renderTrackedOrderUI(localMatch);
+        }
+      } catch (e) {}
+    }
+
     try {
       const custToken = window.KK_DB ? window.KK_DB.getCustomerToken() : null;
       const headers = { "Content-Type": "application/json" };
@@ -777,49 +793,53 @@
           loadAndRenderTrackOrder(cleanId, enteredPhone.trim());
         }
       } else {
-        // Show Safe Error State (No XSS, TextContent only)
-        if (resultBox) resultBox.style.display = "none";
-        if (emptyState) {
-          emptyState.style.display = "block";
-          emptyState.innerHTML = "";
+        // If not rendered locally, show safe empty state
+        if (!resultBox || resultBox.style.display !== "block") {
+          if (resultBox) resultBox.style.display = "none";
+          if (emptyState) {
+            emptyState.style.display = "block";
+            emptyState.innerHTML = "";
 
-          const icon = document.createElement("i");
-          icon.className = "fas fa-shield-halved";
-          icon.style.cssText = "font-size: 2.2rem; color: #F59E0B; margin-bottom: 0.75rem; display: block;";
+            const icon = document.createElement("i");
+            icon.className = "fas fa-shield-halved";
+            icon.style.cssText = "font-size: 2.2rem; color: #F59E0B; margin-bottom: 0.75rem; display: block;";
 
-          const heading = document.createElement("h4");
-          heading.style.cssText = "color: var(--text-main); margin-bottom: 0.35rem; font-weight: 700;";
-          heading.textContent = data.error || "تعذر العثور على الطلب";
+            const heading = document.createElement("h4");
+            heading.style.cssText = "color: var(--text-main); margin-bottom: 0.35rem; font-weight: 700;";
+            heading.textContent = data.error || "تعذر العثور على الطلب";
 
-          const desc = document.createElement("p");
-          desc.style.cssText = "color: var(--text-muted); font-size: 0.82rem; margin: 0 0 1rem 0;";
-          desc.textContent = "لأمان وخصوصية بياناتك، يرجى كتابة كود الطلب كاملاً ورقم الهاتف المسجل للمعاينة وتتبع المراحل.";
+            const desc = document.createElement("p");
+            desc.style.cssText = "color: var(--text-muted); font-size: 0.82rem; margin: 0 0 1rem 0;";
+            desc.textContent = "لأمان وخصوصية بياناتك، يرجى كتابة كود الطلب كاملاً ورقم الهاتف المسجل للمعاينة وتتبع المراحل.";
 
-          const waBtn = document.createElement("button");
-          waBtn.type = "button";
-          waBtn.className = "btn-whatsapp-customer";
-          waBtn.style.cssText = "margin: 0 auto; padding: 0.5rem 1rem; font-size: 0.8rem;";
-          waBtn.innerHTML = `<i class="fab fa-whatsapp"></i> استفسار المعرض عبر واتساب`;
-          waBtn.addEventListener("click", () => {
-            const waNumber = window.SHOWROOM_INFO?.whatsapp || "201006367690";
-            const text = encodeURIComponent(`مرحباً معرض قاصد كريم، أود الاستفسار عن حالة طلبي رقم #${cleanId}.`);
-            window.open(`https://wa.me/${waNumber}?text=${text}`, "_blank");
-          });
+            const waBtn = document.createElement("button");
+            waBtn.type = "button";
+            waBtn.className = "btn-whatsapp-customer";
+            waBtn.style.cssText = "margin: 0 auto; padding: 0.5rem 1rem; font-size: 0.8rem;";
+            waBtn.innerHTML = `<i class="fab fa-whatsapp"></i> استفسار المعرض عبر واتساب`;
+            waBtn.addEventListener("click", () => {
+              const waNumber = window.SHOWROOM_INFO?.whatsapp || "201006367690";
+              const text = encodeURIComponent(`مرحباً معرض قاصد كريم، أود الاستفسار عن حالة طلبي رقم #${cleanId}.`);
+              window.open(`https://wa.me/${waNumber}?text=${text}`, "_blank");
+            });
 
-          emptyState.appendChild(icon);
-          emptyState.appendChild(heading);
-          emptyState.appendChild(desc);
-          emptyState.appendChild(waBtn);
+            emptyState.appendChild(icon);
+            emptyState.appendChild(heading);
+            emptyState.appendChild(desc);
+            emptyState.appendChild(waBtn);
+          }
+          showToast(data.error || "لم يتم العثور على طلب بهذه البيانات");
         }
-        showToast(data.error || "لم يتم العثور على طلب بهذه البيانات");
       }
     } catch (err) {
-      showToast("تعذر الاتصال بمركز التتبع السحابي، يرجى المحاولة لاحقاً");
+      if (!resultBox || resultBox.style.display !== "block") {
+        showToast("تعذر الاتصال بمركز التتبع السحابي، يرجى المحاولة لاحقاً");
+      }
     }
   };
 
-  function renderTrackedOrderUI(order) {
-    window.renderTrackedOrderUI = renderTrackedOrderUI;
+  window.renderTrackedOrderUI = function renderTrackedOrderUI(order) {
+    if (!order) return;
     window.currentTrackedOrderId = order.id;
 
     const emptyState = document.getElementById("trackEmptyState");
@@ -834,7 +854,7 @@
 
     if (idDisplay) idDisplay.textContent = `#${order.id}`;
     if (dateDisplay) {
-      dateDisplay.innerHTML = `<i class="fas fa-clock"></i> تم التسجيل: ${window.escapeHtml(order.dateFormatted)}`;
+      dateDisplay.innerHTML = `<i class="fas fa-clock"></i> تم التسجيل: ${window.escapeHtml(order.dateFormatted || "اليوم")}`;
     }
     if (totalSum) totalSum.textContent = `${formatPrice(order.total)} ج.م`;
 
@@ -874,51 +894,70 @@
 
     steps.forEach(s => s && s.classList.remove("active", "completed"));
 
-    const status = order.status || "pending";
+    const rawStatus = (order.status || "received").toLowerCase();
 
-    if (status === "pending") {
+    if (rawStatus === "received" || rawStatus === "pending") {
       if (stepperFill) stepperFill.style.width = "10%";
       if (steps[0]) steps[0].classList.add("active");
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-pending";
-        badgeDisplay.innerHTML = `<i class="fas fa-clock"></i> قيد المراجعة والاستلام`;
+        badgeDisplay.style.cssText = "";
+        badgeDisplay.innerHTML = `<i class="fas fa-clock"></i> تم الاستلام والتوثيق`;
       }
       if (msgBox) {
         msgBox.style.background = "#FFFBEB";
         msgBox.style.borderColor = "#FDE68A";
         msgBox.style.color = "#92400E";
       }
-      if (msgText) msgText.textContent = order.statusMessage || "تم استلام الطلب وقيد التأكيد بمعرض قاصد كريم بالشيخ زايد.";
-    } else if (status === "confirmed") {
+      if (msgText) msgText.textContent = order.statusMessage || "تم استلام الطلب وتوثيقه سحابياً، وجارٍ مراجعته بمعرض قاصد كريم بالشيخ زايد.";
+    } else if (rawStatus === "confirmed") {
       if (stepperFill) stepperFill.style.width = "35%";
       if (steps[0]) steps[0].classList.add("completed");
       if (steps[1]) steps[1].classList.add("active");
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-confirmed";
-        badgeDisplay.innerHTML = `<i class="fas fa-check-double"></i> تم تأكيد الطلب بالمعرض`;
+        badgeDisplay.style.cssText = "";
+        badgeDisplay.innerHTML = `<i class="fas fa-check-double"></i> تم التأكيد والمعاينة الفنية`;
       }
       if (msgBox) {
         msgBox.style.background = "#EFF6FF";
         msgBox.style.borderColor = "#BFDBFE";
         msgBox.style.color = "#1E40AF";
       }
-      if (msgText) msgText.textContent = order.statusMessage || "تم تأكيد طلبك وجارٍ تجهيز وحدات الإضاءة بالمعرض.";
-    } else if (status === "processing") {
+      if (msgText) msgText.textContent = order.statusMessage || "تم تأكيد طلبك والتحقق من المواصفات الفنية وجارٍ البدء في التجهيز.";
+    } else if (rawStatus === "preparing" || rawStatus === "processing") {
       if (stepperFill) stepperFill.style.width = "60%";
       if (steps[0]) steps[0].classList.add("completed");
       if (steps[1]) steps[1].classList.add("completed");
       if (steps[2]) steps[2].classList.add("active");
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-processing";
-        badgeDisplay.innerHTML = `<i class="fas fa-boxes-packing"></i> جارٍ التجهيز والفحص`;
+        badgeDisplay.style.cssText = "";
+        badgeDisplay.innerHTML = `<i class="fas fa-boxes-packing"></i> جاري التجهيز والتجميع`;
       }
       if (msgBox) {
         msgBox.style.background = "#F5F3FF";
         msgBox.style.borderColor = "#DDD6FE";
         msgBox.style.color = "#5B21B6";
       }
-      if (msgText) msgText.textContent = order.statusMessage || "جارٍ فحص المواصفات الفنية وتغليف الوحدات بعناية فائقة.";
-    } else if (status === "shipped") {
+      if (msgText) msgText.textContent = order.statusMessage || "جارٍ تجهيز وفحص وحدات الإضاءة بعناية فائقة بصالة العرض.";
+    } else if (rawStatus === "packed") {
+      if (stepperFill) stepperFill.style.width = "72%";
+      if (steps[0]) steps[0].classList.add("completed");
+      if (steps[1]) steps[1].classList.add("completed");
+      if (steps[2]) steps[2].classList.add("active");
+      if (badgeDisplay) {
+        badgeDisplay.className = "status-badge-live status-processing";
+        badgeDisplay.style.cssText = "";
+        badgeDisplay.innerHTML = `<i class="fas fa-box-open"></i> تم التغليف والتأمين`;
+      }
+      if (msgBox) {
+        msgBox.style.background = "#F5F3FF";
+        msgBox.style.borderColor = "#DDD6FE";
+        msgBox.style.color = "#5B21B6";
+      }
+      if (msgText) msgText.textContent = order.statusMessage || "تم فحص وحدات الإضاءة وتغليفها بأمان تام وجاهزة للتسليم للمندوب.";
+    } else if (rawStatus === "shipped") {
       if (stepperFill) stepperFill.style.width = "85%";
       if (steps[0]) steps[0].classList.add("completed");
       if (steps[1]) steps[1].classList.add("completed");
@@ -926,27 +965,55 @@
       if (steps[3]) steps[3].classList.add("active");
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-shipped";
-        badgeDisplay.innerHTML = `<i class="fas fa-truck-fast"></i> مع مندوب المعرض`;
+        badgeDisplay.style.cssText = "";
+        badgeDisplay.innerHTML = `<i class="fas fa-truck-fast"></i> خرج للشحن والتوصيل`;
       }
       if (msgBox) {
         msgBox.style.background = "#FFF7ED";
         msgBox.style.borderColor = "#FED7AA";
         msgBox.style.color = "#9A3412";
       }
-      if (msgText) msgText.textContent = order.statusMessage || "الطلب في طريقه إليكم مع مندوب المعرض المعتمد.";
-    } else if (status === "delivered" || status === "completed") {
+      if (msgText) msgText.textContent = order.statusMessage || "الطلب في طريقه إليكم مع مندوب المعرض المعتمد بالشيخ زايد.";
+    } else if (rawStatus === "delivered" || rawStatus === "completed") {
       if (stepperFill) stepperFill.style.width = "100%";
       steps.forEach(s => s && s.classList.add("completed"));
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-delivered";
-        badgeDisplay.innerHTML = `<i class="fas fa-circle-check"></i> تم التسليم بنجاح`;
+        badgeDisplay.style.cssText = "";
+        badgeDisplay.innerHTML = `<i class="fas fa-circle-check"></i> تم التسليم بالضمان المعتمد`;
       }
       if (msgBox) {
         msgBox.style.background = "#F0FDF4";
         msgBox.style.borderColor = "#BBF7D0";
         msgBox.style.color = "#166534";
       }
-      if (msgText) msgText.textContent = order.statusMessage || "تم تسليم الطلب بنجاح. شكراً لثقتكم بمعرض قاصد كريم.";
+      if (msgText) msgText.textContent = order.statusMessage || "تم تسليم الطلب بنجاح. شكراً لثقتكم بمعرض قاصد كريم للإضاءة الفاخرة.";
+    } else if (rawStatus === "cancelled") {
+      if (stepperFill) stepperFill.style.width = "0%";
+      if (badgeDisplay) {
+        badgeDisplay.className = "status-badge-live status-cancelled";
+        badgeDisplay.style.cssText = "background: rgba(239, 68, 68, 0.15) !important; color: #DC2626 !important; border-color: rgba(239, 68, 68, 0.3) !important;";
+        badgeDisplay.innerHTML = `<i class="fas fa-ban"></i> طلب ملغي`;
+      }
+      if (msgBox) {
+        msgBox.style.background = "#FEF2F2";
+        msgBox.style.borderColor = "#FECACA";
+        msgBox.style.color = "#991B1B";
+      }
+      if (msgText) msgText.textContent = order.statusMessage || "تم إلغاء هذا الطلب وإعادة المخزون.";
+    } else if (rawStatus === "failed") {
+      if (stepperFill) stepperFill.style.width = "0%";
+      if (badgeDisplay) {
+        badgeDisplay.className = "status-badge-live status-failed";
+        badgeDisplay.style.cssText = "background: rgba(220, 38, 38, 0.15) !important; color: #DC2626 !important; border-color: rgba(220, 38, 38, 0.3) !important;";
+        badgeDisplay.innerHTML = `<i class="fas fa-triangle-exclamation"></i> تعذر التسليم`;
+      }
+      if (msgBox) {
+        msgBox.style.background = "#FEF2F2";
+        msgBox.style.borderColor = "#FECACA";
+        msgBox.style.color = "#991B1B";
+      }
+      if (msgText) msgText.textContent = order.statusMessage || "تعذر تسليم الطلب، يرجى التواصل مع المعرض عبر واتساب.";
     }
   }
 
