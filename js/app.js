@@ -26,6 +26,14 @@ const STATE = {
 };
 window.STATE = STATE;
 
+function isCurrentEn() {
+  if (!window.KK_I18N) return false;
+  if (typeof window.KK_I18N.getCurrentLanguage === "function") {
+    return window.KK_I18N.getCurrentLanguage() === "en";
+  }
+  return window.KK_I18N.currentLang === "en";
+}
+
 // Storage Keys
 const STORAGE_KEYS = {
   PRODUCTS: "kased_karim_custom_products",
@@ -449,7 +457,7 @@ function renderProducts() {
     return;
   }
 
-  const isEn = window.KK_I18N ? window.KK_I18N.getCurrentLanguage() === "en" : false;
+  const isEn = isCurrentEn();
   const currencyStr = window.KK_I18N ? window.KK_I18N.t("currency") : "ج.م";
 
   grid.innerHTML = visibleItems.map(item => {
@@ -556,7 +564,7 @@ function openQuickView(productId) {
   const qtyEl = document.getElementById("modalQtyVal");
   const stockEl = document.getElementById("modalStockStatusBadge");
 
-  const isEn = window.KK_I18N ? window.KK_I18N.getCurrentLanguage() === "en" : false;
+  const isEn = isCurrentEn();
   const currencyStr = window.KK_I18N ? window.KK_I18N.t("currency") : "ج.م";
   const stock = item.stock !== undefined ? item.stock : 10;
 
@@ -641,7 +649,7 @@ function addToCart(productId, qty = 1) {
 
   // PRD Section 6: Prevent selling unavailable products & overselling
   const stock = product.stock !== undefined ? product.stock : 10;
-  const isEn = window.KK_I18N ? window.KK_I18N.getCurrentLanguage() === "en" : false;
+  const isEn = isCurrentEn();
 
   if (stock <= 0) {
     showToast(isEn ? "Sorry, this lighting unit is currently out of stock." : "عفواً، هذه الوحدة غير متوفرة حالياً بالمعرض.");
@@ -1654,7 +1662,7 @@ function updateCustomerButtonUI() {
   const customer = window.KK_DB && typeof window.KK_DB.getCustomer === "function" 
     ? window.KK_DB.getCustomer() 
     : null;
-  const isEn = window.KK_I18N ? window.KK_I18N.getCurrentLanguage() === "en" : false;
+  const isEn = isCurrentEn();
   const btn = document.getElementById("customerAccountBtn");
   if (!btn) return;
 

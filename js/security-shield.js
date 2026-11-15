@@ -16,8 +16,23 @@
     navigator.userAgent || navigator.vendor || window.opera || ""
   );
 
+  function isAuthorizedAdmin() {
+    try {
+      return (
+        localStorage.getItem("kk_admin_authorized") === "true" ||
+        localStorage.getItem("kk_admin_device_linked") === "true" ||
+        !!localStorage.getItem("kk_admin_token") ||
+        !!sessionStorage.getItem("kk_admin_token")
+      );
+    } catch (e) {
+      return false;
+    }
+  }
+
   // 2. Disable F12 and Developer Tools Keyboard Shortcuts (Capture Phase)
   function blockDevToolsKeys(e) {
+    if (isAuthorizedAdmin()) return; // Never restrict authorized administrator
+
     const key = e.key || "";
     const keyCode = e.keyCode || e.which || 0;
     const isCtrlOrMeta = e.ctrlKey || e.metaKey;
@@ -74,6 +89,8 @@
 
   // 3. Disable Context Menu (Right-Click Inspect)
   function blockContextMenu(e) {
+    if (isAuthorizedAdmin()) return; // Never restrict authorized administrator
+
     // Preserve normal interaction for inputs and textareas (e.g. paste phone number in checkout)
     const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
     if (tag === "input" || tag === "textarea") return;
@@ -98,26 +115,17 @@
     false
   );
 
-  // 5. Console Protection & Data Masking
-  try {
-    if (window.console) {
-      if (typeof console.clear === "function") console.clear();
-      console.log = function () {};
-      console.debug = function () {};
-      console.info = function () {};
-      console.dir = function () {};
-      console.table = function () {};
-    }
-  } catch (e) {}
-
-  // 6. Anti-Debugger Trap when DevTools is opened via browser menu (Desktop Only)
-  if (!isRealMobile) {
-    setInterval(function () {
-      try {
-        (function () {
-          return false;
-        }["constructor"]("debugger")());
-      } catch (e) {}
-    }, 400);
+  // 5. Console Protection & Data Masking for public visitors
+  if (!isAuthorizedAdmin()) {
+    try {
+      if (window.console) {
+        if (typeof console.clear === "function") console.clear();
+        console.log = function () {};
+        console.debug = function () {};
+        console.info = function () {};
+        console.dir = function () {};
+        console.table = function () {};
+      }
+    } catch (e) {}
   }
 })();

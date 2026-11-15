@@ -296,11 +296,19 @@
     }
 
     getLang() {
-      return this.currentLang;
+      return this.currentLang || "ar";
+    }
+
+    getCurrentLanguage() {
+      return this.currentLang || "ar";
+    }
+
+    isEn() {
+      return (this.currentLang || "ar") === "en";
     }
 
     isRTL() {
-      return this.currentLang === "ar";
+      return (this.currentLang || "ar") === "ar";
     }
 
     t(key, fallback = "") {
@@ -390,6 +398,15 @@
   }
 
   window.KK_I18N = new I18nManager();
+  window.KK_I18N.getCurrentLanguage = function () {
+    return (window.KK_I18N && window.KK_I18N.currentLang) || "ar";
+  };
+  window.KK_I18N.getLang = function () {
+    return (window.KK_I18N && window.KK_I18N.currentLang) || "ar";
+  };
+  window.KK_I18N.isEn = function () {
+    return (window.KK_I18N && window.KK_I18N.currentLang) === "en";
+  };
   window.t = function (key, fallback) {
     return window.KK_I18N.t(key, fallback);
   };
