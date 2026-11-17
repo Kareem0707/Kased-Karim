@@ -3,26 +3,22 @@
 // Prohibits anonymous dumping of customer records & ensures cloud persistence before confirming
 
 import crypto from "crypto";
-import { verifyAdminRequest } from "./_auth.js";
+import {
+  verifyAdminRequest,
+  sanitizePathId,
+  getFirebaseUrl,
+  setSecurityHeaders
+} from "./_auth.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Resolve Cloud Database Endpoint
-function getFirebaseUrl(req) {
-  const envUrl = process.env.FIREBASE_DB_URL || process.env.NEXT_PUBLIC_FIREBASE_DB_URL;
-  if (envUrl && envUrl.trim()) {
-    return envUrl.trim().replace(/\/$/, "");
-  }
-  return "https://kased-karim-default-rtdb.firebaseio.com";
-}
-
 // Update Global Sync Metadata
-async function bumpSyncMetadata(firebaseUrl, actionType = "order_update") {
-  if (!firebaseUrl) return;
+async function bumpSyncMetadata(actionType = "order_update") {
   try {
     const now = Date.now();
-    await fetch(`${firebaseUrl}/sync_meta.json`, {
+    const firebaseUrl = getFirebaseUrl("sync_meta.json");
+    await fetch(firebaseUrl, {
       method: "PUT",
       cache: "no-store",
       headers: { "Content-Type": "application/json" },
@@ -38,32 +34,30 @@ async function bumpSyncMetadata(firebaseUrl, actionType = "order_update") {
 // 1. Fetch Orders from Cloud
 async function fetchOrdersFromCloud(req) {
   const t = Date.now();
-  const firebaseUrl = getFirebaseUrl(req);
 
   // A. Firebase Realtime Database
-  if (firebaseUrl) {
-    try {
-      const res = await fetch(`${firebaseUrl}/orders.json?t=${t}`, {
-        cache: "no-store",
-        headers: { "Accept": "application/json", "Cache-Control": "no-cache, no-store" }
-      });
-      if (res.ok) {
-        const raw = await res.json();
-        if (raw) {
-          if (Array.isArray(raw)) {
-            return { orders: raw.filter(Boolean), provider: "firebase-rtdb" };
-          }
-          if (typeof raw === "object") {
-            const list = Object.values(raw).filter(Boolean);
-            list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            return { orders: list, provider: "firebase-rtdb" };
-          }
+  try {
+    const firebaseUrl = getFirebaseUrl("orders.json", { t });
+    const res = await fetch(firebaseUrl, {
+      cache: "no-store",
+      headers: { "Accept": "application/json", "Cache-Control": "no-cache, no-store" }
+    });
+    if (res.ok) {
+      const raw = await res.json();
+      if (raw) {
+        if (Array.isArray(raw)) {
+          return { orders: raw.filter(Boolean), provider: "firebase-rtdb" };
         }
-        return { orders: [], provider: "firebase-rtdb" };
+        if (typeof raw === "object") {
+          const list = Object.values(raw).filter(Boolean);
+          list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          return { orders: list, provider: "firebase-rtdb" };
+        }
       }
-    } catch (err) {
-      console.warn("Firebase fetch orders error:", err.message);
+      return { orders: [], provider: "firebase-rtdb" };
     }
+  } catch (err) {
+    console.warn("Firebase fetch orders error:", err.message);
   }
 
   // B. Vercel KV / Upstash Redis
@@ -97,31 +91,29 @@ async function fetchOrdersFromCloud(req) {
   return { orders: [], provider: "none" };
 }
 
-// 1.5. Canonical Product Price Lookup to Prevent Client Price Tampering
-async function getCanonicalCatalog(req) {
-  const firebaseUrl = getFirebaseUrl(req);
-  if (firebaseUrl) {
-    try {
-      const res = await fetch(`${firebaseUrl}/products.json?t=${Date.now()}`, { cache: "no-store" });
-      if (res.ok) {
-        const raw = await res.json();
-        if (Array.isArray(raw)) return raw.filter(Boolean);
-        if (raw && typeof raw === "object") return Object.values(raw).filter(Boolean);
-      }
-    } catch (e) {}
-  }
+// 1.5. Canonical Product Price Lookup to Prevent Client Price Tampering (F-06)
+async function getCanonicalCatalog() {
+  try {
+    const firebaseUrl = getFirebaseUrl("products.json", { t: Date.now() });
+    const res = await fetch(firebaseUrl, { cache: "no-store" });
+    if (res.ok) {
+      const raw = await res.json();
+      if (Array.isArray(raw)) return raw.filter(Boolean);
+      if (raw && typeof raw === "object") return Object.values(raw).filter(Boolean);
+    }
+  } catch (e) {}
   return [];
 }
 
 // 2. Save / Update Order in Cloud
 async function saveOrderToCloud(req, order) {
-  const firebaseUrl = getFirebaseUrl(req);
   let savedToFirebase = false;
 
-  if (firebaseUrl) {
+  const safeId = sanitizePathId(order.id);
+  if (safeId) {
     try {
-      const safeId = encodeURIComponent(order.id);
-      const res = await fetch(`${firebaseUrl}/orders/${safeId}.json`, {
+      const firebaseUrl = getFirebaseUrl(`orders/${safeId}.json`);
+      const res = await fetch(firebaseUrl, {
         method: "PUT",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
@@ -129,7 +121,7 @@ async function saveOrderToCloud(req, order) {
       });
       if (res.ok) {
         savedToFirebase = true;
-        await bumpSyncMetadata(firebaseUrl, "order_save");
+        await bumpSyncMetadata("order_save");
       }
     } catch (err) {
       console.warn("Firebase save order error:", err.message);
@@ -173,27 +165,28 @@ async function saveOrderToCloud(req, order) {
 
 // 2.5 Batch Overwrite All Orders in Cloud (For Restore / Full Sync)
 async function saveBatchOrdersToCloud(req, ordersList) {
-  const firebaseUrl = getFirebaseUrl(req);
   let saved = false;
 
-  if (firebaseUrl) {
-    try {
-      const ordMap = {};
-      ordersList.forEach(o => {
-        if (o && o.id) {
-          ordMap[encodeURIComponent(o.id)] = o;
-        }
-      });
-      const res = await fetch(`${firebaseUrl}/orders.json`, {
-        method: "PUT",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(ordMap)
-      });
-      if (res.ok) saved = true;
-    } catch (e) {
-      console.warn("Firebase batch orders error:", e.message);
+  try {
+    const ordersMap = {};
+    ordersList.forEach(o => {
+      const safeId = sanitizePathId(o?.id);
+      if (safeId) ordersMap[safeId] = o;
+    });
+
+    const firebaseUrl = getFirebaseUrl("orders.json");
+    const res = await fetch(firebaseUrl, {
+      method: "PUT",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ordersMap)
+    });
+    if (res.ok) {
+      saved = true;
+      await bumpSyncMetadata("batch_orders_overwrite");
     }
+  } catch (err) {
+    console.warn("Firebase batch orders error:", err.message);
   }
 
   const kvUrl = process.env.KV_REST_API_URL;
@@ -210,11 +203,7 @@ async function saveBatchOrdersToCloud(req, ordersList) {
         body: JSON.stringify(ordersList)
       });
       saved = true;
-    } catch (e) {}
-  }
-
-  if (saved) {
-    await bumpSyncMetadata(firebaseUrl, "batch_orders_overwrite");
+    } catch (err) {}
   }
 
   return saved;
@@ -222,20 +211,18 @@ async function saveBatchOrdersToCloud(req, ordersList) {
 
 // 3. Delete Order from Cloud
 async function deleteOrderFromCloud(req, orderId) {
-  const firebaseUrl = getFirebaseUrl(req);
+  const safeId = sanitizePathId(orderId);
+  if (!safeId) return { success: false };
 
-  if (firebaseUrl) {
-    try {
-      const safeId = encodeURIComponent(orderId);
-      await fetch(`${firebaseUrl}/orders/${safeId}.json`, {
-        method: "DELETE",
-        cache: "no-store"
-      });
-      await bumpSyncMetadata(firebaseUrl, "order_delete");
-      return { success: true, provider: "firebase-rtdb" };
-    } catch (err) {
-      console.warn("Firebase delete order error:", err.message);
-    }
+  try {
+    const firebaseUrl = getFirebaseUrl(`orders/${safeId}.json`);
+    await fetch(firebaseUrl, {
+      method: "DELETE",
+      cache: "no-store"
+    });
+    await bumpSyncMetadata("order_delete");
+  } catch (err) {
+    console.warn("Firebase delete order error:", err.message);
   }
 
   const kvUrl = process.env.KV_REST_API_URL;
@@ -253,13 +240,10 @@ async function deleteOrderFromCloud(req, orderId) {
         },
         body: JSON.stringify(filtered)
       });
-      return { success: true, provider: "vercel-kv" };
-    } catch (err) {
-      console.warn("KV delete order error:", err.message);
-    }
+    } catch (err) {}
   }
 
-  return { success: false, provider: "none" };
+  return { success: true };
 }
 
 // Supported Delivery Areas and Fees (PRD Section 5)
@@ -272,27 +256,18 @@ const SUPPORTED_DELIVERY_AREAS = {
   "alexandria": { nameAr: "الإسكندرية والساحل الشمالي", nameEn: "Alexandria & North Coast", fee: 120, days: "3 - 5 أيام عمل" }
 };
 
-// Recent orders cache to prevent accidental duplicate submission (PRD Section 4)
+// Recent orders cache to prevent duplicate submission
 const recentOrdersSubmissionCache = new Map();
 
-// Generate Cryptographically Secure High-Entropy Order Reference
+// Generate Cryptographically Unguessable High-Entropy Order Reference (F-08)
 function generateSecureOrderId() {
   const numPart = crypto.randomInt(1000, 9999);
-  const alphaPart = crypto.randomBytes(2).toString("hex").toUpperCase();
+  const alphaPart = crypto.randomBytes(3).toString("hex").toUpperCase();
   return `ORD-${numPart}-${alphaPart}`;
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
-  res.setHeader("CDN-Cache-Control", "no-store");
-  res.setHeader("Vercel-CDN-Cache-Control", "no-store");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-  res.setHeader("Surrogate-Control", "no-store");
-
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-token, Cache-Control, Pragma");
+  setSecurityHeaders(req, res);
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -300,10 +275,9 @@ export default async function handler(req, res) {
 
   try {
     // -------------------------------------------------------------------------
-    // 1. GET: Fetch Orders (ADMIN-ONLY ACCESS REQUIREMENT)
+    // 1. GET: Fetch Orders (ADMIN-ONLY ACCESS REQUIREMENT) (F-04)
     // -------------------------------------------------------------------------
     if (req.method === "GET") {
-      // STRICT AUTHORIZATION CHECK: Prevent anonymous dumping of customer orders
       const admin = verifyAdminRequest(req);
       if (!admin) {
         return res.status(401).json({
@@ -316,7 +290,7 @@ export default async function handler(req, res) {
       const { orders, provider } = await fetchOrdersFromCloud(req);
 
       if (id) {
-        const cleanId = id.toString().replace(/[#]/g, "").trim().toUpperCase();
+        const cleanId = String(id).replace(/[#]/g, "").trim().toUpperCase();
         const single = orders.find(o => 
           o.id.toUpperCase() === cleanId || 
           o.id.replace("ORD-", "") === cleanId.replace("ORD-", "")
@@ -327,26 +301,18 @@ export default async function handler(req, res) {
         return res.status(404).json({ success: false, error: "Order not found" });
       }
 
-      // Filter out any lingering sample/demo orders and strictly sort descending (newest first)
-      const cleanOrders = orders.filter(o => 
-        o && o.id && 
-        typeof o.id === "string" &&
-        o.id !== "ORD-3985" && 
-        o.id !== "ORD-5412" && 
-        !o.id.startsWith("DEMO-")
-      );
-      cleanOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      orders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
       return res.status(200).json({
         success: true,
-        count: cleanOrders.length,
+        count: orders.length,
         provider,
-        orders: cleanOrders
+        orders
       });
     }
 
     // -------------------------------------------------------------------------
-    // 2. POST: Create a new order (Public Customer Order Submission / Reservation)
+    // 2. POST: Create a new order (Public Customer Order Submission)
     // -------------------------------------------------------------------------
     if (req.method === "POST") {
       let order = req.body;
@@ -361,7 +327,7 @@ export default async function handler(req, res) {
       const isQuickWhatsApp = Boolean(order.isQuickWhatsApp || (order.customer && order.customer.notes && order.customer.notes.includes("واتساب")));
 
       // 1. Server-Side Validation: Name
-      let name = (order.customer.name || "").trim().replace(/[<>]/g, "");
+      let name = (order.customer.name || "").trim().replace(/[<>]/g, "").slice(0, 80);
       if (!name) name = "عميل واتساب المعرض";
       const nameParts = name.split(/\s+/).filter(p => p.replace(/[.\-_]/g, "").length >= 2);
       if (!isQuickWhatsApp && nameParts.length < 2) {
@@ -377,18 +343,17 @@ export default async function handler(req, res) {
       }
 
       // 3. Server-Side Validation: Address
-      let address = (order.customer.address || "").trim().replace(/[<>]/g, "");
+      let address = (order.customer.address || "").trim().replace(/[<>]/g, "").slice(0, 200);
       if (isQuickWhatsApp && address.length < 5) {
         address = "الشيخ زايد - طلب عبر واتساب";
       } else if (address.length < 5) {
         return res.status(400).json({ success: false, error: "يرجى كتابة العنوان بالتفصيل (المنطقة / الشارع / رقم العقار)" });
       }
 
-      // 3.5 Delivery Area Validation & Fee Calculation (PRD Section 4 & 5)
+      // 3.5 Delivery Area Validation & Fee Calculation
       const declaredArea = (order.deliveryArea || order.customer.deliveryArea || order.customer.city || "").toLowerCase().trim();
       let selectedArea = SUPPORTED_DELIVERY_AREAS[declaredArea];
       if (!selectedArea) {
-        // Try finding by Arabic or English name
         const match = Object.entries(SUPPORTED_DELIVERY_AREAS).find(([k, v]) => 
           declaredArea.includes(k) || 
           (order.customer.address && order.customer.address.includes(v.nameAr)) || 
@@ -397,7 +362,6 @@ export default async function handler(req, res) {
         selectedArea = match ? match[1] : (isQuickWhatsApp ? SUPPORTED_DELIVERY_AREAS["sheikh-zayed"] : null);
       }
 
-      // Explicitly reject unsupported areas (PRD Section 5: Orders outside supported delivery areas must not be accepted)
       if (declaredArea === "unsupported" || (!selectedArea && !isQuickWhatsApp)) {
         return res.status(400).json({
           success: false,
@@ -410,8 +374,8 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: "سلة المشتريات فارغة" });
       }
 
-      // 5. Price Tampering Prevention: Recalculate totals server-side against live catalog
-      const catalog = await getCanonicalCatalog(req);
+      // 5. Price Tampering Prevention: Recalculate totals server-side against live catalog (F-06)
+      const catalog = await getCanonicalCatalog();
       const catalogMap = new Map();
       catalog.forEach(p => catalogMap.set(p.id, p));
 
@@ -420,14 +384,14 @@ export default async function handler(req, res) {
 
       for (const item of order.items) {
         const canonicalProduct = catalogMap.get(item.id);
-        const unitPrice = canonicalProduct ? parseFloat(canonicalProduct.price) : parseFloat(item.price);
-        const qty = Math.max(1, parseInt(item.qty, 10) || 1);
+        const unitPrice = canonicalProduct ? parseFloat(canonicalProduct.price) : parseFloat(item.price || 0);
+        const qty = Math.min(100, Math.max(1, parseInt(item.qty, 10) || 1));
         const itemTotal = unitPrice * qty;
         calculatedSubtotal += itemTotal;
 
         sanitizedItems.push({
-          id: item.id,
-          name: canonicalProduct ? canonicalProduct.name : (item.name || "").replace(/[<>]/g, ""),
+          id: sanitizePathId(item.id) || "item",
+          name: canonicalProduct ? canonicalProduct.name : (item.name || "").replace(/[<>]/g, "").slice(0, 100),
           price: unitPrice,
           qty: qty,
           image: canonicalProduct ? canonicalProduct.image : (item.image || ""),
@@ -438,7 +402,7 @@ export default async function handler(req, res) {
       const shippingFee = (calculatedSubtotal >= 5000 || !selectedArea) ? 0 : selectedArea.fee;
       const deliveryEstimate = selectedArea ? selectedArea.days : "2 - 4 أيام عمل";
 
-      // 3.6 Duplicate Order Submission Guard (PRD Section 4)
+      // Duplicate Order Submission Guard
       const duplicateKey = `${phone}_${calculatedSubtotal}`;
       const lastSubmission = recentOrdersSubmissionCache.get(duplicateKey);
       if (lastSubmission && (Date.now() - lastSubmission.time < 12000)) {
@@ -450,7 +414,7 @@ export default async function handler(req, res) {
         });
       }
 
-      // 6. Generate High-Entropy Cryptographic ID
+      // 6. Generate High-Entropy Cryptographic ID (F-08)
       const highEntropyId = generateSecureOrderId();
       const now = Date.now();
       const dateFormatted = new Date().toLocaleDateString("ar-EG", {
@@ -465,8 +429,8 @@ export default async function handler(req, res) {
         minute: "2-digit"
       });
 
-      const customerEmail = (order.customer?.email || order.email || order.customerEmail || "").trim().toLowerCase();
-      const customerId = order.customerId || (order.customer && order.customer.id) || null;
+      const customerEmail = (order.customer?.email || order.email || order.customerEmail || "").trim().toLowerCase().slice(0, 100);
+      const customerId = sanitizePathId(order.customerId || (order.customer && order.customer.id)) || null;
 
       const finalizedOrder = {
         id: highEntropyId,
@@ -474,7 +438,7 @@ export default async function handler(req, res) {
         timestamp: now,
         dateFormatted,
         timeFormatted,
-        status: "received", // PRD Section 5 Standardized Status
+        status: "received",
         statusHistory: [
           { status: "received", timestamp: now, note: "تم استلام الطلب وحجزه سحابياً" }
         ],
@@ -498,13 +462,13 @@ export default async function handler(req, res) {
         shipping: shippingFee,
         total: calculatedSubtotal + shippingFee,
         paymentMethod: "cod",
-        paymentStatus: "uncollected", // PRD Section 5: Cash on delivery — not yet collected
+        paymentStatus: "uncollected",
         paymentStatusText: "الدفع نقدياً عند الاستلام — لم يتم التحصيل بعد",
         paymentStatusTextEn: "Cash on delivery — not yet collected",
         deliveryEstimate: deliveryEstimate
       };
 
-      // 7. Ensure Cloud Persistence BEFORE Responding to Client!
+      // 7. Cloud Persistence BEFORE Responding
       const persistResult = await saveOrderToCloud(req, finalizedOrder);
       if (!persistResult.success) {
         return res.status(503).json({
@@ -513,10 +477,8 @@ export default async function handler(req, res) {
         });
       }
 
-      // Record in duplicate submission cache
       recentOrdersSubmissionCache.set(duplicateKey, { time: now, order: finalizedOrder });
 
-      // 8. Return Full Confirmed Order (Enables Instant Cart/WhatsApp Summary & Multi-Device Sync)
       return res.status(201).json({
         success: true,
         message: "تم استلام طلبك وحجزه بنجاح تام في معارض قاصد كريم!",
@@ -525,7 +487,7 @@ export default async function handler(req, res) {
     }
 
     // -------------------------------------------------------------------------
-    // 3. PUT: Bulk Overwrite Orders (Restore / Batch Sync) (ADMIN-ONLY ACCESS REQUIREMENT)
+    // 3. PUT: Bulk Overwrite Orders (ADMIN-ONLY ACCESS REQUIREMENT) (F-06)
     // -------------------------------------------------------------------------
     if (req.method === "PUT") {
       const admin = verifyAdminRequest(req);
@@ -548,7 +510,7 @@ export default async function handler(req, res) {
     }
 
     // -------------------------------------------------------------------------
-    // 4. PATCH: Update Order Status / Read State (ADMIN-ONLY ACCESS REQUIREMENT)
+    // 4. PATCH: Update Order Status / Read State (ADMIN-ONLY ACCESS REQUIREMENT) (F-06)
     // -------------------------------------------------------------------------
     if (req.method === "PATCH") {
       const admin = verifyAdminRequest(req);
@@ -561,16 +523,15 @@ export default async function handler(req, res) {
         try { body = JSON.parse(body); } catch (e) {}
       }
       const { id, status, isRead, paymentStatus, updatedAt } = body || {};
-      if (!id) return res.status(400).json({ error: "Missing order ID" });
+      const safeId = sanitizePathId(id);
+      if (!safeId) return res.status(400).json({ error: "معرف الطلب غير صحيح" });
 
       const patchTime = updatedAt || Date.now();
-      const firebaseUrl = getFirebaseUrl(req);
-
       const patchData = { updatedAt: patchTime };
-      if (status !== undefined) patchData.status = status;
-      if (isRead !== undefined) patchData.isRead = isRead;
+      if (status !== undefined) patchData.status = String(status).slice(0, 30);
+      if (isRead !== undefined) patchData.isRead = Boolean(isRead);
       if (paymentStatus !== undefined) {
-        patchData.paymentStatus = paymentStatus;
+        patchData.paymentStatus = String(paymentStatus).slice(0, 30);
         patchData.paymentStatusText = paymentStatus === "collected" ? "تم التحصيل نقدياً بنجاح" : "الدفع نقدياً عند الاستلام — لم يتم التحصيل بعد";
         patchData.paymentStatusTextEn = paymentStatus === "collected" ? "Cash Collected Successfully" : "Cash on delivery — not yet collected";
         if (paymentStatus === "collected") {
@@ -579,35 +540,33 @@ export default async function handler(req, res) {
         }
       }
 
-      if (firebaseUrl) {
-        try {
-          const safeId = encodeURIComponent(id);
-          await fetch(`${firebaseUrl}/orders/${safeId}.json`, {
-            method: "PATCH",
-            cache: "no-store",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(patchData)
-          });
-          await bumpSyncMetadata(firebaseUrl, "order_status_patch");
-        } catch (err) {
-          console.warn("Firebase PATCH status error:", err.message);
-        }
+      try {
+        const firebaseUrl = getFirebaseUrl(`orders/${safeId}.json`);
+        await fetch(firebaseUrl, {
+          method: "PATCH",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patchData)
+        });
+        await bumpSyncMetadata("order_status_patch");
+      } catch (err) {
+        console.warn("Firebase PATCH status error:", err.message);
       }
 
       const { orders } = await fetchOrdersFromCloud(req);
-      const target = orders.find(o => o.id === id);
+      const target = orders.find(o => o.id === safeId);
       if (target) {
-        if (status !== undefined) target.status = status;
-        if (isRead !== undefined) target.isRead = isRead;
+        if (status !== undefined) target.status = patchData.status;
+        if (isRead !== undefined) target.isRead = patchData.isRead;
         target.updatedAt = patchTime;
         await saveOrderToCloud(req, target);
       }
 
-      return res.status(200).json({ success: true, id, status, isRead, updatedAt: patchTime });
+      return res.status(200).json({ success: true, id: safeId, status, isRead, updatedAt: patchTime });
     }
 
     // -------------------------------------------------------------------------
-    // 5. DELETE: Remove Order (ADMIN-ONLY ACCESS REQUIREMENT)
+    // 5. DELETE: Remove Order (ADMIN-ONLY ACCESS REQUIREMENT) (F-06)
     // -------------------------------------------------------------------------
     if (req.method === "DELETE") {
       const admin = verifyAdminRequest(req);
@@ -616,10 +575,11 @@ export default async function handler(req, res) {
       }
 
       const { id } = req.query || {};
-      if (!id) return res.status(400).json({ error: "Missing order ID" });
+      const safeId = sanitizePathId(id);
+      if (!safeId) return res.status(400).json({ error: "معرف الطلب غير صحيح" });
 
-      const delResult = await deleteOrderFromCloud(req, id);
-      return res.status(200).json({ success: true, persistedToCloud: delResult.success, deleted: id });
+      const delResult = await deleteOrderFromCloud(req, safeId);
+      return res.status(200).json({ success: true, persistedToCloud: delResult.success, deleted: safeId });
     }
 
     return res.status(405).json({ error: "Method not allowed" });

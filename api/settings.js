@@ -1,23 +1,21 @@
 // Vercel Serverless Function: /api/settings
 // Handles Cloud Persistence for Categories, Showroom Settings & Contact Links
-// Protected with Server-Side Authorization for Mutations
+// Protected with Server-Side Authorization for Mutations (F-06)
 
-import { verifyAdminRequest } from "./_auth.js";
+import {
+  verifyAdminRequest,
+  getFirebaseUrl,
+  setSecurityHeaders
+} from "./_auth.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function getFirebaseUrl(req) {
-  const envUrl = process.env.FIREBASE_DB_URL || process.env.NEXT_PUBLIC_FIREBASE_DB_URL;
-  if (envUrl && envUrl.trim()) return envUrl.trim().replace(/\/$/, "");
-  return "https://kased-karim-default-rtdb.firebaseio.com";
-}
-
-async function bumpSyncMetadata(firebaseUrl, actionType = "settings_update") {
-  if (!firebaseUrl) return;
+async function bumpSyncMetadata(actionType = "settings_update") {
   try {
     const now = Date.now();
-    await fetch(`${firebaseUrl}/sync_meta.json`, {
+    const firebaseUrl = getFirebaseUrl("sync_meta.json");
+    await fetch(firebaseUrl, {
       method: "PUT",
       cache: "no-store",
       headers: { "Content-Type": "application/json" },
@@ -31,16 +29,12 @@ async function bumpSyncMetadata(firebaseUrl, actionType = "settings_update") {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-token");
+  setSecurityHeaders(req, res);
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  const firebaseUrl = getFirebaseUrl(req);
   const type = req.query?.type;
 
   try {
@@ -52,7 +46,8 @@ export default async function handler(req, res) {
 
       if (!type || type === "categories") {
         try {
-          const catRes = await fetch(`${firebaseUrl}/categories.json?t=${t}`, { cache: "no-store" });
+          const catUrl = getFirebaseUrl("categories.json", { t });
+          const catRes = await fetch(catUrl, { cache: "no-store" });
           if (catRes.ok) {
             const raw = await catRes.json();
             if (Array.isArray(raw)) categories = raw.filter(Boolean);
@@ -63,7 +58,8 @@ export default async function handler(req, res) {
 
       if (!type || type === "settings") {
         try {
-          const setRes = await fetch(`${firebaseUrl}/settings.json?t=${t}`, { cache: "no-store" });
+          const setUrl = getFirebaseUrl("settings.json", { t });
+          const setRes = await fetch(setUrl, { cache: "no-store" });
           if (setRes.ok) {
             settings = await setRes.json();
           }
@@ -77,7 +73,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // 2. POST / PUT: Update Categories or Settings (ADMIN-ONLY ACCESS REQUIREMENT)
+    // 2. POST / PUT: Update Categories or Settings (ADMIN-ONLY ACCESS REQUIREMENT) (F-06)
     if (req.method === "POST" || req.method === "PUT") {
       const admin = verifyAdminRequest(req);
       if (!admin) {
@@ -92,25 +88,27 @@ export default async function handler(req, res) {
 
       if (body.type === "categories" || Array.isArray(body.categories)) {
         const cats = body.categories || body;
-        await fetch(`${firebaseUrl}/categories.json`, {
+        const catUrl = getFirebaseUrl("categories.json");
+        await fetch(catUrl, {
           method: "PUT",
           cache: "no-store",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(cats)
         });
-        await bumpSyncMetadata(firebaseUrl, "categories_update");
+        await bumpSyncMetadata("categories_update");
         return res.status(200).json({ success: true, updated: "categories" });
       }
 
       if (body.type === "settings" || body.settings || body.phone) {
         const st = { ...(body.settings || body), updatedAt: Date.now() };
-        await fetch(`${firebaseUrl}/settings.json`, {
+        const setUrl = getFirebaseUrl("settings.json");
+        await fetch(setUrl, {
           method: "PUT",
           cache: "no-store",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(st)
         });
-        await bumpSyncMetadata(firebaseUrl, "settings_update");
+        await bumpSyncMetadata("settings_update");
         return res.status(200).json({ success: true, updated: "settings", settings: st });
       }
 

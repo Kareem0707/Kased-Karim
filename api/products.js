@@ -2,26 +2,22 @@
 // Handles High-Performance Multi-Device Products Catalog Persistence & Real-Time Sync
 // Protected with Server-Side Authorization for Mutations (POST, PUT, DELETE)
 
-import { verifyAdminRequest } from "./_auth.js";
+import {
+  verifyAdminRequest,
+  sanitizePathId,
+  getFirebaseUrl,
+  setSecurityHeaders
+} from "./_auth.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Resolve Cloud Database Endpoint
-function getFirebaseUrl(req) {
-  const envUrl = process.env.FIREBASE_DB_URL || process.env.NEXT_PUBLIC_FIREBASE_DB_URL;
-  if (envUrl && envUrl.trim()) {
-    return envUrl.trim().replace(/\/$/, "");
-  }
-  return "https://kased-karim-default-rtdb.firebaseio.com";
-}
-
 // Update Global Sync Metadata
-async function bumpSyncMetadata(firebaseUrl, actionType = "product_update") {
-  if (!firebaseUrl) return;
+async function bumpSyncMetadata(actionType = "product_update") {
   try {
     const now = Date.now();
-    await fetch(`${firebaseUrl}/sync_meta.json`, {
+    const firebaseUrl = getFirebaseUrl("sync_meta.json");
+    await fetch(firebaseUrl, {
       method: "PUT",
       cache: "no-store",
       headers: { "Content-Type": "application/json" },
@@ -37,30 +33,28 @@ async function bumpSyncMetadata(firebaseUrl, actionType = "product_update") {
 // 1. Fetch Products from Cloud
 async function fetchProductsFromCloud(req) {
   const t = Date.now();
-  const firebaseUrl = getFirebaseUrl(req);
 
   // A. Firebase Realtime Database
-  if (firebaseUrl) {
-    try {
-      const res = await fetch(`${firebaseUrl}/products.json?t=${t}`, {
-        cache: "no-store",
-        headers: { "Accept": "application/json", "Cache-Control": "no-cache, no-store" }
-      });
-      if (res.ok) {
-        const raw = await res.json();
-        if (raw) {
-          if (Array.isArray(raw)) {
-            return { products: raw.filter(Boolean), provider: "firebase-rtdb" };
-          }
-          if (typeof raw === "object") {
-            return { products: Object.values(raw).filter(Boolean), provider: "firebase-rtdb" };
-          }
+  try {
+    const firebaseUrl = getFirebaseUrl("products.json", { t });
+    const res = await fetch(firebaseUrl, {
+      cache: "no-store",
+      headers: { "Accept": "application/json", "Cache-Control": "no-cache, no-store" }
+    });
+    if (res.ok) {
+      const raw = await res.json();
+      if (raw) {
+        if (Array.isArray(raw)) {
+          return { products: raw.filter(Boolean), provider: "firebase-rtdb" };
         }
-        return { products: [], provider: "firebase-rtdb" };
+        if (typeof raw === "object") {
+          return { products: Object.values(raw).filter(Boolean), provider: "firebase-rtdb" };
+        }
       }
-    } catch (err) {
-      console.warn("Firebase fetch error:", err.message);
+      return { products: [], provider: "firebase-rtdb" };
     }
+  } catch (err) {
+    console.warn("Firebase fetch error:", err.message);
   }
 
   // B. Vercel KV / Upstash Redis
@@ -95,32 +89,31 @@ async function fetchProductsFromCloud(req) {
 
 // 2. Batch Save/Overwrite All Products to Cloud
 async function saveBatchProductsToCloud(req, productList) {
-  const firebaseUrl = getFirebaseUrl(req);
   let saved = false;
   let provider = "none";
 
-  if (firebaseUrl) {
-    try {
-      const prodMap = {};
-      productList.forEach(p => {
-        if (p && p.id) {
-          prodMap[p.id] = p;
-        }
-      });
-
-      const res = await fetch(`${firebaseUrl}/products.json`, {
-        method: "PUT",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(prodMap)
-      });
-      if (res.ok) {
-        saved = true;
-        provider = "firebase-rtdb";
+  try {
+    const prodMap = {};
+    productList.forEach(p => {
+      const safeId = sanitizePathId(p?.id);
+      if (safeId) {
+        prodMap[safeId] = p;
       }
-    } catch (err) {
-      console.warn("Firebase batch products error:", err.message);
+    });
+
+    const firebaseUrl = getFirebaseUrl("products.json");
+    const res = await fetch(firebaseUrl, {
+      method: "PUT",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(prodMap)
+    });
+    if (res.ok) {
+      saved = true;
+      provider = "firebase-rtdb";
     }
+  } catch (err) {
+    console.warn("Firebase batch products error:", err.message);
   }
 
   const kvUrl = process.env.KV_REST_API_URL;
@@ -142,7 +135,7 @@ async function saveBatchProductsToCloud(req, productList) {
   }
 
   if (saved) {
-    await bumpSyncMetadata(firebaseUrl, "batch_catalog_overwrite");
+    await bumpSyncMetadata("batch_catalog_overwrite");
   }
 
   return { success: saved, provider };
@@ -150,24 +143,23 @@ async function saveBatchProductsToCloud(req, productList) {
 
 // 3. Save Single Product to Cloud
 async function saveProductToCloud(req, product) {
-  const firebaseUrl = getFirebaseUrl(req);
+  const safeId = sanitizePathId(product.id);
+  if (!safeId) return { success: false, provider: "none" };
 
-  if (firebaseUrl) {
-    try {
-      const safeId = encodeURIComponent(product.id);
-      const res = await fetch(`${firebaseUrl}/products/${safeId}.json`, {
-        method: "PUT",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(product)
-      });
-      if (res.ok) {
-        await bumpSyncMetadata(firebaseUrl, "product_save");
-        return { success: true, provider: "firebase-rtdb" };
-      }
-    } catch (err) {
-      console.warn("Firebase save error:", err.message);
+  try {
+    const firebaseUrl = getFirebaseUrl(`products/${safeId}.json`);
+    const res = await fetch(firebaseUrl, {
+      method: "PUT",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(product)
+    });
+    if (res.ok) {
+      await bumpSyncMetadata("product_save");
+      return { success: true, provider: "firebase-rtdb" };
     }
+  } catch (err) {
+    console.warn("Firebase save error:", err.message);
   }
 
   const kvUrl = process.env.KV_REST_API_URL;
@@ -203,20 +195,19 @@ async function saveProductToCloud(req, product) {
 
 // 4. Delete Product from Cloud
 async function deleteProductFromCloud(req, productId) {
-  const firebaseUrl = getFirebaseUrl(req);
+  const safeId = sanitizePathId(productId);
+  if (!safeId) return { success: false, provider: "none" };
 
-  if (firebaseUrl) {
-    try {
-      const safeId = encodeURIComponent(productId);
-      await fetch(`${firebaseUrl}/products/${safeId}.json`, {
-        method: "DELETE",
-        cache: "no-store"
-      });
-      await bumpSyncMetadata(firebaseUrl, "product_delete");
-      return { success: true, provider: "firebase-rtdb" };
-    } catch (err) {
-      console.warn("Firebase delete error:", err.message);
-    }
+  try {
+    const firebaseUrl = getFirebaseUrl(`products/${safeId}.json`);
+    await fetch(firebaseUrl, {
+      method: "DELETE",
+      cache: "no-store"
+    });
+    await bumpSyncMetadata("product_delete");
+    return { success: true, provider: "firebase-rtdb" };
+  } catch (err) {
+    console.warn("Firebase delete error:", err.message);
   }
 
   const kvUrl = process.env.KV_REST_API_URL;
@@ -244,16 +235,7 @@ async function deleteProductFromCloud(req, productId) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
-  res.setHeader("CDN-Cache-Control", "no-store");
-  res.setHeader("Vercel-CDN-Cache-Control", "no-store");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-  res.setHeader("Surrogate-Control", "no-store");
-
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-token, Cache-Control, Pragma");
+  setSecurityHeaders(req, res);
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -271,7 +253,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // 2. POST / PUT: Add, update or batch-overwrite products (ADMIN-ONLY ACCESS REQUIREMENT)
+    // 2. POST / PUT: Add, update or batch-overwrite products (ADMIN-ONLY ACCESS REQUIREMENT) (F-06)
     if (req.method === "POST" || req.method === "PUT") {
       const admin = verifyAdminRequest(req);
       if (!admin) {
@@ -305,9 +287,10 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "بيانات المنتج غير مكتملة" });
       }
 
-      if (!product.id) {
-        product.id = "kk-" + Date.now().toString().slice(-6);
-      }
+      const safeId = sanitizePathId(product.id) || ("kk-" + Date.now().toString().slice(-6));
+      product.id = safeId;
+      product.name = String(product.name).trim().replace(/[<>]/g, "").slice(0, 150);
+      if (product.price) product.price = parseFloat(product.price) || 0;
 
       const saveResult = await saveProductToCloud(req, product);
       return res.status(201).json({
@@ -318,7 +301,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // 3. DELETE: Remove product from catalog (ADMIN-ONLY ACCESS REQUIREMENT)
+    // 3. DELETE: Remove product from catalog (ADMIN-ONLY ACCESS REQUIREMENT) (F-06)
     if (req.method === "DELETE") {
       const admin = verifyAdminRequest(req);
       if (!admin) {
@@ -326,13 +309,14 @@ export default async function handler(req, res) {
       }
 
       const { id } = req.query || {};
-      if (!id) return res.status(400).json({ error: "Missing product ID" });
+      const safeId = sanitizePathId(id);
+      if (!safeId) return res.status(400).json({ error: "معرف المنتج غير صحيح" });
 
-      const delResult = await deleteProductFromCloud(req, id);
+      const delResult = await deleteProductFromCloud(req, safeId);
       return res.status(200).json({
         success: true,
         persistedToCloud: delResult.success,
-        deleted: id
+        deleted: safeId
       });
     }
 

@@ -173,9 +173,9 @@
       // Auth & Form Placeholders
       ph_fullName: "مثال: كريم محمود",
       ph_phone: "010XXXXXXXX (11 رقماً)",
-      ph_email: "example@kasedkarim.test",
+      ph_email: "name@example.com",
       ph_password: "•••••••• (6 خانات على الأقل)",
-      ph_loginIdentifier: "010XXXXXXXX أو your@email.test"
+      ph_loginIdentifier: "010XXXXXXXX أو your@email.com"
     },
 
     en: {
@@ -341,9 +341,9 @@
       // Auth & Form Placeholders
       ph_fullName: "e.g., Karim Mahmoud",
       ph_phone: "010XXXXXXXX (11 digits)",
-      ph_email: "example@kasedkarim.test",
+      ph_email: "name@example.com",
       ph_password: "•••••••• (min 6 characters)",
-      ph_loginIdentifier: "010XXXXXXXX or your@email.test"
+      ph_loginIdentifier: "010XXXXXXXX or your@email.com"
     }
   };
 

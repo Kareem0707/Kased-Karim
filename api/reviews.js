@@ -3,20 +3,20 @@
 // PRD Section 11: Moderation before public display (Pending -> Approved / Rejected)
 
 import crypto from "crypto";
-import { verifyAdminRequest } from "./_auth.js";
+import {
+  verifyAdminRequest,
+  sanitizePathId,
+  getFirebaseUrl,
+  setSecurityHeaders
+} from "./_auth.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function getFirebaseUrl(req) {
-  const envUrl = process.env.FIREBASE_DB_URL || process.env.NEXT_PUBLIC_FIREBASE_DB_URL;
-  if (envUrl && envUrl.trim()) return envUrl.trim().replace(/\/$/, "");
-  return "https://kased-karim-default-rtdb.firebaseio.com";
-}
-
-async function fetchReviews(firebaseUrl) {
+async function fetchReviews() {
   try {
-    const res = await fetch(`${firebaseUrl}/reviews.json?t=${Date.now()}`, { cache: "no-store" });
+    const firebaseUrl = getFirebaseUrl("reviews.json", { t: Date.now() });
+    const res = await fetch(firebaseUrl, { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data === "object") {
@@ -27,9 +27,11 @@ async function fetchReviews(firebaseUrl) {
   return [];
 }
 
-async function saveReview(firebaseUrl, review) {
-  const safeId = encodeURIComponent(review.id);
-  const res = await fetch(`${firebaseUrl}/reviews/${safeId}.json`, {
+async function saveReview(review) {
+  const safeId = sanitizePathId(review.id);
+  if (!safeId) return false;
+  const firebaseUrl = getFirebaseUrl(`reviews/${safeId}.json`);
+  const res = await fetch(firebaseUrl, {
     method: "PUT",
     cache: "no-store",
     headers: { "Content-Type": "application/json" },
@@ -39,16 +41,11 @@ async function saveReview(firebaseUrl, review) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-token");
+  setSecurityHeaders(req, res);
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
-
-  const firebaseUrl = getFirebaseUrl(req);
 
   try {
     // -------------------------------------------------------------------------
@@ -58,18 +55,18 @@ export default async function handler(req, res) {
       const { productId, all } = req.query || {};
 
       if (all === "1" || all === "true") {
-        // ADMIN ONLY: View all reviews (Pending, Approved, Rejected)
+        // ADMIN ONLY: View all reviews (Pending, Approved, Rejected) (F-06)
         const admin = verifyAdminRequest(req);
         if (!admin) {
           return res.status(401).json({ success: false, error: "غير مصرح بالوصول لمراجعة التقييمات" });
         }
-        const reviews = await fetchReviews(firebaseUrl);
+        const reviews = await fetchReviews();
         reviews.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         return res.status(200).json({ success: true, reviews });
       }
 
       // PUBLIC STOREFRONT: Only approved reviews for a specific product
-      const reviews = await fetchReviews(firebaseUrl);
+      const reviews = await fetchReviews();
       const approved = reviews.filter(r => {
         if (!r || r.status !== "approved") return false;
         if (productId && r.productId !== productId) return false;
@@ -90,43 +87,39 @@ export default async function handler(req, res) {
       }
       body = body || {};
 
-      const productId = (body.productId || "").trim();
-      const productName = (body.productName || "").trim();
+      const productId = sanitizePathId(body.productId || "");
+      const productName = (body.productName || "").trim().replace(/[<>]/g, "").slice(0, 100);
       const author = (body.author || body.name || "عميل موثوق").trim().replace(/[<>]/g, "").slice(0, 50);
       const rating = Math.min(5, Math.max(1, parseInt(body.rating, 10) || 5));
       const comment = (body.comment || body.text || "").trim().replace(/[<>]/g, "").slice(0, 500);
 
       if (!productId) {
-        return res.status(400).json({ success: false, error: "معرف المنتج مطلوب" });
-      }
-      if (!comment || comment.length < 5) {
-        return res.status(400).json({ success: false, error: "يرجى كتابة تقييم لا يقل عن 5 أحرف" });
+        return res.status(400).json({ success: false, error: "معرف المنتج غير صحيح" });
       }
 
-      const reviewId = "REV-" + crypto.randomInt(1000, 9999) + "-" + crypto.randomBytes(2).toString("hex").toUpperCase();
+      const reviewId = "REV-" + Date.now() + "-" + crypto.randomBytes(2).toString("hex").toUpperCase();
       const newReview = {
         id: reviewId,
         productId,
-        productName: productName || "وحدة إضاءة فاخرة",
-        author: author || "عميل معرض قاصد كريم",
+        productName,
+        author,
         rating,
         comment,
-        status: "pending", // PRD: Moderation before public display
-        timestamp: Date.now(),
-        dateFormatted: new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "short", day: "numeric" })
+        status: "pending", // PRD: Requires administrative moderation before publication
+        timestamp: Date.now()
       };
 
-      await saveReview(firebaseUrl, newReview);
+      await saveReview(newReview);
 
       return res.status(201).json({
         success: true,
-        message: "تم استلام تقييمك بنجاح! سيتم نشره بالمعرض فور المراجعة والاعتماد من الإدارة.",
+        message: "تم إرسال تقييمك بنجاح وسوف يظهر بعد مراجعته من إدارة المعرض.",
         review: newReview
       });
     }
 
     // -------------------------------------------------------------------------
-    // 3. PATCH: MODERATE REVIEW (ADMIN ONLY: Approve / Reject / Hide)
+    // 3. PATCH: MODERATE REVIEW (ADMIN ONLY) (F-06)
     // -------------------------------------------------------------------------
     if (req.method === "PATCH") {
       const admin = verifyAdminRequest(req);
@@ -140,31 +133,30 @@ export default async function handler(req, res) {
       }
       body = body || {};
 
-      const { id, status } = body;
-      if (!id || !status) {
-        return res.status(400).json({ success: false, error: "معرف التقييم والحالة الجديدة مطلوبان" });
+      const safeId = sanitizePathId(body.id);
+      if (!safeId) {
+        return res.status(400).json({ success: false, error: "معرف التقييم غير صحيح" });
       }
 
-      const allowedStatuses = ["pending", "approved", "rejected", "hidden"];
-      if (!allowedStatuses.includes(status)) {
-        return res.status(400).json({ success: false, error: "حالة التقييم غير صالحة" });
-      }
-
-      const reviews = await fetchReviews(firebaseUrl);
-      const target = reviews.find(r => r.id === id);
+      const reviews = await fetchReviews();
+      const target = reviews.find(r => r.id === safeId);
       if (!target) {
-        return res.status(404).json({ success: false, error: "لم يتم العثور على التقييم" });
+        return res.status(404).json({ success: false, error: "التقييم غير موجود" });
       }
 
-      target.status = status;
+      if (body.status && ["approved", "rejected", "pending"].includes(body.status)) {
+        target.status = body.status;
+      }
       target.moderatedAt = Date.now();
-      await saveReview(firebaseUrl, target);
+      target.moderatedBy = admin.sub || "admin";
+
+      await saveReview(target);
 
       return res.status(200).json({ success: true, message: "تم تحديث حالة التقييم بنجاح", review: target });
     }
 
     // -------------------------------------------------------------------------
-    // 4. DELETE: DELETE REVIEW (ADMIN ONLY)
+    // 4. DELETE: REMOVE REVIEW (ADMIN ONLY) (F-06)
     // -------------------------------------------------------------------------
     if (req.method === "DELETE") {
       const admin = verifyAdminRequest(req);
@@ -172,15 +164,13 @@ export default async function handler(req, res) {
         return res.status(401).json({ success: false, error: "غير مصرح" });
       }
 
-      const id = req.query?.id;
-      if (!id) {
-        return res.status(400).json({ success: false, error: "معرف التقييم مطلوب" });
-      }
+      const { id } = req.query || {};
+      const safeId = sanitizePathId(id);
+      if (!safeId) return res.status(400).json({ error: "معرف التقييم غير صحيح" });
 
-      const safeId = encodeURIComponent(id);
-      await fetch(`${firebaseUrl}/reviews/${safeId}.json`, { method: "DELETE", cache: "no-store" });
-
-      return res.status(200).json({ success: true, message: "تم حذف التقييم نهائياً" });
+      const firebaseUrl = getFirebaseUrl(`reviews/${safeId}.json`);
+      await fetch(firebaseUrl, { method: "DELETE", cache: "no-store" });
+      return res.status(200).json({ success: true, message: "تم حذف التقييم" });
     }
 
     return res.status(405).json({ error: "Method not allowed" });

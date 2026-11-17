@@ -7,21 +7,22 @@ import {
   hashCustomerPassword,
   verifyCustomerPassword,
   createCustomerToken,
-  verifyCustomerRequest
+  verifyCustomerRequest,
+  verifyAdminRequest,
+  verifyGoogleIdToken,
+  sanitizeCustomer,
+  sanitizePathId,
+  getFirebaseUrl,
+  setSecurityHeaders
 } from "./_auth.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function getFirebaseUrl(req) {
-  const envUrl = process.env.FIREBASE_DB_URL || process.env.NEXT_PUBLIC_FIREBASE_DB_URL;
-  if (envUrl && envUrl.trim()) return envUrl.trim().replace(/\/$/, "");
-  return "https://kased-karim-default-rtdb.firebaseio.com";
-}
-
-async function fetchCustomers(firebaseUrl) {
+async function fetchCustomers() {
   try {
-    const res = await fetch(`${firebaseUrl}/customers.json?t=${Date.now()}`, { cache: "no-store" });
+    const firebaseUrl = getFirebaseUrl("customers.json", { t: Date.now() });
+    const res = await fetch(firebaseUrl, { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data === "object") {
@@ -32,9 +33,11 @@ async function fetchCustomers(firebaseUrl) {
   return [];
 }
 
-async function saveCustomer(firebaseUrl, customer) {
-  const safeId = encodeURIComponent(customer.id);
-  const res = await fetch(`${firebaseUrl}/customers/${safeId}.json`, {
+async function saveCustomer(customer) {
+  const safeId = sanitizePathId(customer.id);
+  if (!safeId) return false;
+  const firebaseUrl = getFirebaseUrl(`customers/${safeId}.json`);
+  const res = await fetch(firebaseUrl, {
     method: "PUT",
     cache: "no-store",
     headers: { "Content-Type": "application/json" },
@@ -44,16 +47,12 @@ async function saveCustomer(firebaseUrl, customer) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-customer-token");
+  setSecurityHeaders(req, res);
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  const firebaseUrl = getFirebaseUrl(req);
   let action = req.query?.action;
 
   let body = req.body;
@@ -71,9 +70,9 @@ export default async function handler(req, res) {
     // 1. REGISTER NEW CUSTOMER ACCOUNT
     // -------------------------------------------------------------------------
     if (req.method === "POST" && action === "register") {
-      const name = (body.name || "").trim().replace(/[<>]/g, "");
+      const name = (body.name || "").trim().replace(/[<>]/g, "").slice(0, 80);
       const phone = (body.phone || "").replace(/[^0-9]/g, "");
-      const email = (body.email || "").trim().toLowerCase().replace(/[<>]/g, "");
+      const email = (body.email || "").trim().toLowerCase().replace(/[<>]/g, "").slice(0, 100);
       const password = (body.password || "").trim();
 
       if (!name || name.length < 2) {
@@ -86,7 +85,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: "كلمة المرور يجب ألا تقل عن 6 أحرف أو أرقام" });
       }
 
-      const allCustomers = await fetchCustomers(firebaseUrl);
+      const allCustomers = await fetchCustomers();
       const existing = allCustomers.find(c => c.phone === phone || (email && c.email === email));
       if (existing) {
         return res.status(409).json({
@@ -95,21 +94,21 @@ export default async function handler(req, res) {
         });
       }
 
-      const customerId = "CUST-" + crypto.randomInt(1000, 9999) + "-" + crypto.randomBytes(2).toString("hex").toUpperCase();
+      const customerId = "CUST-" + crypto.randomInt(1000, 9999) + "-" + crypto.randomBytes(3).toString("hex").toUpperCase();
       const { hash, salt } = hashCustomerPassword(password);
 
       const newCustomer = {
         id: customerId,
         name,
         phone,
-        email: email || `${phone}@kasedkarim.test`,
+        email: email || null,
         passwordHash: hash,
         passwordSalt: salt,
         createdAt: Date.now(),
         updatedAt: Date.now()
       };
 
-      await saveCustomer(firebaseUrl, newCustomer);
+      await saveCustomer(newCustomer);
 
       const token = createCustomerToken({
         sub: customerId,
@@ -118,58 +117,69 @@ export default async function handler(req, res) {
         email: newCustomer.email
       });
 
+      // Secure HttpOnly Cookie for customer session (F-10)
+      res.setHeader("Set-Cookie", `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
+
       return res.status(201).json({
         success: true,
         message: "تم إنشاء حساب العميل بنجاح",
         token,
-        customer: {
-          id: newCustomer.id,
-          name: newCustomer.name,
-          phone: newCustomer.phone,
-          email: newCustomer.email
-        }
+        customer: sanitizeCustomer(newCustomer)
       });
     }
 
     // -------------------------------------------------------------------------
-    // 1.5 AUTHENTIC GOOGLE OAUTH SIGN-IN
+    // 1.5 AUTHENTIC GOOGLE OAUTH SIGN-IN WITH SERVER-SIDE TOKEN VERIFICATION (F-03)
     // -------------------------------------------------------------------------
     if (req.method === "POST" && (action === "google" || action === "google-login")) {
-      const email = (body.email || "").trim().toLowerCase().replace(/[<>]/g, "");
-      const name = (body.name || "").trim().replace(/[<>]/g, "");
-      const googleId = (body.sub || body.googleId || "").trim();
-      const avatar = (body.picture || body.avatar || "").trim();
-      const phone = (body.phone || "").replace(/[^0-9]/g, "");
-
-      if (!email || !googleId) {
-        return res.status(400).json({ success: false, error: "بيانات حساب Google غير مكتملة" });
+      const rawCredential = body.credential || body.idToken || body.token;
+      if (!rawCredential) {
+        return res.status(400).json({
+          success: false,
+          error: "رمز توثيق Google غير موجود. يلزم إرسال رمز الاعتماد المشفر (credential)."
+        });
       }
 
-      const allCustomers = await fetchCustomers(firebaseUrl);
+      // Cryptographically verify Google ID token against Google's public keys (F-03)
+      const verifiedProfile = await verifyGoogleIdToken(rawCredential);
+      if (!verifiedProfile || !verifiedProfile.email || !verifiedProfile.sub) {
+        return res.status(401).json({
+          success: false,
+          error: "فشل التحقق الأمني من صحة رمز Google. الرمز مزيف أو منتهي الصلاحية."
+        });
+      }
+
+      const googleId = verifiedProfile.sub;
+      const email = verifiedProfile.email;
+      const name = verifiedProfile.name;
+      const avatar = verifiedProfile.picture;
+      const clientPhone = (body.phone || "").replace(/[^0-9]/g, "");
+
+      const allCustomers = await fetchCustomers();
       let customer = allCustomers.find(c => c.googleId === googleId || (c.email && c.email.toLowerCase() === email));
 
       if (customer) {
         customer.name = name || customer.name;
         customer.googleId = googleId;
         if (avatar) customer.avatar = avatar;
-        if (phone && !customer.phone) customer.phone = phone;
+        if (clientPhone && !customer.phone) customer.phone = clientPhone;
         customer.authProvider = "google";
         customer.updatedAt = Date.now();
-        await saveCustomer(firebaseUrl, customer);
+        await saveCustomer(customer);
       } else {
-        const customerId = "CUST-G-" + crypto.randomInt(1000, 9999) + "-" + crypto.randomBytes(2).toString("hex").toUpperCase();
+        const customerId = "CUST-G-" + crypto.randomInt(1000, 9999) + "-" + crypto.randomBytes(3).toString("hex").toUpperCase();
         customer = {
           id: customerId,
           googleId,
           name: name || "عميل Google",
           email,
-          phone: phone || "",
+          phone: clientPhone || "",
           avatar: avatar || "",
           authProvider: "google",
           createdAt: Date.now(),
           updatedAt: Date.now()
         };
-        await saveCustomer(firebaseUrl, customer);
+        await saveCustomer(customer);
       }
 
       const token = createCustomerToken({
@@ -179,18 +189,13 @@ export default async function handler(req, res) {
         email: customer.email
       });
 
+      res.setHeader("Set-Cookie", `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
+
       return res.status(200).json({
         success: true,
-        message: "تم تسجيل الدخول بواسطة Google بنجاح",
+        message: "تم تسجيل الدخول بواسطة Google بنجاح وتوثيق الهوية رسمياً",
         token,
-        customer: {
-          id: customer.id,
-          name: customer.name,
-          phone: customer.phone,
-          email: customer.email,
-          avatar: customer.avatar,
-          authProvider: "google"
-        }
+        customer: sanitizeCustomer(customer)
       });
     }
 
@@ -206,7 +211,7 @@ export default async function handler(req, res) {
       }
 
       const cleanPhone = identifier.replace(/[^0-9]/g, "");
-      const allCustomers = await fetchCustomers(firebaseUrl);
+      const allCustomers = await fetchCustomers();
 
       const customer = allCustomers.find(c => 
         (cleanPhone && c.phone === cleanPhone) || 
@@ -229,16 +234,13 @@ export default async function handler(req, res) {
         email: customer.email
       });
 
+      res.setHeader("Set-Cookie", `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
+
       return res.status(200).json({
         success: true,
         message: "تم تسجيل الدخول بنجاح",
         token,
-        customer: {
-          id: customer.id,
-          name: customer.name,
-          phone: customer.phone,
-          email: customer.email
-        }
+        customer: sanitizeCustomer(customer)
       });
     }
 
@@ -251,8 +253,8 @@ export default async function handler(req, res) {
         return res.status(401).json({ success: false, error: "جلسة الدخول غير صالحة أو منتهية" });
       }
 
-      const allCustomers = await fetchCustomers(firebaseUrl);
-      const customer = allCustomers.find(c => c.id === auth.sub || c.phone === auth.phone);
+      const allCustomers = await fetchCustomers();
+      const customer = allCustomers.find(c => c.id === auth.sub || (auth.phone && c.phone === auth.phone));
 
       if (!customer) {
         return res.status(404).json({ success: false, error: "لم يتم العثور على حساب العميل" });
@@ -260,13 +262,7 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         success: true,
-        customer: {
-          id: customer.id,
-          name: customer.name,
-          phone: customer.phone,
-          email: customer.email,
-          createdAt: customer.createdAt
-        }
+        customer: sanitizeCustomer(customer)
       });
     }
 
@@ -279,8 +275,9 @@ export default async function handler(req, res) {
         return res.status(401).json({ success: false, error: "يجب تسجيل الدخول لعرض سجل طلباتك" });
       }
 
-      // Fetch all orders from Firebase
-      const ordRes = await fetch(`${firebaseUrl}/orders.json?t=${Date.now()}`, { cache: "no-store" });
+      // Fetch orders using secure authenticated server-side endpoint
+      const ordUrl = getFirebaseUrl("orders.json", { t: Date.now() });
+      const ordRes = await fetch(ordUrl, { cache: "no-store" });
       let allOrders = [];
       if (ordRes.ok) {
         const raw = await ordRes.json();
@@ -298,11 +295,11 @@ export default async function handler(req, res) {
         if (!o || !o.id) return false;
         if (customerId && o.customerId && o.customerId === customerId) return true;
         
-        // Permanent Email Linkage (Google OAuth & Customer Email Persistence)
+        // Permanent Email Linkage
         const ordEmail = (o.customer?.email || o.email || "").trim().toLowerCase();
         if (customerEmail && ordEmail && ordEmail === customerEmail) return true;
 
-        // Match by phone number
+        // Match by verified phone number
         const ordPhone = (o.customer?.phone || "").replace(/[^0-9]/g, "");
         if (customerPhone && ordPhone && (ordPhone === customerPhone || ordPhone.endsWith(customerPhone) || customerPhone.endsWith(ordPhone))) {
           return true;
@@ -347,14 +344,14 @@ export default async function handler(req, res) {
         return res.status(401).json({ success: false, error: "غير مصرح" });
       }
 
-      const allCustomers = await fetchCustomers(firebaseUrl);
-      const customer = allCustomers.find(c => c.id === auth.sub || c.phone === auth.phone);
+      const allCustomers = await fetchCustomers();
+      const customer = allCustomers.find(c => c.id === auth.sub || (auth.phone && c.phone === auth.phone));
       if (!customer) {
         return res.status(404).json({ success: false, error: "حساب العميل غير موجود" });
       }
 
-      if (body.name) customer.name = String(body.name).trim().replace(/[<>]/g, "");
-      if (body.email) customer.email = String(body.email).trim().toLowerCase().replace(/[<>]/g, "");
+      if (body.name) customer.name = String(body.name).trim().replace(/[<>]/g, "").slice(0, 80);
+      if (body.email) customer.email = String(body.email).trim().toLowerCase().replace(/[<>]/g, "").slice(0, 100);
 
       if (body.newPassword && String(body.newPassword).trim().length >= 6) {
         if (body.currentPassword) {
@@ -369,39 +366,35 @@ export default async function handler(req, res) {
       }
 
       customer.updatedAt = Date.now();
-      await saveCustomer(firebaseUrl, customer);
+      await saveCustomer(customer);
 
       return res.status(200).json({
         success: true,
         message: "تم تحديث البيانات بنجاح",
-        customer: {
-          id: customer.id,
-          name: customer.name,
-          phone: customer.phone,
-          email: customer.email
-        }
+        customer: sanitizeCustomer(customer)
       });
     }
 
     // -------------------------------------------------------------------------
-    // 6. GET ALL REGISTERED CUSTOMERS (ADMIN DIRECTORY)
+    // 6. GET ALL REGISTERED CUSTOMERS (ADMIN DIRECTORY - STRICT ADMIN AUTH REQ) (F-04)
     // -------------------------------------------------------------------------
     if (req.method === "GET" && action === "list") {
-      const allCustomers = await fetchCustomers(firebaseUrl);
+      // Mandatory admin authorization check (F-04)
+      const admin = verifyAdminRequest(req);
+      if (!admin) {
+        return res.status(401).json({
+          success: false,
+          error: "غير مصرح بالوصول. استعراض سجل العملاء يتطلب صلاحيات الإدارة العليا المعتمدة."
+        });
+      }
+
+      const allCustomers = await fetchCustomers();
       allCustomers.sort((a, b) => (b.createdAt || b.updatedAt || 0) - (a.createdAt || a.updatedAt || 0));
+
       return res.status(200).json({
         success: true,
         count: allCustomers.length,
-        customers: allCustomers.map(c => ({
-          id: c.id,
-          googleId: c.googleId || null,
-          name: c.name || "عميل",
-          email: c.email || "",
-          phone: c.phone || "",
-          avatar: c.avatar || "",
-          authProvider: c.authProvider || "email",
-          createdAt: c.createdAt || c.updatedAt || Date.now()
-        }))
+        customers: allCustomers.map(c => sanitizeCustomer(c))
       });
     }
 

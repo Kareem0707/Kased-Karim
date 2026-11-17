@@ -1,35 +1,25 @@
 // Vercel Serverless Function: /api/backup
 // Handles Cloud Snapshots & Remote Backup Synchronization
-// Strictly Protected with Admin-Only Authorization
+// Strictly Protected with Admin-Only Authorization (F-06, F-09)
 
-import { verifyAdminRequest } from "./_auth.js";
+import {
+  verifyAdminRequest,
+  sanitizePathId,
+  getFirebaseUrl,
+  setSecurityHeaders
+} from "./_auth.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function getFirebaseUrl(req) {
-  const envUrl = process.env.FIREBASE_DB_URL || process.env.NEXT_PUBLIC_FIREBASE_DB_URL;
-  if (envUrl && envUrl.trim()) return envUrl.trim().replace(/\/$/, "");
-  return "https://kased-karim-default-rtdb.firebaseio.com";
-}
-
 export default async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
-  res.setHeader("CDN-Cache-Control", "no-store");
-  res.setHeader("Vercel-CDN-Cache-Control", "no-store");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-  res.setHeader("Surrogate-Control", "no-store");
-
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-token, Cache-Control, Pragma");
+  setSecurityHeaders(req, res);
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  // STRICT ADMIN AUTHORIZATION CHECK FOR BOTH READ AND WRITE
+  // STRICT ADMIN AUTHORIZATION CHECK FOR BOTH READ AND WRITE (F-06, F-09)
   const admin = verifyAdminRequest(req);
   if (!admin) {
     return res.status(401).json({
@@ -38,7 +28,6 @@ export default async function handler(req, res) {
     });
   }
 
-  const firebaseUrl = getFirebaseUrl(req);
   const kvUrl = process.env.KV_REST_API_URL;
   const kvToken = process.env.KV_REST_API_TOKEN;
 
@@ -52,7 +41,8 @@ export default async function handler(req, res) {
 
       if (action === "sync_version") {
         try {
-          const metaRes = await fetch(`${firebaseUrl}/sync_meta.json?t=${t}`, { cache: "no-store" });
+          const metaUrl = getFirebaseUrl("sync_meta.json", { t });
+          const metaRes = await fetch(metaUrl, { cache: "no-store" });
           if (metaRes.ok) {
             const meta = await metaRes.json();
             return res.status(200).json({ success: true, meta: meta || { version: t } });
@@ -61,8 +51,9 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, meta: { version: t } });
       }
 
-      // Default: fetch latest cloud snapshot
-      const snapRes = await fetch(`${firebaseUrl}/backups/latest.json?t=${t}`, { cache: "no-store" });
+      // Default: fetch latest cloud snapshot (ADMIN ONLY)
+      const snapUrl = getFirebaseUrl("backups/latest.json", { t });
+      const snapRes = await fetch(snapUrl, { cache: "no-store" });
       if (snapRes.ok) {
         const data = await snapRes.json();
         return res.status(200).json({ success: true, backup: data });
@@ -71,7 +62,7 @@ export default async function handler(req, res) {
     }
 
     // -------------------------------------------------------------------------
-    // 2. POST: Handle Restore Snapshot OR Save Backup Point
+    // 2. POST: Handle Restore Snapshot OR Save Backup Point (ADMIN ONLY)
     // -------------------------------------------------------------------------
     if (req.method === "POST") {
       let body = req.body;
@@ -98,10 +89,12 @@ export default async function handler(req, res) {
         if (products.length > 0) {
           const prodMap = {};
           products.forEach(p => {
-            if (p && p.id) prodMap[p.id] = p;
+            const safeId = sanitizePathId(p?.id);
+            if (safeId) prodMap[safeId] = p;
           });
+          const prodUrl = getFirebaseUrl("products.json");
           tasks.push(
-            fetch(`${firebaseUrl}/products.json`, {
+            fetch(prodUrl, {
               method: "PUT",
               cache: "no-store",
               headers: { "Content-Type": "application/json" },
@@ -113,12 +106,12 @@ export default async function handler(req, res) {
         // 2. Overwrite Orders in Firebase RTDB
         const ordMap = {};
         orders.forEach(o => {
-          if (o && o.id) {
-            ordMap[encodeURIComponent(o.id)] = o;
-          }
+          const safeId = sanitizePathId(o?.id);
+          if (safeId) ordMap[safeId] = o;
         });
+        const ordUrl = getFirebaseUrl("orders.json");
         tasks.push(
-          fetch(`${firebaseUrl}/orders.json`, {
+          fetch(ordUrl, {
             method: "PUT",
             cache: "no-store",
             headers: { "Content-Type": "application/json" },
@@ -128,8 +121,9 @@ export default async function handler(req, res) {
 
         // 3. Overwrite Categories in Firebase RTDB
         if (categories.length > 0) {
+          const catUrl = getFirebaseUrl("categories.json");
           tasks.push(
-            fetch(`${firebaseUrl}/categories.json`, {
+            fetch(catUrl, {
               method: "PUT",
               cache: "no-store",
               headers: { "Content-Type": "application/json" },
@@ -141,8 +135,9 @@ export default async function handler(req, res) {
         // 4. Overwrite Settings in Firebase RTDB
         if (settings) {
           const safeSettings = { ...settings, updatedAt: syncTimestamp };
+          const setUrl = getFirebaseUrl("settings.json");
           tasks.push(
-            fetch(`${firebaseUrl}/settings.json`, {
+            fetch(setUrl, {
               method: "PUT",
               cache: "no-store",
               headers: { "Content-Type": "application/json" },
@@ -151,9 +146,10 @@ export default async function handler(req, res) {
           );
         }
 
-        // 5. Update Sync Metadata (signals all other devices to refresh immediately)
+        // 5. Update Sync Metadata
+        const syncUrl = getFirebaseUrl("sync_meta.json");
         tasks.push(
-          fetch(`${firebaseUrl}/sync_meta.json`, {
+          fetch(syncUrl, {
             method: "PUT",
             cache: "no-store",
             headers: { "Content-Type": "application/json" },
@@ -210,22 +206,25 @@ export default async function handler(req, res) {
       // =======================================================================
       // CASE B: SAVE BACKUP SNAPSHOT
       // =======================================================================
-      await fetch(`${firebaseUrl}/backups/latest.json`, {
+      const latestUrl = getFirebaseUrl("backups/latest.json");
+      await fetch(latestUrl, {
         method: "PUT",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
 
-      // Optionally save to history if an ID is present
       if (body.id) {
-        const safeId = encodeURIComponent(body.id);
-        fetch(`${firebaseUrl}/backups/history/${safeId}.json`, {
-          method: "PUT",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        }).catch(() => null);
+        const safeId = sanitizePathId(body.id);
+        if (safeId) {
+          const historyUrl = getFirebaseUrl(`backups/history/${safeId}.json`);
+          fetch(historyUrl, {
+            method: "PUT",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          }).catch(() => null);
+        }
       }
 
       return res.status(200).json({ success: true, message: "Cloud backup saved successfully" });

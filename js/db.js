@@ -94,19 +94,7 @@ class KasedKarimDB {
       localOrders = [];
     }
 
-    localOrders = (localOrders || []).filter(o => 
-      o && o.id &&
-      o.id !== "ORD-3985" &&
-      o.id !== "ORD-5412" &&
-      o.id !== "ORD-8941" && 
-      o.id !== "ORD-8820" &&
-      !o.id.startsWith("DEMO-") &&
-      (!o.customer || (
-        !o.customer.name.includes("ككك") && 
-        !o.customer.name.includes("منك") &&
-        o.customer.name !== "test"
-      ))
-    );
+    localOrders = (localOrders || []).filter(o => o && o.id);
 
     localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(localOrders));
 
@@ -265,19 +253,15 @@ class KasedKarimDB {
   }
 
   // --------------------------------------------------------------------------
-  // CLOUD DATABASE SETTINGS & HEADERS
+  // CLOUD DATABASE SETTINGS & HEADERS (SECURE SERVERLESS PROXY ARCHITECTURE)
   // --------------------------------------------------------------------------
   getCustomCloudUrl() {
-    try {
-      const saved = localStorage.getItem(DB_KEYS.CUSTOM_CLOUD_URL);
-      if (saved && saved.trim()) return saved.trim().replace(/\/$/, "");
-      return "https://kased-karim-default-rtdb.firebaseio.com";
-    } catch (e) {
-      return "https://kased-karim-default-rtdb.firebaseio.com";
-    }
+    // Path A eliminated: Direct client Firebase REST calls are disabled for security
+    return "";
   }
 
   setCustomCloudUrl(url) {
+    // Retained for settings UI compatibility; routing goes via serverless API
     if (url && typeof url === "string") {
       localStorage.setItem(DB_KEYS.CUSTOM_CLOUD_URL, url.trim());
     } else {
@@ -301,11 +285,15 @@ class KasedKarimDB {
       headers["x-admin-token"] = adminToken;
     }
 
-    const customUrl = this.getCustomCloudUrl();
-    if (customUrl) {
-      headers["x-cloud-db-url"] = customUrl;
-      headers["x-firebase-url"] = customUrl;
+    const customerToken = (typeof sessionStorage !== "undefined" && sessionStorage.getItem("kk_customer_token")) ||
+                          (typeof localStorage !== "undefined" && localStorage.getItem("kk_customer_token"));
+    if (customerToken) {
+      headers["x-customer-token"] = customerToken;
+      if (!adminToken) {
+        headers["Authorization"] = `Bearer ${customerToken}`;
+      }
     }
+
     return headers;
   }
 
@@ -405,52 +393,25 @@ class KasedKarimDB {
       const t = Date.now();
       const customUrl = this.getCustomCloudUrl();
 
-      // 1. Direct Firebase Realtime Database Fetch (if configured)
-      if (customUrl) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4500);
-          const directRes = await fetch(`${customUrl}/products.json?t=${t}`, {
-            signal: controller.signal,
-            cache: "no-store",
-            headers: { "Accept": "application/json" }
-          });
-          clearTimeout(timeoutId);
-          if (directRes.ok) {
-            const raw = await directRes.json();
-            if (raw) {
-              if (Array.isArray(raw)) {
-                cloudProducts = raw.filter(Boolean);
-              } else if (typeof raw === "object") {
-                cloudProducts = Object.values(raw).filter(Boolean);
-              }
-              this.cloudProvider = "Firebase Realtime DB (Direct)";
-            }
-          }
-        } catch (e) {}
-      }
+      // Vercel Serverless Endpoint /api/products (Path B Ground Truth)
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(`/api/products?t=${t}`, {
+          signal: controller.signal,
+          cache: "no-store",
+          headers: this.getCloudHeaders()
+        });
+        clearTimeout(timeoutId);
 
-      // 2. Vercel Serverless Endpoint /api/products
-      if (!cloudProducts || cloudProducts.length === 0) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4500);
-          const res = await fetch(`/api/products?t=${t}`, {
-            signal: controller.signal,
-            cache: "no-store",
-            headers: this.getCloudHeaders()
-          });
-          clearTimeout(timeoutId);
-
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
-              cloudProducts = data.products;
-              this.cloudProvider = data.provider === "firebase-rtdb" ? "Firebase RTDB (via Vercel)" : (data.provider === "vercel-kv" ? "Vercel KV" : "Vercel Serverless");
-            }
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
+            cloudProducts = data.products;
+            this.cloudProvider = data.provider === "firebase-rtdb" ? "Firebase RTDB (via Vercel)" : (data.provider === "vercel-kv" ? "Vercel KV" : "Vercel Serverless");
           }
-        } catch (errApi) {}
-      }
+        }
+      } catch (errApi) {}
 
       // Cloud Ground Truth Synchronization
       let deletedIds = new Set();
@@ -486,65 +447,30 @@ class KasedKarimDB {
       const t = Date.now();
       const customUrl = this.getCustomCloudUrl();
 
-      // 1. Direct Firebase Realtime Database Fetch (if configured)
-      if (customUrl) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
-          const directRes = await fetch(`${customUrl}/orders.json?t=${t}`, {
-            signal: controller.signal,
-            cache: "no-store",
-            headers: { "Accept": "application/json" }
-          });
-          clearTimeout(timeoutId);
-          if (directRes.ok) {
-            const raw = await directRes.json();
-            if (raw) {
-              if (Array.isArray(raw)) {
-                orders = raw.filter(Boolean);
-              } else if (typeof raw === "object") {
-                orders = Object.values(raw).filter(Boolean);
-              }
-            }
-          }
-        } catch (e) {}
-      }
+      // Vercel Serverless Endpoint /api/orders (Path B Ground Truth with Admin Token)
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(`/api/orders?t=${t}`, {
+          signal: controller.signal,
+          cache: "no-store",
+          headers: this.getCloudHeaders()
+        });
+        clearTimeout(timeoutId);
 
-      // 2. Vercel Serverless Endpoint /api/orders
-      if (!orders || orders.length === 0) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
-          const res = await fetch(`/api/orders?t=${t}`, {
-            signal: controller.signal,
-            cache: "no-store",
-            headers: this.getCloudHeaders()
-          });
-          clearTimeout(timeoutId);
-
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.success && Array.isArray(data.orders) && data.orders.length > 0) {
-              orders = data.orders;
-            }
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.orders)) {
+            orders = data.orders;
           }
-        } catch (errApi) {}
-      }
+        }
+      } catch (errApi) {}
 
       if (orders && Array.isArray(orders)) {
         this.lastSyncTimestamp = Date.now();
 
-        // 1. Sanitize: filter out fake test orders
-        const cleanCloudOrders = orders.filter(o => {
-          if (!o || !o.id) return false;
-          if (o.id === "ORD-8941" || o.id === "ORD-8820") return false;
-          if (o.customer && (
-            (o.customer.name && (o.customer.name.includes("ككك") || o.customer.name.includes("منك") || o.customer.name === "test"))
-          )) {
-            this.deleteOrderFromCloud(o.id);
-            return false;
-          }
-          return true;
+        // Standardize orders list
+        const cleanCloudOrders = orders.filter(o => o && o.id);
         });
 
         // Normalize items and customer for all cloud orders
@@ -654,21 +580,7 @@ class KasedKarimDB {
 
     let saved = false;
 
-    // 1. Direct Firebase Realtime Database
-    if (customUrl) {
-      try {
-        const safeId = encodeURIComponent(safeProduct.id);
-        const res = await fetch(`${customUrl}/products/${safeId}.json`, {
-          method: "PUT",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(safeProduct)
-        });
-        if (res.ok) saved = true;
-      } catch (e) {}
-    }
-
-    // 2. Vercel Serverless Function /api/products
+    // Vercel Serverless Function /api/products (Path B Ground Truth with Admin Token)
     try {
       const apiRes = await fetch("/api/products", {
         method: "POST",
@@ -683,43 +595,20 @@ class KasedKarimDB {
   }
 
   async deleteProductFromCloud(productId) {
-    const customUrl = this.getCustomCloudUrl();
-    if (customUrl) {
-      try {
-        const safeId = encodeURIComponent(productId);
-        fetch(`${customUrl}/products/${safeId}.json`, { method: "DELETE", cache: "no-store" }).catch(() => null);
-      } catch (e) {}
-    }
-    fetch(`/api/products?id=${productId}`, {
-      method: "DELETE",
-      cache: "no-store",
-      headers: this.getCloudHeaders()
-    }).catch(() => null);
+    try {
+      await fetch(`/api/products?id=${encodeURIComponent(productId)}`, {
+        method: "DELETE",
+        cache: "no-store",
+        headers: this.getCloudHeaders()
+      });
+    } catch (e) {}
   }
 
   // Push entire local catalog to cloud database with one atomic call
   async syncAllLocalProductsToCloud() {
     const products = this.getProducts();
-    const customUrl = this.getCustomCloudUrl();
 
-    // 1. Direct Firebase RTDB Batch (if customUrl configured)
-    if (customUrl) {
-      try {
-        const mapObj = {};
-        products.forEach(p => {
-          if (p && p.id) mapObj[p.id] = p;
-        });
-        const res = await fetch(`${customUrl}/products.json`, {
-          method: "PUT",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(mapObj)
-        });
-        if (res.ok) return products.length;
-      } catch (e) {}
-    }
-
-    // 2. Atomic Batch Overwrite to /api/products
+    // Atomic Batch Overwrite to /api/products (Path B Ground Truth)
     try {
       const res = await fetch("/api/products", {
         method: "PUT",
@@ -732,7 +621,7 @@ class KasedKarimDB {
       }
     } catch (e) {}
 
-    // 3. Fallback: individual product push
+    // Fallback: individual product push
     let count = 0;
     for (const p of products) {
       try {
@@ -747,81 +636,45 @@ class KasedKarimDB {
   // ORDERS CLOUD PUSH & UPDATE
   // --------------------------------------------------------------------------
   async sendOrderToCloud(order) {
-    const customUrl = this.getCustomCloudUrl();
-
-    // 1. Direct Firebase RTDB
-    if (customUrl) {
-      try {
-        const safeId = encodeURIComponent(order.id);
-        fetch(`${customUrl}/orders/${safeId}.json`, {
-          method: "PUT",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(order)
-        }).catch(() => null);
-      } catch (e) {}
-    }
-
-    // 2. Vercel Serverless Function
-    fetch("/api/orders", {
-      method: "POST",
-      cache: "no-store",
-      headers: this.getCloudHeaders(),
-      body: JSON.stringify(order)
-    }).catch(() => null);
+    // Vercel Serverless Function /api/orders (Path B Ground Truth)
+    try {
+      await fetch("/api/orders", {
+        method: "POST",
+        cache: "no-store",
+        headers: this.getCloudHeaders(),
+        body: JSON.stringify(order)
+      });
+    } catch (e) {}
   }
 
   // Fetch single order directly from cloud with zero lag
   async fetchLiveOrder(orderId) {
     if (!orderId) return null;
     const cleanId = orderId.toString().replace(/[#]/g, "").trim();
-    const customUrl = this.getCustomCloudUrl();
     const t = Date.now();
     let cloudOrder = null;
 
-    // 1. Direct Firebase RTDB single-order fetch
-    if (customUrl) {
-      try {
-        const safeId = encodeURIComponent(cleanId);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
-        const res = await fetch(`${customUrl}/orders/${safeId}.json?t=${t}`, {
-          signal: controller.signal,
-          cache: "no-store",
-          headers: { "Accept": "application/json" }
-        });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && typeof data === "object" && data.id) {
-            cloudOrder = data;
-          }
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(`/api/orders?id=${encodeURIComponent(cleanId)}&t=${t}`, {
+        signal: controller.signal,
+        cache: "no-store",
+        headers: this.getCloudHeaders()
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.order) {
+          cloudOrder = json.order;
+        } else if (json && json.orders && Array.isArray(json.orders)) {
+          cloudOrder = json.orders.find(o => 
+            o.id.toUpperCase() === cleanId.toUpperCase() || 
+            o.id.replace("ORD-", "") === cleanId.replace("ORD-", "")
+          );
         }
-      } catch (e) {}
-    }
-
-    // 2. Fallback to /api/orders
-    if (!cloudOrder) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
-        const res = await fetch(`/api/orders?t=${t}`, {
-          signal: controller.signal,
-          cache: "no-store",
-          headers: this.getCloudHeaders()
-        });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const json = await res.json();
-          if (json && json.orders && Array.isArray(json.orders)) {
-            cloudOrder = json.orders.find(o => 
-              o.id.toUpperCase() === cleanId.toUpperCase() || 
-              o.id.replace("ORD-", "") === cleanId.replace("ORD-", "")
-            );
-          }
-        }
-      } catch (e) {}
-    }
+      }
+    } catch (e) {}
 
     if (cloudOrder) {
       const orders = this.getOrders();
@@ -844,37 +697,7 @@ class KasedKarimDB {
   }
 
   async updateOrderStatusInCloud(orderId, status) {
-    const customUrl = this.getCustomCloudUrl();
-    const safeId = encodeURIComponent(orderId);
     const updatedAt = Date.now();
-
-    if (customUrl) {
-      try {
-        // Fast PATCH on the order object in Firebase RTDB
-        fetch(`${customUrl}/orders/${safeId}.json`, {
-          method: "PATCH",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status, updatedAt })
-        }).catch(() => null);
-
-        // Also ensure status.json child is updated
-        fetch(`${customUrl}/orders/${safeId}/status.json`, {
-          method: "PUT",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(status)
-        }).catch(() => null);
-
-        // Bump sync metadata
-        fetch(`${customUrl}/sync_meta.json`, {
-          method: "PUT",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ version: updatedAt, action: "order_status_patch", orderId, status })
-        }).catch(() => null);
-      } catch (e) {}
-    }
 
     try {
       await fetch("/api/orders", {
@@ -889,18 +712,13 @@ class KasedKarimDB {
   }
 
   async deleteOrderFromCloud(orderId) {
-    const customUrl = this.getCustomCloudUrl();
-    if (customUrl) {
-      try {
-        const safeId = encodeURIComponent(orderId);
-        fetch(`${customUrl}/orders/${safeId}.json`, { method: "DELETE", cache: "no-store" }).catch(() => null);
-      } catch (e) {}
-    }
-    fetch(`/api/orders?id=${orderId}`, {
-      method: "DELETE",
-      cache: "no-store",
-      headers: this.getCloudHeaders()
-    }).catch(() => null);
+    try {
+      await fetch(`/api/orders?id=${encodeURIComponent(orderId)}`, {
+        method: "DELETE",
+        cache: "no-store",
+        headers: this.getCloudHeaders()
+      });
+    } catch (e) {}
   }
 
   // --------------------------------------------------------------------------
@@ -1467,38 +1285,21 @@ class KasedKarimDB {
 
   async syncCategoriesFromCloud() {
     try {
-      const customUrl = this.getCustomCloudUrl();
       const t = Date.now();
       let cloudCats = null;
 
-      if (customUrl) {
-        try {
-          const res = await fetch(`${customUrl}/categories.json?t=${t}`, {
-            cache: "no-store",
-            headers: { "Accept": "application/json" }
-          });
-          if (res.ok) {
-            const raw = await res.json();
-            if (raw && Array.isArray(raw)) cloudCats = raw;
-            else if (raw && typeof raw === "object") cloudCats = Object.values(raw);
+      try {
+        const res = await fetch(`/api/settings?type=categories&t=${t}`, {
+          cache: "no-store",
+          headers: this.getCloudHeaders()
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.categories)) {
+            cloudCats = data.categories;
           }
-        } catch (e) {}
-      }
-
-      if (!cloudCats) {
-        try {
-          const res = await fetch(`/api/settings?type=categories&t=${t}`, {
-            cache: "no-store",
-            headers: this.getCloudHeaders()
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.success && Array.isArray(data.categories)) {
-              cloudCats = data.categories;
-            }
-          }
-        } catch (e) {}
-      }
+        }
+      } catch (e) {}
 
       if (cloudCats && Array.isArray(cloudCats) && cloudCats.length > 0) {
         const localCats = this.getCategories();
@@ -1513,18 +1314,6 @@ class KasedKarimDB {
   }
 
   async sendCategoriesToCloud(categories) {
-    const customUrl = this.getCustomCloudUrl();
-    if (customUrl) {
-      try {
-        await fetch(`${customUrl}/categories.json`, {
-          method: "PUT",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(categories)
-        });
-      } catch (e) {}
-    }
-
     try {
       await fetch("/api/settings", {
         method: "POST",
@@ -1577,36 +1366,21 @@ class KasedKarimDB {
 
   async syncSettingsFromCloud() {
     try {
-      const customUrl = this.getCustomCloudUrl();
       const t = Date.now();
       let cloudSettings = null;
 
-      if (customUrl) {
-        try {
-          const res = await fetch(`${customUrl}/settings.json?t=${t}`, {
-            cache: "no-store",
-            headers: { "Accept": "application/json" }
-          });
-          if (res.ok) {
-            cloudSettings = await res.json();
+      try {
+        const res = await fetch(`/api/settings?type=settings&t=${t}`, {
+          cache: "no-store",
+          headers: this.getCloudHeaders()
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.settings) {
+            cloudSettings = data.settings;
           }
-        } catch (e) {}
-      }
-
-      if (!cloudSettings) {
-        try {
-          const res = await fetch(`/api/settings?type=settings&t=${t}`, {
-            cache: "no-store",
-            headers: this.getCloudHeaders()
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.success && data.settings) {
-              cloudSettings = data.settings;
-            }
-          }
-        } catch (e) {}
-      }
+        }
+      } catch (e) {}
 
       if (cloudSettings && typeof cloudSettings === "object") {
         const localSettings = this.getSettings();
@@ -1622,18 +1396,6 @@ class KasedKarimDB {
   }
 
   async sendSettingsToCloud(settings) {
-    const customUrl = this.getCustomCloudUrl();
-    if (customUrl) {
-      try {
-        fetch(`${customUrl}/settings.json`, {
-          method: "PUT",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(settings)
-        }).catch(() => null);
-      } catch (e) {}
-    }
-
     try {
       await fetch("/api/settings", {
         method: "POST",
@@ -1796,20 +1558,7 @@ class KasedKarimDB {
       } catch (err) {}
     }
 
-    // Push latest restore point to cloud
-    const customUrl = this.getCustomCloudUrl();
-    if (customUrl) {
-      try {
-        fetch(`${customUrl}/backups/latest.json`, {
-          method: "PUT",
-          cache: "no-store",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newPoint)
-        }).catch(() => null);
-      } catch (e) {}
-    }
-
-    // Always push snapshot to /api/backup so all admin devices can access it!
+    // Push snapshot securely to /api/backup (Path B Ground Truth with Admin Token)
     fetch("/api/backup", {
       method: "POST",
       cache: "no-store",
@@ -2027,32 +1776,16 @@ class KasedKarimDB {
 
   async getCustomersList() {
     try {
-      const res = await fetch(`/api/customer?action=list&t=${Date.now()}`, { cache: "no-store" });
+      const res = await fetch(`/api/customer?action=list&t=${Date.now()}`, {
+        cache: "no-store",
+        headers: this.getCloudHeaders()
+      });
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.customers)) {
-          localStorage.setItem("kased_karim_db_customers_v1", JSON.stringify(data.customers));
           return data.customers;
         }
       }
-    } catch (e) {}
-    // Fallback directly to Firebase RTDB if API is bypassed
-    try {
-      const cloudUrl = this.getCustomCloudUrl() || "https://kased-karim-default-rtdb.firebaseio.com";
-      const res = await fetch(`${cloudUrl}/customers.json?t=${Date.now()}`, { cache: "no-store" });
-      if (res.ok) {
-        const raw = await res.json();
-        if (raw && typeof raw === "object") {
-          const list = Object.values(raw).filter(Boolean);
-          list.sort((a, b) => (b.createdAt || b.updatedAt || 0) - (a.createdAt || a.updatedAt || 0));
-          localStorage.setItem("kased_karim_db_customers_v1", JSON.stringify(list));
-          return list;
-        }
-      }
-    } catch (e) {}
-    try {
-      const local = localStorage.getItem("kased_karim_db_customers_v1");
-      if (local) return JSON.parse(local);
     } catch (e) {}
     return [];
   }

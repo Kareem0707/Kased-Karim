@@ -1,14 +1,19 @@
 // Vercel Serverless Function: /api/track
 // Privacy-Hardened Order Tracking Endpoint with Multi-Factor Verification
 // Protects customer privacy by requiring Order ID + Customer Phone match
-// Strips all sensitive personal information (address, notes, full phone) from public response
+// Strips all sensitive personal information (address, notes, full phone) from public response (F-04, F-08)
 
-import { verifyCustomerRequest } from "./_auth.js";
+import {
+  verifyCustomerRequest,
+  sanitizePathId,
+  getFirebaseUrl,
+  setSecurityHeaders
+} from "./_auth.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Rate limiting to prevent automated order enumeration and scraping
+// Rate limiting to prevent automated order enumeration and scraping (F-08, F-18)
 const trackRateLimit = new Map();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const MAX_REQUESTS_PER_MIN = 12;
@@ -27,31 +32,22 @@ function checkRateLimit(ip) {
   return true;
 }
 
-function getFirebaseUrl(req) {
-  const envUrl = process.env.FIREBASE_DB_URL || process.env.NEXT_PUBLIC_FIREBASE_DB_URL;
-  if (envUrl && envUrl.trim()) return envUrl.trim().replace(/\/$/, "");
-  return "https://kased-karim-default-rtdb.firebaseio.com";
-}
-
-async function fetchOrdersFromCloud(req) {
+async function fetchOrdersFromCloud() {
   const t = Date.now();
-  const firebaseUrl = getFirebaseUrl(req);
-
-  if (firebaseUrl) {
-    try {
-      const res = await fetch(`${firebaseUrl}/orders.json?t=${t}`, {
-        cache: "no-store",
-        headers: { "Accept": "application/json" }
-      });
-      if (res.ok) {
-        const raw = await res.json();
-        if (raw) {
-          if (Array.isArray(raw)) return raw.filter(Boolean);
-          if (typeof raw === "object") return Object.values(raw).filter(Boolean);
-        }
+  try {
+    const firebaseUrl = getFirebaseUrl("orders.json", { t });
+    const res = await fetch(firebaseUrl, {
+      cache: "no-store",
+      headers: { "Accept": "application/json" }
+    });
+    if (res.ok) {
+      const raw = await res.json();
+      if (raw) {
+        if (Array.isArray(raw)) return raw.filter(Boolean);
+        if (typeof raw === "object") return Object.values(raw).filter(Boolean);
       }
-    } catch (e) {}
-  }
+    }
+  } catch (e) {}
 
   const kvUrl = process.env.KV_REST_API_URL;
   const kvToken = process.env.KV_REST_API_TOKEN;
@@ -76,10 +72,7 @@ async function fetchOrdersFromCloud(req) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  setSecurityHeaders(req, res);
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -122,13 +115,13 @@ export default async function handler(req, res) {
     const cleanPhone = phone.replace(/[^0-9]/g, "");
 
     let targetOrder = null;
-    const firebaseUrl = getFirebaseUrl(req);
 
-    // 1. Try Direct Fast Fetch by Order ID (Zero-lag real-time Firebase read)
-    if (firebaseUrl) {
+    // 1. Try Direct Fast Fetch by Order ID with Privileged Auth
+    const safeId = sanitizePathId(cleanOrderId);
+    if (safeId) {
       try {
-        const safeId = encodeURIComponent(cleanOrderId);
-        const singleRes = await fetch(`${firebaseUrl}/orders/${safeId}.json?t=${Date.now()}`, {
+        const singleUrl = getFirebaseUrl(`orders/${safeId}.json`, { t: Date.now() });
+        const singleRes = await fetch(singleUrl, {
           cache: "no-store",
           headers: { "Accept": "application/json" }
         });
@@ -143,7 +136,7 @@ export default async function handler(req, res) {
 
     // 2. Fallback: Search in full orders list (from Firebase or KV)
     if (!targetOrder) {
-      const orders = await fetchOrdersFromCloud(req);
+      const orders = await fetchOrdersFromCloud();
       targetOrder = orders.find(o => {
         if (!o || !o.id) return false;
         const oId = o.id.toString().toUpperCase().trim();
@@ -152,7 +145,7 @@ export default async function handler(req, res) {
     }
 
     if (!targetOrder) {
-      // Delay response slightly to prevent timing enumeration
+      // Delay response slightly to prevent timing enumeration attacks (F-08)
       await new Promise(r => setTimeout(r, 400));
       return res.status(404).json({
         success: false,
@@ -179,7 +172,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Two-factor verification: If not authenticated owner, require matching phone verification
+    // Two-factor verification: If not authenticated owner, require matching phone verification (F-08)
     const storedPhone = (targetOrder.customer?.phone || "").replace(/[^0-9]/g, "");
     if (!isAuthenticatedOwner && storedPhone && storedPhone.length >= 10) {
       if (!cleanPhone || cleanPhone.length < 4) {
@@ -202,7 +195,7 @@ export default async function handler(req, res) {
     }
 
     // PRIVACY-SAFE RESPONSE:
-    // Strip all sensitive personal data (customer name, address, notes, phone)
+    // Strictly strip all sensitive personal data (customer name, address, notes, phone) (F-04, F-08)
     const sanitizedItems = (targetOrder.items || []).map(item => ({
       name: item.name || "وحدة إضاءة فاخرة",
       enName: item.enName || "",

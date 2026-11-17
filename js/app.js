@@ -248,7 +248,7 @@ function renderCategoryTabs() {
   }
 }
 
-// 3.1 Render Sub-Bar Categories
+// 3.1 Render Sub-Bar Categories (XSS-Safe Context Encoding)
 function renderSubBarCategories() {
   const container = document.getElementById("subBarItems");
   if (!container) return;
@@ -258,16 +258,18 @@ function renderSubBarCategories() {
   container.innerHTML = cats.map(cat => {
     const isSub = !!cat.parentId;
     const rawName = (isEn && cat.enName) ? cat.enName : (cat.id === "all" && isEn ? "All Products" : cat.name);
-    const displayName = isSub ? `<span style="opacity: 0.6; font-size: 0.8em; margin-left: 3px;">↳</span>${rawName}` : rawName;
+    const safeName = escapeHtml(rawName);
+    const safeId = escapeHtml(cat.id);
+    const displayName = isSub ? `<span style="opacity: 0.6; font-size: 0.8em; margin-left: 3px;">↳</span>${safeName}` : safeName;
     return `
-      <button class="sub-bar-cat-btn ${STATE.activeCategory === cat.id ? 'active' : ''}" onclick="selectCategoryFromSubBar('${cat.id}')">
+      <button type="button" class="sub-bar-cat-btn ${STATE.activeCategory === cat.id ? 'active' : ''}" data-action="select-subbar-cat" data-cat-id="${safeId}">
         <span>${displayName}</span>
       </button>
     `;
   }).join("");
 }
 
-// 3.2 Render Mobile Accordion Categories
+// 3.2 Render Mobile Accordion Categories (XSS-Safe Context Encoding)
 function renderMobileAccordionCategories() {
   const container = document.getElementById("mobileAccordionContent");
   if (!container) return;
@@ -277,16 +279,18 @@ function renderMobileAccordionCategories() {
   container.innerHTML = cats.map(cat => {
     const isSub = !!cat.parentId;
     const rawName = (isEn && cat.enName) ? cat.enName : (cat.id === "all" && isEn ? "All Products" : cat.name);
-    const displayName = isSub ? `— ${rawName}` : rawName;
+    const safeName = escapeHtml(rawName);
+    const safeId = escapeHtml(cat.id);
+    const displayName = isSub ? `— ${safeName}` : safeName;
     return `
-      <button class="mobile-sub-cat-item ${STATE.activeCategory === cat.id ? 'active' : ''} ${isSub ? 'is-mobile-subcat' : ''}" onclick="selectCategoryFromMobile('${cat.id}')" style="${isSub ? 'padding-right: 1.75rem; font-size: 0.88rem; opacity: 0.9;' : ''}">
+      <button type="button" class="mobile-sub-cat-item ${STATE.activeCategory === cat.id ? 'active' : ''} ${isSub ? 'is-mobile-subcat' : ''}" data-action="select-mobile-cat" data-cat-id="${safeId}" style="${isSub ? 'padding-right: 1.75rem; font-size: 0.88rem; opacity: 0.9;' : ''}">
         <span>${displayName}</span>
       </button>
     `;
   }).join("");
 }
 
-// 3.3 Render Footer Collections Categories
+// 3.3 Render Footer Collections Categories (XSS-Safe Context Encoding)
 function renderFooterCategories() {
   const container = document.querySelector(".footer-links-grid");
   if (!container) return;
@@ -295,7 +299,9 @@ function renderFooterCategories() {
   const cats = (window.KK_DB ? window.KK_DB.getCategories() : (typeof CATEGORIES !== "undefined" ? CATEGORIES : [])).filter(c => c.id !== "all");
   container.innerHTML = cats.map(cat => {
     const rawName = (isEn && cat.enName) ? cat.enName : cat.name;
-    return `<li><a href="#catalog" class="footer-link" onclick="selectCategoryFromSubBar('${cat.id}')">${rawName}</a></li>`;
+    const safeName = escapeHtml(rawName);
+    const safeId = escapeHtml(cat.id);
+    return `<li><a href="#catalog" class="footer-link" data-action="select-subbar-cat" data-cat-id="${safeId}">${safeName}</a></li>`;
   }).join("");
 }
 
@@ -573,7 +579,7 @@ function renderProducts() {
         </div>
 
         <div class="card-hover-actions">
-          <button class="btn-card-quickview" onclick="openQuickView('${escapeHtml(item.id)}')">
+          <button class="btn-card-quickview" data-action="quickview" data-id="${escapeHtml(item.id)}">
             <i class="fas fa-expand"></i>
             <span>${isEn ? 'Specifications' : 'المواصفات الفنية'}</span>
           </button>
@@ -589,7 +595,7 @@ function renderProducts() {
           </div>
         </div>
 
-        <h3 class="product-name" onclick="openQuickView('${escapeHtml(item.id)}')">${escapeHtml(displayName)}</h3>
+        <h3 class="product-name" data-action="quickview" data-id="${escapeHtml(item.id)}" style="cursor: pointer;">${escapeHtml(displayName)}</h3>
         ${subtitleText ? `<p class="product-en-name">${escapeHtml(subtitleText)}</p>` : ''}
 
         <div class="product-specs-pills">
@@ -607,7 +613,7 @@ function renderProducts() {
             ${item.originalPrice ? `<span class="product-price-old">${formatPrice(item.originalPrice)} ${currencyStr}</span>` : ''}
           </div>
 
-          <button class="btn-card-quote" title="${isAvailable ? (isEn ? 'Add to Cart' : 'إضافة للسلة') : (isEn ? 'Out of Stock' : 'غير متوفر')}" ${!isAvailable ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''} onclick="addToCart('${escapeHtml(item.id)}', 1)">
+          <button class="btn-card-quote" title="${isAvailable ? (isEn ? 'Add to Cart' : 'إضافة للسلة') : (isEn ? 'Out of Stock' : 'غير متوفر')}" ${!isAvailable ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''} data-action="add-to-cart" data-id="${escapeHtml(item.id)}">
             <i class="fas fa-plus"></i>
           </button>
         </div>
@@ -1628,15 +1634,7 @@ window.initGoogleIdentityServices = function () {
       client_id: clientId,
       callback: async function (response) {
         if (!response || !response.credential) return;
-        const profile = parseJwt(response.credential);
-        if (profile) {
-          await completeGoogleCustomerSignIn({
-            sub: profile.sub,
-            name: profile.name,
-            email: profile.email,
-            picture: profile.picture
-          });
-        }
+        await completeGoogleCustomerSignIn(response.credential);
       },
       auto_select: false,
       cancel_on_tap_outside: true
@@ -1661,52 +1659,43 @@ window.initGoogleIdentityServices = function () {
   }
 };
 
-window.completeGoogleCustomerSignIn = async function (profile) {
-  if (!profile || !profile.email) {
+window.completeGoogleCustomerSignIn = async function (credential) {
+  if (!credential) {
     showToast(isCurrentEn() ? "Invalid Google account data" : "بيانات حساب Google غير مكتملة", "error");
     return;
   }
 
   const isEn = isCurrentEn();
-  const name = profile.name || profile.given_name || "عميل Google";
-  const email = profile.email;
-  const avatar = profile.picture || "";
-  const googleId = profile.sub || profile.id || ("g_" + Date.now());
+  let customerData = null;
 
-  let customerData = {
-    id: "goog_" + googleId,
-    googleId: googleId,
-    name: name,
-    email: email,
-    avatar: avatar,
-    phone: localStorage.getItem("kk_customer_phone") || "",
-    authProvider: "google",
-    createdAt: Date.now()
-  };
-
-  // Sync with backend API
+  // Sync with backend API via cryptographic server-side ID token verification (F-03)
   try {
     const res = await fetch("/api/customer?action=google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sub: googleId,
-        googleId: googleId,
-        name: name,
-        email: email,
-        picture: avatar,
-        phone: customerData.phone
+        credential,
+        phone: localStorage.getItem("kk_customer_phone") || ""
       })
     });
     if (res.ok) {
       const data = await res.json();
       if (data && data.success && data.customer) {
-        customerData = { ...customerData, ...data.customer };
+        customerData = data.customer;
         if (data.token) {
           localStorage.setItem("kk_customer_token", data.token);
         }
       }
+    } else {
+      showToast(isEn ? "Google verification failed on server" : "تعذر التحقق من هوية Google على الخادم", "error");
+      return;
     }
+  } catch (err) {
+    console.warn("Backend Google auth sync note:", err);
+    return;
+  }
+
+  if (!customerData) return;
   } catch (err) {
     console.warn("Backend Google auth sync note:", err);
   }
@@ -2263,6 +2252,45 @@ async function handleReviewSubmit(e) {
   }
 }
 window.handleReviewSubmit = handleReviewSubmit;
+
+// Global event delegation for XSS-safe catalog & category interactions (F-07)
+document.addEventListener("click", function(e) {
+  const quickviewEl = e.target.closest('[data-action="quickview"]');
+  if (quickviewEl) {
+    const id = quickviewEl.getAttribute("data-id");
+    if (id && typeof window.openQuickView === "function") {
+      window.openQuickView(id);
+    }
+    return;
+  }
+
+  const addToCartEl = e.target.closest('[data-action="add-to-cart"]');
+  if (addToCartEl) {
+    const id = addToCartEl.getAttribute("data-id");
+    if (id && typeof window.addToCart === "function") {
+      window.addToCart(id, 1);
+    }
+    return;
+  }
+
+  const subBarCatEl = e.target.closest('[data-action="select-subbar-cat"]');
+  if (subBarCatEl) {
+    const catId = subBarCatEl.getAttribute("data-cat-id");
+    if (catId && typeof window.selectCategoryFromSubBar === "function") {
+      window.selectCategoryFromSubBar(catId);
+    }
+    return;
+  }
+
+  const mobileCatEl = e.target.closest('[data-action="select-mobile-cat"]');
+  if (mobileCatEl) {
+    const catId = mobileCatEl.getAttribute("data-cat-id");
+    if (catId && typeof window.selectCategoryFromMobile === "function") {
+      window.selectCategoryFromMobile(catId);
+    }
+    return;
+  }
+});
 
 // Global invocation on ready
 document.addEventListener("DOMContentLoaded", initApp);

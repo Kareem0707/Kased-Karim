@@ -33,6 +33,23 @@
         {
           "key": "X-Frame-Options",
           "value": "DENY"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    },
+    {
+      "source": "/admin(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate, max-age=0"
         }
       ]
     },
@@ -65,7 +82,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://accounts.google.com/gsi/client https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://images.unsplash.com https://*.google.com https://*.googleapis.com https://*.googleusercontent.com; frame-src https://maps.google.com https://www.google.com https://accounts.google.com/gsi/; connect-src 'self' https://*.firebaseio.com https://accounts.google.com/gsi/ https://www.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://accounts.google.com/gsi/client https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://images.unsplash.com https://*.google.com https://*.googleapis.com https://*.googleusercontent.com https://res.cloudinary.com; frame-src https://maps.google.com https://www.google.com https://accounts.google.com/gsi/; connect-src 'self' https://accounts.google.com/gsi/ https://www.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
         }
       ]
     }

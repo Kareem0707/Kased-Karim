@@ -1,5 +1,5 @@
 // Vercel Serverless Function: /api/auth
-// Executive Admin Authentication Gate & Token Issuance with 2-Factor Authentication (2FA OTP)
+// Executive Admin Authentication Gate & Token Issuance with Mandatory 2-Factor Authentication (2FA OTP)
 import {
   createAdminToken,
   verifyAdminRequest,
@@ -8,13 +8,15 @@ import {
   save2FAOTP,
   verify2FAOTP,
   send2FAEmail,
-  ADMIN_2FA_EMAIL
+  ADMIN_2FA_EMAILS,
+  maskEmail,
+  setSecurityHeaders
 } from "./_auth.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// In-Memory Brute-Force Rate Limiter (per serverless instance)
+// In-Memory Brute-Force Rate Limiter (per serverless instance) (F-18)
 const loginAttempts = new Map();
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
@@ -54,10 +56,7 @@ function resetAttempts(ip) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-token");
+  setSecurityHeaders(req, res);
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -96,7 +95,7 @@ export default async function handler(req, res) {
       body = body || {};
 
       // =======================================================================
-      // STEP 2: VERIFY 6-DIGIT EMAIL OTP
+      // STEP 2: VERIFY 6-DIGIT EMAIL OTP (MANDATORY MFA)
       // =======================================================================
       if (body.action === "verify_otp" || (body.otp && !body.password)) {
         const inputOtp = String(body.otp || "").trim().replace(/[^0-9]/g, "");
@@ -107,17 +106,19 @@ export default async function handler(req, res) {
         const isOtpValid = await verify2FAOTP(inputOtp);
         if (!isOtpValid) {
           recordFailedAttempt(clientIp);
-          await new Promise(r => setTimeout(r, 600));
+          await new Promise(r => setTimeout(r, 600)); // Constant delay against timing analysis
           return res.status(401).json({
             success: false,
-            error: "رمز التحقق السداسي غير صحيح أو انتهت صلاحيته (10 دقائق)"
+            error: "رمز التحقق السداسي غير صحيح أو انتهت صلاحيته (5 دقائق - حد أقصى 3 محاولات)"
           });
         }
 
-        // OTP Verified: Reset limits and issue JWT session token
+        // OTP Verified: Reset limits and issue short-lived JWT session token (2 hours) (F-10)
         resetAttempts(clientIp);
-        const token = createAdminToken({ sub: "executive-admin", ip: clientIp, verified2FA: true });
-        res.setHeader("Set-Cookie", `kk_admin_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
+        const token = createAdminToken({ sub: "executive-admin", ip: clientIp, verified2FA: true }, 2 * 60 * 60 * 1000);
+        
+        // Secure HttpOnly Cookie (F-10)
+        res.setHeader("Set-Cookie", `kk_admin_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=7200; Secure`);
 
         return res.status(200).json({
           success: true,
@@ -146,29 +147,17 @@ export default async function handler(req, res) {
         });
       }
 
-      // Sovereign Master Key Direct Mode: immediate login for owner
-      if (password === "KasedKarim@2026") {
-        resetAttempts(clientIp);
-        const token = createAdminToken({ sub: "executive-admin", ip: clientIp, bypass: true });
-        res.setHeader("Set-Cookie", `kk_admin_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
-        return res.status(200).json({
-          success: true,
-          token,
-          user: { role: "admin", name: "Kased Karim Admin" },
-          message: "تم الدخول المباشر لحساب الإدارة الرئيسية"
-        });
-      }
-
-      // Standard Flow: Generate 6-Digit OTP and dispatch to Gmail
+      // MANDATORY 2FA ENFORCEMENT: All password entries require OTP verification (F-13: NO BYPASSES)
       const otpCode = generate6DigitOTP();
-      await save2FAOTP(otpCode, ADMIN_2FA_EMAIL);
-      const emailResult = await send2FAEmail(otpCode, ADMIN_2FA_EMAIL);
+      await save2FAOTP(otpCode);
+      const emailResult = await send2FAEmail(otpCode, ADMIN_2FA_EMAILS);
 
       return res.status(200).json({
         success: true,
         step: "otp_required",
         message: "تم إرسال كود التحقق الأمني السداسي إلى البريد المعتمد للإدارة الرئيسية.",
-        emailDispatched: emailResult.dispatched
+        emailDispatched: emailResult.dispatched,
+        maskedEmails: ADMIN_2FA_EMAILS.map(maskEmail)
       });
     }
 
