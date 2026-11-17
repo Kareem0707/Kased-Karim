@@ -57,6 +57,14 @@ async function checkAdminSecurityGate() {
   const urlParams = new URLSearchParams(window.location.search);
   const isForceRelock = urlParams.has("logout") || urlParams.has("lock") || urlParams.has("relock");
   if (isForceRelock) {
+    try {
+      fetch("/api/auth", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "logout" })
+      });
+    } catch(e) {}
     sessionStorage.removeItem(ADMIN_TOKEN_KEY);
     localStorage.removeItem(ADMIN_TOKEN_KEY);
     localStorage.removeItem("kk_admin_authorized");
@@ -64,32 +72,15 @@ async function checkAdminSecurityGate() {
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
-  // Enforce session-level authentication: require valid token in sessionStorage or authorized device localStorage
-  let token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
-  if (!token) {
-    token = localStorage.getItem(ADMIN_TOKEN_KEY);
-    if (token) {
-      sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
-    }
-  }
+  let token = sessionStorage.getItem(ADMIN_TOKEN_KEY) || localStorage.getItem(ADMIN_TOKEN_KEY) || "";
 
-  if (!token) {
-    document.body.classList.remove("is-admin-user", "is-admin-authenticated");
-    gateEl.style.display = "flex";
-    rootEl.style.display = "none";
-    const step1 = document.getElementById("adminAuthStep1");
-    const step2 = document.getElementById("adminAuthStep2");
-    if (step1) step1.style.display = "block";
-    if (step2) step2.style.display = "none";
-    const pinInput = document.getElementById("adminPinInput");
-    if (pinInput) setTimeout(() => pinInput.focus(), 150);
-    return;
-  }
-
-  // Verify token with server-side authentication endpoint
+  // Verify session with server-side authentication endpoint (supports both HttpOnly Cookie & Bearer Header)
   try {
+    const headers = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
     const res = await fetch("/api/auth", {
-      headers: { "Authorization": `Bearer ${token}` }
+      credentials: "same-origin",
+      headers
     });
     const data = await res.json();
 
@@ -106,25 +97,22 @@ async function checkAdminSecurityGate() {
       renderAdminOrders();
       renderAdminInventory();
       populateAdminCategorySelect();
-    } else {
-      // Invalid or expired token: show gate
-      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-      localStorage.removeItem(ADMIN_TOKEN_KEY);
-      document.body.classList.remove("is-admin-user", "is-admin-authenticated");
-      gateEl.style.display = "flex";
-      rootEl.style.display = "none";
-      const step1 = document.getElementById("adminAuthStep1");
-      const step2 = document.getElementById("adminAuthStep2");
-      if (step1) step1.style.display = "block";
-      if (step2) step2.style.display = "none";
+      return;
     }
-  } catch (err) {
-    // On verification failure, stay securely locked behind the gate
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-    document.body.classList.remove("is-admin-user", "is-admin-authenticated");
-    gateEl.style.display = "flex";
-    rootEl.style.display = "none";
-  }
+  } catch (err) {}
+
+  // Not authenticated: show gate
+  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  document.body.classList.remove("is-admin-user", "is-admin-authenticated");
+  gateEl.style.display = "flex";
+  rootEl.style.display = "none";
+  const step1 = document.getElementById("adminAuthStep1");
+  const step2 = document.getElementById("adminAuthStep2");
+  if (step1) step1.style.display = "block";
+  if (step2) step2.style.display = "none";
+  const pinInput = document.getElementById("adminPinInput");
+  if (pinInput) setTimeout(() => pinInput.focus(), 150);
 }
 
 let otpTimerInterval = null;

@@ -8,6 +8,9 @@ import {
   save2FAOTP,
   verify2FAOTP,
   send2FAEmail,
+  checkDistributedRateLimit,
+  recordFailedRateLimitAttempt,
+  resetDistributedRateLimit,
   ADMIN_2FA_EMAILS,
   maskEmail,
   setSecurityHeaders
@@ -78,8 +81,30 @@ export default async function handler(req, res) {
       });
     }
 
-    // 2. POST: 2-Step Authentication (Password -> 6-Digit Email OTP -> Token)
+    // 2. POST: 2-Step Authentication (Password -> 6-Digit Email OTP -> Token) & Logout
     if (req.method === "POST") {
+      let body = req.body;
+      if (typeof body === "string") {
+        try { body = JSON.parse(body); } catch (e) {}
+      }
+      body = body || {};
+
+      // Handle Admin Logout (Clear Secure HttpOnly Cookie)
+      if (body.action === "logout" || req.query.action === "logout") {
+        res.setHeader("Set-Cookie", "kk_admin_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure");
+        return res.status(200).json({ success: true, message: "تم تسجيل الخروج بنجاح" });
+      }
+
+      // Check Distributed Central Rate Limiter first (Cross-Serverless Instances)
+      const distCheck = await checkDistributedRateLimit(clientIp, "admin_login", 5, 15 * 60 * 1000);
+      if (!distCheck.allowed) {
+        return res.status(429).json({
+          success: false,
+          error: `تم تجاوز الحد الأقصى للمحاولات الخاطئة. يرجى الانتظار ${distCheck.remainingSec} ثانية قبل إعادة المحاولة.`
+        });
+      }
+
+      // In-Memory Rate Limiter Fallback
       const rateCheck = checkRateLimit(clientIp);
       if (!rateCheck.allowed) {
         return res.status(429).json({
@@ -87,12 +112,6 @@ export default async function handler(req, res) {
           error: `تم تجاوز الحد الأقصى للمحاولات الخاطئة. يرجى الانتظار ${rateCheck.remainingSec} ثانية قبل إعادة المحاولة.`
         });
       }
-
-      let body = req.body;
-      if (typeof body === "string") {
-        try { body = JSON.parse(body); } catch (e) {}
-      }
-      body = body || {};
 
       // =======================================================================
       // STEP 2: VERIFY 6-DIGIT EMAIL OTP (MANDATORY MFA)
@@ -105,6 +124,7 @@ export default async function handler(req, res) {
 
         const isOtpValid = await verify2FAOTP(inputOtp);
         if (!isOtpValid) {
+          await recordFailedRateLimitAttempt(clientIp, "admin_login", 5, 15 * 60 * 1000);
           recordFailedAttempt(clientIp);
           await new Promise(r => setTimeout(r, 600)); // Constant delay against timing analysis
           return res.status(401).json({
@@ -114,6 +134,7 @@ export default async function handler(req, res) {
         }
 
         // OTP Verified: Reset limits and issue short-lived JWT session token (2 hours) (F-10)
+        await resetDistributedRateLimit(clientIp, "admin_login");
         resetAttempts(clientIp);
         const token = createAdminToken({ sub: "executive-admin", ip: clientIp, verified2FA: true }, 2 * 60 * 60 * 1000);
         
@@ -139,6 +160,7 @@ export default async function handler(req, res) {
 
       const isValid = verifyAdminPassword(password);
       if (!isValid) {
+        await recordFailedRateLimitAttempt(clientIp, "admin_login", 5, 15 * 60 * 1000);
         recordFailedAttempt(clientIp);
         await new Promise(r => setTimeout(r, 600));
         return res.status(401).json({

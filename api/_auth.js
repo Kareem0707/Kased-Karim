@@ -2,9 +2,9 @@
 // Node.js Native Crypto (Zero External Dependencies)
 import crypto from "crypto";
 
-// Cryptographically Strong JWT Secrets
-const FALLBACK_SECRET = "kk_sec_vault_" + crypto.createHash("sha256").update("kased_karim_luxury_lighting_sheikh_zayed_2026").digest("hex");
-const JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.ADMIN_SECRET || FALLBACK_SECRET;
+// Cryptographically Strong JWT Secrets (Strict Environment Enforcement - Zero Static Fallback Secrets)
+const EPHEMERAL_RANDOM_SECRET = crypto.randomBytes(64).toString("hex");
+const JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.ADMIN_SECRET || EPHEMERAL_RANDOM_SECRET;
 const CUSTOMER_JWT_SECRET = process.env.CUSTOMER_JWT_SECRET || (JWT_SECRET + "_customer_portal_key_2026");
 
 // Allowed server-side admin passwords (strictly from environment variable)
@@ -12,11 +12,8 @@ const CONFIGURED_ADMIN_PASSWORDS = [
   process.env.ADMIN_PASSWORD
 ].filter(Boolean);
 
-// Fallback password for initial deployment if ADMIN_PASSWORD is not yet configured in Vercel
-// Note: It is strongly recommended to set ADMIN_PASSWORD in Vercel project environment variables!
-const ALLOWED_ADMIN_PASSWORDS = CONFIGURED_ADMIN_PASSWORDS.length > 0 
-  ? CONFIGURED_ADMIN_PASSWORDS 
-  : ["KasedKarim@SheikhZayed2026!Sec"];
+// Strict Fail-Closed: No hardcoded fallback passwords in source code
+const ALLOWED_ADMIN_PASSWORDS = CONFIGURED_ADMIN_PASSWORDS;
 
 // -----------------------------------------------------------------------------
 // CORS & HTTP SECURITY HEADERS ENGINE (F-14, F-11)
@@ -87,6 +84,87 @@ export function sanitizePathId(id) {
     return null;
   }
   return clean;
+}
+
+// -----------------------------------------------------------------------------
+// DISTRIBUTED SERVERLESS RATE LIMITER (FIREBASE RTDB BACKED)
+// -----------------------------------------------------------------------------
+export async function checkDistributedRateLimit(clientIp, action = "login", maxAttempts = 5, windowMs = 15 * 60 * 1000) {
+  if (!clientIp) return { allowed: true, remainingSec: 0 };
+  const safeIp = crypto.createHash("sha256").update(clientIp).digest("hex").slice(0, 16);
+  const now = Date.now();
+  const rateLimitUrl = getFirebaseUrl(`security_limits/rate_limit/${action}/${safeIp}.json`);
+
+  try {
+    const res = await fetch(rateLimitUrl, {
+      cache: "no-store",
+      headers: { "Accept": "application/json" }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === "object") {
+        if (data.lockedUntil && data.lockedUntil > now) {
+          const remainingSec = Math.ceil((data.lockedUntil - now) / 1000);
+          return { allowed: false, remainingSec, count: data.count || maxAttempts };
+        }
+        if (data.firstAttempt && now - data.firstAttempt > windowMs) {
+          return { allowed: true, count: 0, remainingSec: 0 };
+        }
+        if (data.count && data.count >= maxAttempts) {
+          return { allowed: false, remainingSec: Math.ceil(windowMs / 1000), count: data.count };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Distributed rate limit check note:", err.message);
+  }
+  return { allowed: true, count: 0, remainingSec: 0 };
+}
+
+export async function recordFailedRateLimitAttempt(clientIp, action = "login", maxAttempts = 5, windowMs = 15 * 60 * 1000) {
+  if (!clientIp) return;
+  const safeIp = crypto.createHash("sha256").update(clientIp).digest("hex").slice(0, 16);
+  const now = Date.now();
+  const rateLimitUrl = getFirebaseUrl(`security_limits/rate_limit/${action}/${safeIp}.json`);
+
+  try {
+    let currentCount = 0;
+    let firstAttempt = now;
+    const res = await fetch(rateLimitUrl, { cache: "no-store", headers: { "Accept": "application/json" } });
+    if (res.ok) {
+      const existing = await res.json();
+      if (existing && typeof existing === "object") {
+        if (existing.firstAttempt && now - existing.firstAttempt < windowMs) {
+          currentCount = existing.count || 0;
+          firstAttempt = existing.firstAttempt;
+        }
+      }
+    }
+    const newCount = currentCount + 1;
+    const payload = {
+      count: newCount,
+      firstAttempt,
+      lastAttempt: now,
+      lockedUntil: newCount >= maxAttempts ? now + windowMs : null
+    };
+    await fetch(rateLimitUrl, {
+      method: "PUT",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    console.warn("Distributed rate limit record note:", err.message);
+  }
+}
+
+export async function resetDistributedRateLimit(clientIp, action = "login") {
+  if (!clientIp) return;
+  const safeIp = crypto.createHash("sha256").update(clientIp).digest("hex").slice(0, 16);
+  const rateLimitUrl = getFirebaseUrl(`security_limits/rate_limit/${action}/${safeIp}.json`);
+  try {
+    await fetch(rateLimitUrl, { method: "DELETE", cache: "no-store" });
+  } catch (err) {}
 }
 
 // -----------------------------------------------------------------------------

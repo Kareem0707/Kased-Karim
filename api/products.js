@@ -242,6 +242,13 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Payload Size Limit Check (DoS Mitigation - CWE-400)
+    const MAX_PRODUCTS_PAYLOAD = 2 * 1024 * 1024; // 2 MB
+    const contentLength = parseInt(req.headers["content-length"] || "0", 10);
+    if (contentLength > MAX_PRODUCTS_PAYLOAD) {
+      return res.status(413).json({ success: false, error: "حجم الطلب يتجاوز الحد الأقصى المسموح به (2 ميجابايت)" });
+    }
+
     // 1. GET: Fetch products across all devices (Public Storefront Read)
     if (req.method === "GET") {
       const { products, provider } = await fetchProductsFromCloud(req);

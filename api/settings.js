@@ -38,6 +38,13 @@ export default async function handler(req, res) {
   const type = req.query?.type;
 
   try {
+    // Payload Size Limit Check (DoS Mitigation - CWE-400)
+    const MAX_SETTINGS_PAYLOAD = 300 * 1024; // 300 KB
+    const contentLength = parseInt(req.headers["content-length"] || "0", 10);
+    if (contentLength > MAX_SETTINGS_PAYLOAD) {
+      return res.status(413).json({ success: false, error: "حجم الطلب يتجاوز الحد الأقصى المسموح به (300 كيلوبايت)" });
+    }
+
     // 1. GET: Fetch Categories and/or Settings (Public Storefront Read)
     if (req.method === "GET") {
       const t = Date.now();
