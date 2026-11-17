@@ -1696,9 +1696,6 @@ window.completeGoogleCustomerSignIn = async function (credential) {
   }
 
   if (!customerData) return;
-  } catch (err) {
-    console.warn("Backend Google auth sync note:", err);
-  }
 
   // Store in LocalStorage and Local DB
   try {
@@ -1713,7 +1710,7 @@ window.completeGoogleCustomerSignIn = async function (credential) {
     window.KK_DB.saveCustomer(customerData);
   }
 
-  showToast(isEn ? `Signed in successfully with Google: ${name}` : `تم تسجيل الدخول بحساب Google الحقيقي بنجاح: ${name}`);
+  showToast(isEn ? `Signed in successfully with Google: ${customerData.name}` : `تم تسجيل الدخول بحساب Google الحقيقي بنجاح: ${customerData.name}`);
 
   if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
   if (typeof closeCustomerAuthModal === "function") closeCustomerAuthModal();

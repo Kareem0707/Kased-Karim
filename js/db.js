@@ -471,7 +471,6 @@ class KasedKarimDB {
 
         // Standardize orders list
         const cleanCloudOrders = orders.filter(o => o && o.id);
-        });
 
         // Normalize items and customer for all cloud orders
         cleanCloudOrders.forEach(o => {
