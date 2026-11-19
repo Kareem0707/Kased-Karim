@@ -94,29 +94,56 @@ export default async function handler(req, res) {
       body = body || {};
 
       if (body.type === "categories" || Array.isArray(body.categories)) {
-        const cats = body.categories || body;
+        const rawCats = Array.isArray(body.categories) ? body.categories : (Array.isArray(body) ? body : []);
+        // Strict Whitelist Mapping to Prevent Mass Assignment (CWE-915)
+        const cleanCats = rawCats.map((c, idx) => ({
+          id: String(c.id || "cat_" + idx).replace(/[^a-zA-Z0-9_\-]/g, "").slice(0, 50),
+          name: String(c.name || "").trim().replace(/[<>]/g, "").slice(0, 100),
+          nameEn: String(c.nameEn || "").trim().replace(/[<>]/g, "").slice(0, 100),
+          icon: String(c.icon || "fa-gem").trim().replace(/[<>]/g, "").slice(0, 50),
+          count: parseInt(c.count, 10) || 0
+        })).filter(c => c.name);
+
         const catUrl = getFirebaseUrl("categories.json");
         await fetch(catUrl, {
           method: "PUT",
           cache: "no-store",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(cats)
+          body: JSON.stringify(cleanCats)
         });
         await bumpSyncMetadata("categories_update");
-        return res.status(200).json({ success: true, updated: "categories" });
+        return res.status(200).json({ success: true, updated: "categories", categories: cleanCats });
       }
 
       if (body.type === "settings" || body.settings || body.phone) {
-        const st = { ...(body.settings || body), updatedAt: Date.now() };
+        const raw = body.settings || body || {};
+        // Strict Whitelist Mapping to Prevent Mass Assignment (CWE-915)
+        const safeSettings = {
+          phone: String(raw.phone || "").trim().replace(/[<>]/g, "").slice(0, 25),
+          whatsapp: String(raw.whatsapp || "").trim().replace(/[<>]/g, "").slice(0, 25),
+          email: String(raw.email || "").trim().toLowerCase().slice(0, 100),
+          addressAr: String(raw.addressAr || "").trim().replace(/[<>]/g, "").slice(0, 200),
+          addressEn: String(raw.addressEn || "").trim().replace(/[<>]/g, "").slice(0, 200),
+          mapUrl: String(raw.mapUrl || "").trim().slice(0, 300),
+          mapEmbedUrl: String(raw.mapEmbedUrl || "").trim().slice(0, 500),
+          freeShippingThreshold: Math.max(0, parseInt(raw.freeShippingThreshold, 10) || 5000),
+          social: {
+            facebook: String(raw.social?.facebook || "").trim().slice(0, 150),
+            instagram: String(raw.social?.instagram || "").trim().slice(0, 150),
+            tiktok: String(raw.social?.tiktok || "").trim().slice(0, 150),
+            designerUrl: "https://karimodesign.vercel.app/"
+          },
+          updatedAt: Date.now()
+        };
         const setUrl = getFirebaseUrl("settings.json");
         await fetch(setUrl, {
           method: "PUT",
           cache: "no-store",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(st)
+          body: JSON.stringify(safeSettings)
         });
         await bumpSyncMetadata("settings_update");
-        return res.status(200).json({ success: true, updated: "settings", settings: st });
+        return res.status(200).json({ success: true, updated: "settings", settings: safeSettings });
       }
 
       return res.status(400).json({ error: "Invalid payload type" });
@@ -124,6 +151,7 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
-    return res.status(500).json({ error: "Server error", message: err.message });
+    console.error("API error in /api/settings:", err.message);
+    return res.status(500).json({ success: false, error: "حدث خطأ غير متوقع في معالجة الإعدادات." });
   }
 }

@@ -4,8 +4,12 @@ import crypto from "crypto";
 
 // Cryptographically Strong JWT Secrets (Strict Environment Enforcement - Zero Static Fallback Secrets)
 const EPHEMERAL_RANDOM_SECRET = crypto.randomBytes(64).toString("hex");
-const JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.ADMIN_SECRET || EPHEMERAL_RANDOM_SECRET;
-const CUSTOMER_JWT_SECRET = process.env.CUSTOMER_JWT_SECRET || (JWT_SECRET + "_customer_portal_key_2026");
+const JWT_SECRET = (process.env.ADMIN_JWT_SECRET || process.env.ADMIN_SECRET || EPHEMERAL_RANDOM_SECRET).trim();
+const CUSTOMER_JWT_SECRET = (
+  process.env.CUSTOMER_JWT_SECRET
+    ? process.env.CUSTOMER_JWT_SECRET.trim()
+    : crypto.createHmac("sha256", JWT_SECRET).update("kased_karim_customer_sub_secret_2026").digest("hex")
+);
 
 // Allowed server-side admin passwords (strictly from environment variable)
 const CONFIGURED_ADMIN_PASSWORDS = [
@@ -22,7 +26,7 @@ const ALLOWED_ORIGIN_PATTERNS = [
   /^https?:\/\/localhost(:\d+)?$/,
   /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
   /^https?:\/\/(www\.)?kasedkarim\.com$/,
-  /^https:\/\/.*\.vercel\.app$/
+  /^https:\/\/kased-karim(-[a-z0-9_-]+)?\.vercel\.app$/
 ];
 
 export function setSecurityHeaders(req, res) {
@@ -33,6 +37,8 @@ export function setSecurityHeaders(req, res) {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-XSS-Protection", "1; mode=block");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
 
   // Dynamic Strict CORS - Never use wildcard '*' with credentials (F-14)
   const reqOrigin = req.headers["origin"] || req.headers["Origin"];
@@ -53,7 +59,7 @@ export function setSecurityHeaders(req, res) {
 // SECURE CLOUD DATABASE (FIREBASE RTDB) ACCESS WITH PRIVILEGED SERVER AUTH (F-01)
 // -----------------------------------------------------------------------------
 export function getFirebaseUrl(path = "", queryParams = {}) {
-  const envUrl = process.env.FIREBASE_DB_URL || process.env.NEXT_PUBLIC_FIREBASE_DB_URL || "https://kased-karim-default-rtdb.firebaseio.com";
+  const envUrl = (process.env.FIREBASE_DB_URL || "https://kased-karim-default-rtdb.firebaseio.com").trim();
   const baseUrl = envUrl.trim().replace(/\/$/, "");
   const cleanPath = path ? (path.startsWith("/") ? path : `/${path}`) : "";
   const url = new URL(`${baseUrl}${cleanPath}`);
@@ -277,11 +283,28 @@ export function verifyAdminPassword(inputPassword) {
   return false;
 }
 
+// Extract client IP securely (prevent header spoofing / multi-hop tampering)
+export function getClientIp(req) {
+  if (!req) return "127.0.0.1";
+  const realIp = req.headers["x-real-ip"];
+  if (realIp && typeof realIp === "string" && /^[a-fA-F0-9:.]+$/.test(realIp.trim())) {
+    return realIp.trim();
+  }
+  const xForwardedFor = req.headers["x-forwarded-for"];
+  if (xForwardedFor && typeof xForwardedFor === "string") {
+    const parts = xForwardedFor.split(",").map(p => p.trim()).filter(Boolean);
+    if (parts.length > 0 && /^[a-fA-F0-9:.]+$/.test(parts[0])) {
+      return parts[0];
+    }
+  }
+  return req.socket?.remoteAddress || "127.0.0.1";
+}
+
 // -----------------------------------------------------------------------------
 // TWO-FACTOR AUTHENTICATION (2FA) & EMAIL OTP ENGINE (F-02, F-15, F-18)
 // -----------------------------------------------------------------------------
-// Admin emails read from environment variable with fallback to owner email (F-15)
-export const ADMIN_2FA_EMAILS = (process.env.ADMIN_2FA_EMAILS || process.env.ADMIN_2FA_EMAIL || "kelshafie8743@gmail.com")
+// Admin emails read strictly from environment variable (Zero Hardcoded Personal Emails)
+export const ADMIN_2FA_EMAILS = (process.env.ADMIN_2FA_EMAILS || process.env.ADMIN_2FA_EMAIL || "")
   .split(",")
   .map(e => e.trim().toLowerCase())
   .filter(Boolean);
@@ -296,7 +319,8 @@ export function maskEmail(email) {
   return `${masked}@${domain}`;
 }
 
-// In-Memory Secure OTP Cache per Serverless Instance
+// In-Memory Secure OTP & Challenge Cache per Serverless Instance
+const inMemoryChallenges = new Map();
 const inMemoryOTP = new Map();
 
 // Generate high-entropy 6-digit cryptographic PIN
@@ -312,13 +336,46 @@ function hashOTP(code, salt) {
     .digest("hex");
 }
 
-// Save active OTP to persistent cloud storage & in-memory cache
+// Create Challenge-Bound 2FA OTP (NIST SP 800-63B Compliant)
+export async function create2FAChallenge() {
+  const challengeId = crypto.randomBytes(24).toString("hex");
+  const otpCode = generate6DigitOTP();
+  const salt = crypto.randomBytes(16).toString("hex");
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes TTL
+  const codeHash = hashOTP(otpCode, salt);
+
+  const record = {
+    codeHash,
+    salt,
+    expiresAt,
+    attempts: 0,
+    createdAt: Date.now()
+  };
+
+  inMemoryChallenges.set(challengeId, record);
+  inMemoryOTP.set("active_otp", record);
+
+  try {
+    const firebaseUrl = getFirebaseUrl(`_server_vault/otp_challenges/${challengeId}.json`);
+    await fetch(firebaseUrl, {
+      method: "PUT",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(record)
+    });
+  } catch (e) {
+    console.warn("Server vault challenge persistence note:", e.message);
+  }
+
+  return { challengeId, otpCode };
+}
+
+// Save active OTP to persistent cloud storage & in-memory cache (Backwards-compatibility wrapper)
 export async function save2FAOTP(code) {
   const salt = crypto.randomBytes(16).toString("hex");
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes TTL (F-02)
   const codeHash = hashOTP(code, salt);
 
-  // Note: We DO NOT store admin emails inside the database record (F-15)
   const record = {
     codeHash,
     salt,
@@ -343,6 +400,91 @@ export async function save2FAOTP(code) {
   }
 
   return record;
+}
+
+// Verify Challenge-Bound OTP with strict rate-limit, attempt burning & timing equality
+export async function verify2FAChallenge(challengeId, inputCode) {
+  if (!inputCode || typeof inputCode !== "string") return false;
+  const cleanCode = inputCode.trim().replace(/[^0-9]/g, "");
+  if (cleanCode.length !== 6) return false;
+
+  let record = null;
+  const safeId = sanitizePathId(challengeId);
+
+  if (safeId) {
+    try {
+      const firebaseUrl = getFirebaseUrl(`_server_vault/otp_challenges/${safeId}.json`, { t: Date.now() });
+      const res = await fetch(firebaseUrl, { cache: "no-store" });
+      if (res.ok) {
+        record = await res.json();
+      }
+    } catch (e) {}
+
+    if (!record) {
+      record = inMemoryChallenges.get(safeId);
+    }
+  }
+
+  // Fallback to active_otp if no challengeId provided
+  if (!record) {
+    return verify2FAOTP(cleanCode);
+  }
+
+  if (!record || !record.codeHash || !record.salt || !record.expiresAt) {
+    return false;
+  }
+
+  // Check TTL expiry or attempt limit exceeded
+  if (Date.now() > record.expiresAt || (record.attempts && record.attempts >= 3)) {
+    if (safeId) {
+      inMemoryChallenges.delete(safeId);
+      try {
+        const firebaseUrl = getFirebaseUrl(`_server_vault/otp_challenges/${safeId}.json`);
+        await fetch(firebaseUrl, { method: "DELETE", cache: "no-store" });
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  const inputHash = hashOTP(cleanCode, record.salt);
+  const a = Buffer.from(inputHash);
+  const b = Buffer.from(record.codeHash);
+
+  if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+    // Single-Use Guarantee: Burn challenge immediately upon success
+    if (safeId) {
+      inMemoryChallenges.delete(safeId);
+      try {
+        const firebaseUrl = getFirebaseUrl(`_server_vault/otp_challenges/${safeId}.json`);
+        await fetch(firebaseUrl, { method: "DELETE", cache: "no-store" });
+      } catch (e) {}
+    }
+    await burnOTP();
+    return true;
+  } else {
+    record.attempts = (record.attempts || 0) + 1;
+    if (safeId) inMemoryChallenges.set(safeId, record);
+
+    if (record.attempts >= 3) {
+      if (safeId) {
+        inMemoryChallenges.delete(safeId);
+        try {
+          const firebaseUrl = getFirebaseUrl(`_server_vault/otp_challenges/${safeId}.json`);
+          await fetch(firebaseUrl, { method: "DELETE", cache: "no-store" });
+        } catch (e) {}
+      }
+    } else if (safeId) {
+      try {
+        const firebaseUrl = getFirebaseUrl(`_server_vault/otp_challenges/${safeId}/attempts.json`);
+        await fetch(firebaseUrl, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(record.attempts)
+        });
+      } catch (e) {}
+    }
+    return false;
+  }
 }
 
 // Verify 6-digit OTP code with strict rate-limit, attempt burning & timing equality (F-02, F-18)
@@ -459,9 +601,8 @@ export async function send2FAEmail(otpCode, targetEmails = ADMIN_2FA_EMAILS) {
     </div>
   `;
 
-  // Option A: Resend API
-  const defaultResendKey = Buffer.from("cmVfSlZCYjhvNm5fRXVEZkF5eEtvWHZXYmdTNkdyVG1mTWto", "base64").toString("utf-8");
-  const resendApiKey = process.env.RESEND_API_KEY || defaultResendKey;
+  // Option A: Resend API (Strict Fail-Closed: Zero hardcoded fallback keys)
+  const resendApiKey = process.env.RESEND_API_KEY ? process.env.RESEND_API_KEY.trim() : null;
   if (resendApiKey) {
     try {
       const fromEmail = process.env.RESEND_FROM || "Kased Karim Security <onboarding@resend.dev>";
@@ -647,25 +788,38 @@ export function verifyCustomerRequest(req) {
 // -----------------------------------------------------------------------------
 export async function verifyGoogleIdToken(idToken) {
   if (!idToken || typeof idToken !== "string" || idToken.length < 50) return null;
+  
+  // Strict Fail-Closed: Require configured Google Client ID in server environment
+  const configuredAud = (process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "").trim();
+  if (!configuredAud) {
+    console.error("CRITICAL SECURITY ALERT: GOOGLE_CLIENT_ID is not configured in environment. Blocking OAuth authentication to prevent Confused Deputy exploits.");
+    return null;
+  }
+
   try {
     const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken.trim())}`);
     if (!res.ok) return null;
     const payload = await res.json();
 
-    // Verify token issuer
+    // 1. Verify token issuer strictly
     if (payload.iss !== "accounts.google.com" && payload.iss !== "https://accounts.google.com") {
       return null;
     }
 
-    // Verify expiration
+    // 2. Strict Fail-Closed audience check (aud must match exactly)
+    if (payload.aud !== configuredAud) {
+      console.warn("Security Alert: Google ID Token audience mismatch. Expected:", configuredAud, "Received:", payload.aud);
+      return null;
+    }
+
+    // 3. Verify expiration
     const exp = parseInt(payload.exp, 10) * 1000;
     if (isNaN(exp) || exp < Date.now()) {
       return null;
     }
 
-    // Verify audience matches configured Google Client ID if available
-    const configuredAud = process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (configuredAud && payload.aud && payload.aud !== configuredAud) {
+    // 4. Strict email verification requirement
+    if (payload.email_verified !== "true" && payload.email_verified !== true) {
       return null;
     }
 
@@ -674,7 +828,7 @@ export async function verifyGoogleIdToken(idToken) {
       sub: payload.sub,
       googleId: payload.sub,
       email: payload.email ? payload.email.toLowerCase().trim() : "",
-      emailVerified: payload.email_verified === "true" || payload.email_verified === true,
+      emailVerified: true,
       name: payload.name || payload.given_name || "عميل Google",
       picture: payload.picture || ""
     };

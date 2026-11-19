@@ -7,6 +7,8 @@ import {
   verifyAdminRequest,
   sanitizePathId,
   getFirebaseUrl,
+  getClientIp,
+  checkDistributedRateLimit,
   setSecurityHeaders
 } from "./_auth.js";
 
@@ -88,6 +90,16 @@ export default async function handler(req, res) {
     // 2. POST: SUBMIT NEW PRODUCT REVIEW (Requires Moderation)
     // -------------------------------------------------------------------------
     if (req.method === "POST") {
+      // Distributed Rate Limiting (Anti-Spam / Anti-Flood)
+      const clientIp = getClientIp(req);
+      const rateLimit = await checkDistributedRateLimit(clientIp, "submit_review", 3, 15 * 60 * 1000);
+      if (!rateLimit.allowed) {
+        return res.status(429).json({
+          success: false,
+          error: `تم تجاوز الحد المسموح لإرسال التقييمات. يرجى الانتظار ${rateLimit.remainingSec || "بضع"} ثوانٍ والمحاولة مجدداً.`
+        });
+      }
+
       let body = req.body;
       if (typeof body === "string") {
         try { body = JSON.parse(body); } catch (e) {}
@@ -104,7 +116,8 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: "معرف المنتج غير صحيح" });
       }
 
-      const reviewId = "REV-" + Date.now() + "-" + crypto.randomBytes(2).toString("hex").toUpperCase();
+      // High-Entropy Cryptographic ID (CWE-330 Mitigation)
+      const reviewId = "REV-" + Date.now() + "-" + crypto.randomBytes(8).toString("hex").toUpperCase();
       const newReview = {
         id: reviewId,
         productId,
@@ -182,6 +195,7 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    console.error("API error in /api/reviews:", err.message);
+    return res.status(500).json({ success: false, error: "حدث خطأ غير متوقع في معالجة التقييم." });
   }
 }

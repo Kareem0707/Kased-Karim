@@ -87,6 +87,25 @@ async function fetchProductsFromCloud(req) {
   return { products: [], provider: "none" };
 }
 
+// Whitelist Product Sanitizer to Prevent Mass Assignment (CWE-915)
+function sanitizeProductObject(p) {
+  if (!p || typeof p !== "object") return null;
+  const safeId = sanitizePathId(p.id) || ("kk-" + Date.now().toString().slice(-6));
+  return {
+    id: safeId,
+    name: String(p.name || "").trim().replace(/[<>]/g, "").slice(0, 150),
+    enName: String(p.enName || "").trim().replace(/[<>]/g, "").slice(0, 150),
+    price: Math.max(0, parseFloat(p.price) || 0),
+    originalPrice: p.originalPrice ? Math.max(0, parseFloat(p.originalPrice) || 0) : null,
+    category: String(p.category || "chandeliers").replace(/[^a-zA-Z0-9_\-]/g, "").slice(0, 50),
+    stock: Math.max(0, parseInt(p.stock, 10) || 10),
+    image: String(p.image || "").trim().slice(0, 500),
+    description: String(p.description || "").trim().replace(/[<>]/g, "").slice(0, 1500),
+    featured: Boolean(p.featured),
+    updatedAt: Date.now()
+  };
+}
+
 // 2. Batch Save/Overwrite All Products to Cloud
 async function saveBatchProductsToCloud(req, productList) {
   let saved = false;
@@ -94,10 +113,12 @@ async function saveBatchProductsToCloud(req, productList) {
 
   try {
     const prodMap = {};
-    productList.forEach(p => {
-      const safeId = sanitizePathId(p?.id);
-      if (safeId) {
-        prodMap[safeId] = p;
+    const sanitizedList = [];
+    (Array.isArray(productList) ? productList : []).forEach(p => {
+      const cleanProd = sanitizeProductObject(p);
+      if (cleanProd && cleanProd.id) {
+        prodMap[cleanProd.id] = cleanProd;
+        sanitizedList.push(cleanProd);
       }
     });
 
@@ -279,6 +300,18 @@ export default async function handler(req, res) {
       // CASE A: BATCH CATALOG REPLACEMENT / RESTORE OVERWRITE
       if (Array.isArray(payload) || (payload.products && Array.isArray(payload.products))) {
         const productList = Array.isArray(payload) ? payload : payload.products;
+
+        // Step-Up Authentication / Blast Radius Safety Floor (Assume-Breach Mitigation)
+        if (productList.length === 0) {
+          const confirmHeader = req.headers["x-destructive-confirm"];
+          if (confirmHeader !== "CONFIRM_EMPTY_PRODUCTS_CATALOG") {
+            return res.status(403).json({
+              success: false,
+              error: "عملية تفريغ كتالوج المنتجات بالكامل تتطلب تأكيداً إدارياً إضافياً فائق الأمان (Destructive Action Step-up Required)."
+            });
+          }
+        }
+
         const batchResult = await saveBatchProductsToCloud(req, productList);
         return res.status(200).json({
           success: batchResult.success,
@@ -288,23 +321,18 @@ export default async function handler(req, res) {
         });
       }
 
-      // CASE B: SINGLE PRODUCT SAVE / UPDATE
-      const product = payload;
-      if (!product || !product.name) {
+      // CASE B: SINGLE PRODUCT SAVE / UPDATE (STRICT ALLOWLIST)
+      const safeProduct = sanitizeProductObject(payload);
+      if (!safeProduct || !safeProduct.name) {
         return res.status(400).json({ error: "بيانات المنتج غير مكتملة" });
       }
 
-      const safeId = sanitizePathId(product.id) || ("kk-" + Date.now().toString().slice(-6));
-      product.id = safeId;
-      product.name = String(product.name).trim().replace(/[<>]/g, "").slice(0, 150);
-      if (product.price) product.price = parseFloat(product.price) || 0;
-
-      const saveResult = await saveProductToCloud(req, product);
+      const saveResult = await saveProductToCloud(req, safeProduct);
       return res.status(201).json({
         success: true,
         persistedToCloud: saveResult.success,
         provider: saveResult.provider,
-        product
+        product: safeProduct
       });
     }
 
@@ -329,7 +357,7 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
-    console.error("API Error in /api/products:", err);
-    return res.status(500).json({ error: "Server error", message: err.message });
+    console.error("API Error in /api/products:", err.message);
+    return res.status(500).json({ success: false, error: "حدث خطأ غير متوقع في معالجة منتجات الكتالوج." });
   }
 }

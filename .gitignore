@@ -7,6 +7,27 @@ pids
 *.pid
 *.seed
 
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables & sensitive credentials
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+*.pem
+*.key
+*.crt
+
+# Vercel deployment artifacts
+.vercel
+
+# Security audits and internal reports
+*.pdf
+
 # OS generated files
 .DS_Store
 Thumbs.db

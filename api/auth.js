@@ -7,10 +7,13 @@ import {
   generate6DigitOTP,
   save2FAOTP,
   verify2FAOTP,
+  create2FAChallenge,
+  verify2FAChallenge,
   send2FAEmail,
   checkDistributedRateLimit,
   recordFailedRateLimitAttempt,
   resetDistributedRateLimit,
+  getClientIp,
   ADMIN_2FA_EMAILS,
   maskEmail,
   setSecurityHeaders
@@ -65,9 +68,15 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const clientIp = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown_ip";
+  const clientIp = getClientIp(req);
 
   try {
+    // Payload Size Limit Check (DoS Mitigation - CWE-400)
+    const MAX_AUTH_PAYLOAD = 50 * 1024; // 50 KB
+    const contentLength = parseInt(req.headers["content-length"] || "0", 10);
+    if (contentLength > MAX_AUTH_PAYLOAD) {
+      return res.status(413).json({ authenticated: false, error: "حجم بيانات الطلب يتجاوز الحد المسموح به (50 كيلوبايت)" });
+    }
     // 1. GET: Verify active session token
     if (req.method === "GET") {
       const admin = verifyAdminRequest(req);
@@ -90,7 +99,7 @@ export default async function handler(req, res) {
       body = body || {};
 
       // Handle Admin Logout (Clear Secure HttpOnly Cookie)
-      if (body.action === "logout" || req.query.action === "logout") {
+      if (body.action === "logout" || req.query?.action === "logout") {
         res.setHeader("Set-Cookie", "kk_admin_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure");
         return res.status(200).json({ success: true, message: "تم تسجيل الخروج بنجاح" });
       }
@@ -114,15 +123,16 @@ export default async function handler(req, res) {
       }
 
       // =======================================================================
-      // STEP 2: VERIFY 6-DIGIT EMAIL OTP (MANDATORY MFA)
+      // STEP 2: VERIFY 6-DIGIT EMAIL OTP (MANDATORY MFA WITH CHALLENGE BINDING)
       // =======================================================================
       if (body.action === "verify_otp" || (body.otp && !body.password)) {
         const inputOtp = String(body.otp || "").trim().replace(/[^0-9]/g, "");
+        const challengeId = body.challengeId || body.challenge || "";
         if (!inputOtp || inputOtp.length !== 6) {
           return res.status(400).json({ success: false, error: "يرجى إدخال رمز التحقق السداسي المكون من 6 أرقام" });
         }
 
-        const isOtpValid = await verify2FAOTP(inputOtp);
+        const isOtpValid = await verify2FAChallenge(challengeId, inputOtp);
         if (!isOtpValid) {
           await recordFailedRateLimitAttempt(clientIp, "admin_login", 5, 15 * 60 * 1000);
           recordFailedAttempt(clientIp);
@@ -138,19 +148,18 @@ export default async function handler(req, res) {
         resetAttempts(clientIp);
         const token = createAdminToken({ sub: "executive-admin", ip: clientIp, verified2FA: true }, 2 * 60 * 60 * 1000);
         
-        // Secure HttpOnly Cookie (F-10)
+        // Strict Secure HttpOnly Cookie (Zero Client Token Leakage)
         res.setHeader("Set-Cookie", `kk_admin_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=7200; Secure`);
 
         return res.status(200).json({
           success: true,
-          token,
           user: { role: "admin", name: "Kased Karim Admin" },
           message: "تم التحقق الأمني بنجاح ومصادقة هذا الجهاز كجهاز إدارة معتمد"
         });
       }
 
       // =======================================================================
-      // STEP 1: VERIFY PASSWORD & DISPATCH 6-DIGIT EMAIL OTP
+      // STEP 1: VERIFY PASSWORD & DISPATCH 6-DIGIT EMAIL OTP CHALLENGE
       // =======================================================================
       const password = (body.password || body.pin || body.key || "").trim();
 
@@ -170,13 +179,13 @@ export default async function handler(req, res) {
       }
 
       // MANDATORY 2FA ENFORCEMENT: All password entries require OTP verification (F-13: NO BYPASSES)
-      const otpCode = generate6DigitOTP();
-      await save2FAOTP(otpCode);
+      const { challengeId, otpCode } = await create2FAChallenge();
       const emailResult = await send2FAEmail(otpCode, ADMIN_2FA_EMAILS);
 
       return res.status(200).json({
         success: true,
         step: "otp_required",
+        challengeId,
         message: "تم إرسال كود التحقق الأمني السداسي إلى البريد المعتمد للإدارة الرئيسية.",
         emailDispatched: emailResult.dispatched,
         maskedEmails: ADMIN_2FA_EMAILS.map(maskEmail)
@@ -185,6 +194,7 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
-    return res.status(500).json({ error: "Server error", message: err.message });
+    console.error("API error in /api/auth:", err.message);
+    return res.status(500).json({ success: false, error: "حدث خطأ غير متوقع أثناء معالجة المصادقة." });
   }
 }

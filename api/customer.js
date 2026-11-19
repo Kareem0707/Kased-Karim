@@ -13,6 +13,10 @@ import {
   sanitizeCustomer,
   sanitizePathId,
   getFirebaseUrl,
+  checkDistributedRateLimit,
+  recordFailedRateLimitAttempt,
+  resetDistributedRateLimit,
+  getClientIp,
   setSecurityHeaders
 } from "./_auth.js";
 
@@ -65,11 +69,35 @@ export default async function handler(req, res) {
     action = body.action;
   }
 
+  const clientIp = getClientIp(req);
+
   try {
+    // Payload Size Limit Check (DoS Mitigation - CWE-400)
+    const MAX_CUSTOMER_PAYLOAD = 100 * 1024; // 100 KB
+    const contentLength = parseInt(req.headers["content-length"] || "0", 10);
+    if (contentLength > MAX_CUSTOMER_PAYLOAD) {
+      return res.status(413).json({ success: false, error: "حجم بيانات الطلب يتجاوز الحد المسموح به (100 كيلوبايت)" });
+    }
+    // -------------------------------------------------------------------------
+    // 0. CUSTOMER LOGOUT (CLEAR SECURE HTTPONLY COOKIE)
+    // -------------------------------------------------------------------------
+    if (req.method === "POST" && action === "logout") {
+      res.setHeader("Set-Cookie", "kk_customer_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure");
+      return res.status(200).json({ success: true, message: "تم تسجيل خروج العميل بنجاح" });
+    }
+
     // -------------------------------------------------------------------------
     // 1. REGISTER NEW CUSTOMER ACCOUNT
     // -------------------------------------------------------------------------
     if (req.method === "POST" && action === "register") {
+      const regLimit = await checkDistributedRateLimit(clientIp, "customer_register", 5, 15 * 60 * 1000);
+      if (!regLimit.allowed) {
+        return res.status(429).json({
+          success: false,
+          error: `تم تجاوز الحد الأقصى لمحاولات التسجيل. يرجى الانتظار ${regLimit.remainingSec} ثانية.`
+        });
+      }
+
       const name = (body.name || "").trim().replace(/[<>]/g, "").slice(0, 80);
       const phone = (body.phone || "").replace(/[^0-9]/g, "");
       const email = (body.email || "").trim().toLowerCase().replace(/[<>]/g, "").slice(0, 100);
@@ -81,8 +109,8 @@ export default async function handler(req, res) {
       if (!phone || phone.length < 11 || !phone.startsWith("01")) {
         return res.status(400).json({ success: false, error: "يرجى إدخال رقم هاتف مصري صحيح يبدأ بـ 01 (11 رقماً)" });
       }
-      if (!password || password.length < 6) {
-        return res.status(400).json({ success: false, error: "كلمة المرور يجب ألا تقل عن 6 أحرف أو أرقام" });
+      if (!password || password.length < 10) {
+        return res.status(400).json({ success: false, error: "كلمة المرور يجب ألا تقل عن 10 أحرف أو أرقام لضمان أمان حسابك" });
       }
 
       const allCustomers = await fetchCustomers();
@@ -117,13 +145,12 @@ export default async function handler(req, res) {
         email: newCustomer.email
       });
 
-      // Secure HttpOnly Cookie for customer session (F-10)
+      // Secure HttpOnly Cookie for customer session (Zero Client-Side Token Storage)
       res.setHeader("Set-Cookie", `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
 
       return res.status(201).json({
         success: true,
         message: "تم إنشاء حساب العميل بنجاح",
-        token,
         customer: sanitizeCustomer(newCustomer)
       });
     }
@@ -132,6 +159,11 @@ export default async function handler(req, res) {
     // 1.5 AUTHENTIC GOOGLE OAUTH SIGN-IN WITH SERVER-SIDE TOKEN VERIFICATION (F-03)
     // -------------------------------------------------------------------------
     if (req.method === "POST" && (action === "google" || action === "google-login")) {
+      const gLimit = await checkDistributedRateLimit(clientIp, "customer_google", 10, 15 * 60 * 1000);
+      if (!gLimit.allowed) {
+        return res.status(429).json({ success: false, error: "تم تجاوز عدد محاولات الدخول عبر Google. يرجى المحاولة لاحقاً." });
+      }
+
       const rawCredential = body.credential || body.idToken || body.token;
       if (!rawCredential) {
         return res.status(400).json({
@@ -145,7 +177,7 @@ export default async function handler(req, res) {
       if (!verifiedProfile || !verifiedProfile.email || !verifiedProfile.sub) {
         return res.status(401).json({
           success: false,
-          error: "فشل التحقق الأمني من صحة رمز Google. الرمز مزيف أو منتهي الصلاحية."
+          error: "فشل التحقق الأمني من صحة رمز Google. الرمز مزيف أو منتهي الصلاحية أو غير مخصص لهذا الموقع."
         });
       }
 
@@ -189,20 +221,28 @@ export default async function handler(req, res) {
         email: customer.email
       });
 
+      // Strict Secure HttpOnly Cookie (Zero Client Token Leakage)
       res.setHeader("Set-Cookie", `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
 
       return res.status(200).json({
         success: true,
         message: "تم تسجيل الدخول بواسطة Google بنجاح وتوثيق الهوية رسمياً",
-        token,
         customer: sanitizeCustomer(customer)
       });
     }
 
     // -------------------------------------------------------------------------
-    // 2. SIGN IN / LOGIN CUSTOMER
+    // 2. SIGN IN / LOGIN CUSTOMER (WITH DISTRIBUTED BRUTE-FORCE RATE LIMITING)
     // -------------------------------------------------------------------------
     if (req.method === "POST" && action === "login") {
+      const loginLimit = await checkDistributedRateLimit(clientIp, "customer_login", 5, 15 * 60 * 1000);
+      if (!loginLimit.allowed) {
+        return res.status(429).json({
+          success: false,
+          error: `تم تجاوز الحد الأقصى للمحاولات الخاطئة. يرجى الانتظار ${loginLimit.remainingSec} ثانية قبل إعادة المحاولة.`
+        });
+      }
+
       const identifier = (body.identifier || body.phone || body.email || "").trim().toLowerCase();
       const password = (body.password || "").trim();
 
@@ -219,13 +259,20 @@ export default async function handler(req, res) {
       );
 
       if (!customer || !customer.passwordHash || !customer.passwordSalt) {
+        await recordFailedRateLimitAttempt(clientIp, "customer_login", 5, 15 * 60 * 1000);
+        await new Promise(r => setTimeout(r, 600)); // Constant delay against timing analysis
         return res.status(401).json({ success: false, error: "بيانات الدخول غير صحيحة" });
       }
 
       const isMatch = verifyCustomerPassword(password, customer.passwordHash, customer.passwordSalt);
       if (!isMatch) {
+        await recordFailedRateLimitAttempt(clientIp, "customer_login", 5, 15 * 60 * 1000);
+        await new Promise(r => setTimeout(r, 600));
         return res.status(401).json({ success: false, error: "بيانات الدخول غير صحيحة" });
       }
+
+      // Reset login rate limit upon successful authentication
+      await resetDistributedRateLimit(clientIp, "customer_login");
 
       const token = createCustomerToken({
         sub: customer.id,
@@ -234,12 +281,12 @@ export default async function handler(req, res) {
         email: customer.email
       });
 
+      // Strict Secure HttpOnly Cookie (Zero Client Token Leakage)
       res.setHeader("Set-Cookie", `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
 
       return res.status(200).json({
         success: true,
         message: "تم تسجيل الدخول بنجاح",
-        token,
         customer: sanitizeCustomer(customer)
       });
     }
@@ -299,9 +346,9 @@ export default async function handler(req, res) {
         const ordEmail = (o.customer?.email || o.email || "").trim().toLowerCase();
         if (customerEmail && ordEmail && ordEmail === customerEmail) return true;
 
-        // Match by verified phone number
+        // Match by verified 11-digit phone number (Strict Exact Match - Zero Suffix Spoofing)
         const ordPhone = (o.customer?.phone || "").replace(/[^0-9]/g, "");
-        if (customerPhone && ordPhone && (ordPhone === customerPhone || ordPhone.endsWith(customerPhone) || customerPhone.endsWith(ordPhone))) {
+        if (customerPhone && ordPhone && customerPhone.length === 11 && ordPhone.length === 11 && ordPhone === customerPhone) {
           return true;
         }
         return false;
@@ -400,6 +447,7 @@ export default async function handler(req, res) {
 
     return res.status(400).json({ success: false, error: "إجراء غير معروف" });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    console.error("API error in /api/customer:", err.message);
+    return res.status(500).json({ success: false, error: "حدث خطأ غير متوقع في معالجة حساب العميل." });
   }
 }

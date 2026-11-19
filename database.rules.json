@@ -1,6 +1,74 @@
 {
   "rules": {
     ".read": false,
-    ".write": false
+    ".write": false,
+
+    "orders": {
+      "$orderId": {
+        ".validate": "newData.hasChildren(['id', 'customer', 'items', 'total', 'timestamp'])",
+        "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "total": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "timestamp": { ".validate": "newData.isNumber()" },
+        "paymentMethod": { ".validate": "newData.isString() && (newData.val() == 'cod' || newData.val() == 'card' || newData.val() == 'instapay')" },
+        "customer": {
+          ".validate": "newData.hasChildren(['name', 'phone', 'address'])",
+          "name": { ".validate": "newData.isString() && newData.val().length <= 100" },
+          "phone": { ".validate": "newData.isString() && newData.val().length <= 20" }
+        }
+      }
+    },
+
+    "products": {
+      "$productId": {
+        ".validate": "newData.hasChildren(['id', 'name', 'price'])",
+        "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "name": { ".validate": "newData.isString() && newData.val().length <= 150" },
+        "price": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "category": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 50)" },
+        "stock": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)" }
+      }
+    },
+
+    "customers": {
+      "$customerId": {
+        ".validate": "newData.hasChildren(['id', 'name', 'createdAt'])",
+        "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "name": { ".validate": "newData.isString() && newData.val().length <= 100" },
+        "phone": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 20)" },
+        "email": { ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 100)" }
+      }
+    },
+
+    "reviews": {
+      "$reviewId": {
+        ".validate": "newData.hasChildren(['id', 'productId', 'author', 'rating', 'status', 'timestamp'])",
+        "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "productId": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "rating": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 5" },
+        "status": { ".validate": "newData.isString() && (newData.val() == 'pending' || newData.val() == 'approved' || newData.val() == 'rejected')" }
+      }
+    },
+
+    "settings": {
+      ".validate": "newData.exists()"
+    },
+
+    "categories": {
+      ".validate": "newData.exists()"
+    },
+
+    "sync_meta": {
+      ".validate": "newData.hasChildren(['version', 'timestamp'])"
+    },
+
+    "security_limits": {
+      ".read": false,
+      ".write": false
+    },
+
+    "_server_vault": {
+      ".read": false,
+      ".write": false
+    }
   }
 }

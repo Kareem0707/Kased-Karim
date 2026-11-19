@@ -5,6 +5,9 @@
 import crypto from "crypto";
 import {
   verifyAdminRequest,
+  verifyCustomerRequest,
+  getClientIp,
+  checkDistributedRateLimit,
   sanitizePathId,
   getFirebaseUrl,
   setSecurityHeaders
@@ -163,15 +166,64 @@ async function saveOrderToCloud(req, order) {
   return { success: false, provider: "none" };
 }
 
+// Strict Allowlist Sanitizer for Batch Orders (CWE-915 Mass Assignment Mitigation)
+function sanitizeOrderObject(o) {
+  if (!o || typeof o !== "object") return null;
+  const safeId = sanitizePathId(o.id);
+  if (!safeId) return null;
+  return {
+    id: safeId,
+    orderNumber: typeof o.orderNumber === "string" ? o.orderNumber.slice(0, 32) : safeId,
+    timestamp: typeof o.timestamp === "number" ? o.timestamp : Date.now(),
+    dateFormatted: typeof o.dateFormatted === "string" ? o.dateFormatted.slice(0, 50) : "",
+    timeFormatted: typeof o.timeFormatted === "string" ? o.timeFormatted.slice(0, 50) : "",
+    status: typeof o.status === "string" ? o.status.slice(0, 30) : "received",
+    statusHistory: Array.isArray(o.statusHistory) ? o.statusHistory.slice(0, 20).map(sh => ({
+      status: String(sh?.status || "").slice(0, 30),
+      timestamp: typeof sh?.timestamp === "number" ? sh.timestamp : Date.now(),
+      note: String(sh?.note || "").slice(0, 200)
+    })) : [],
+    isRead: Boolean(o.isRead),
+    customerId: sanitizePathId(o.customerId) || null,
+    email: typeof o.email === "string" ? o.email.trim().toLowerCase().slice(0, 100) : null,
+    customer: o.customer && typeof o.customer === "object" ? {
+      name: String(o.customer.name || "").replace(/[<>]/g, "").slice(0, 80),
+      phone: String(o.customer.phone || "").replace(/[^0-9]/g, "").slice(0, 20),
+      city: String(o.customer.city || "").replace(/[<>]/g, "").slice(0, 50),
+      deliveryArea: String(o.customer.deliveryArea || "").slice(0, 50),
+      deliveryAreaName: String(o.customer.deliveryAreaName || "").slice(0, 50),
+      deliveryAreaNameEn: String(o.customer.deliveryAreaNameEn || "").slice(0, 50),
+      address: String(o.customer.address || "").replace(/[<>]/g, "").slice(0, 200),
+      notes: String(o.customer.notes || "").replace(/[<>]/g, "").slice(0, 500)
+    } : {},
+    items: Array.isArray(o.items) ? o.items.slice(0, 50).map(it => ({
+      id: sanitizePathId(it.id) || "item",
+      name: String(it.name || "").replace(/[<>]/g, "").slice(0, 100),
+      price: Math.max(0, parseFloat(it.price) || 0),
+      qty: Math.min(100, Math.max(1, parseInt(it.qty, 10) || 1)),
+      image: String(it.image || "").slice(0, 500),
+      total: Math.max(0, parseFloat(it.total) || 0)
+    })) : [],
+    subtotal: Math.max(0, parseFloat(o.subtotal) || 0),
+    shipping: Math.max(0, parseFloat(o.shipping) || 0),
+    total: Math.max(0, parseFloat(o.total) || 0),
+    paymentMethod: String(o.paymentMethod || "cod").slice(0, 20),
+    paymentStatus: String(o.paymentStatus || "uncollected").slice(0, 30),
+    paymentStatusText: String(o.paymentStatusText || "").slice(0, 100),
+    paymentStatusTextEn: String(o.paymentStatusTextEn || "").slice(0, 100),
+    deliveryEstimate: String(o.deliveryEstimate || "").slice(0, 50)
+  };
+}
+
 // 2.5 Batch Overwrite All Orders in Cloud (For Restore / Full Sync)
 async function saveBatchOrdersToCloud(req, ordersList) {
   let saved = false;
+  const sanitizedList = (Array.isArray(ordersList) ? ordersList : []).map(sanitizeOrderObject).filter(Boolean);
 
   try {
     const ordersMap = {};
-    ordersList.forEach(o => {
-      const safeId = sanitizePathId(o?.id);
-      if (safeId) ordersMap[safeId] = o;
+    sanitizedList.forEach(o => {
+      ordersMap[o.id] = o;
     });
 
     const firebaseUrl = getFirebaseUrl("orders.json");
@@ -200,7 +252,7 @@ async function saveBatchOrdersToCloud(req, ordersList) {
           "Authorization": `Bearer ${kvToken}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(ordersList)
+        body: JSON.stringify(sanitizedList)
       });
       saved = true;
     } catch (err) {}
@@ -274,6 +326,13 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Payload Size Limit Check (DoS Mitigation - CWE-400)
+    const MAX_ORDERS_PAYLOAD = 512 * 1024; // 512 KB
+    const contentLength = parseInt(req.headers["content-length"] || "0", 10);
+    if (contentLength > MAX_ORDERS_PAYLOAD) {
+      return res.status(413).json({ success: false, error: "حجم بيانات الطلب يتجاوز الحد الأقصى المسموح به (512 كيلوبايت)" });
+    }
+
     // -------------------------------------------------------------------------
     // 1. GET: Fetch Orders (ADMIN-ONLY ACCESS REQUIREMENT) (F-04)
     // -------------------------------------------------------------------------
@@ -315,6 +374,16 @@ export default async function handler(req, res) {
     // 2. POST: Create a new order (Public Customer Order Submission)
     // -------------------------------------------------------------------------
     if (req.method === "POST") {
+      // 0. Distributed Rate Limiter per Client IP (CWE-770 Anti-Flooding)
+      const clientIp = getClientIp(req);
+      const rateLimit = await checkDistributedRateLimit(clientIp, "create_order", 5, 15 * 60 * 1000);
+      if (!rateLimit.allowed) {
+        return res.status(429).json({
+          success: false,
+          error: `تم تجاوز الحد المسموح لإنشاء الطلبات. يرجى الانتظار ${rateLimit.remainingSec || "بضع"} ثوانٍ والمحاولة مجدداً.`
+        });
+      }
+
       let order = req.body;
       if (typeof order === "string") {
         try { order = JSON.parse(order); } catch (e) {}
@@ -370,31 +439,72 @@ export default async function handler(req, res) {
       }
 
       // 4. Strict Server-Side Validation: Items
-      if (!Array.isArray(order.items) || order.items.length === 0) {
-        return res.status(400).json({ success: false, error: "سلة المشتريات فارغة" });
+      if (!Array.isArray(order.items) || order.items.length === 0 || order.items.length > 50) {
+        return res.status(400).json({ success: false, error: "سلة المشتريات غير صالحة، يجب أن تحتوي بين 1 و 50 منتجاً" });
       }
 
-      // 5. Price Tampering Prevention: Recalculate totals server-side against live catalog (F-06)
+      // 5. Price Tampering Prevention: Recalculate totals server-side against live catalog (F-06 / CWE-840)
       const catalog = await getCanonicalCatalog();
+      if (!catalog || !Array.isArray(catalog) || catalog.length === 0) {
+        return res.status(503).json({
+          success: false,
+          error: "تعذر التحقق من قائمة الأسعار المعتمدة حالياً. يرجى إعادة المحاولة لاحقاً."
+        });
+      }
       const catalogMap = new Map();
-      catalog.forEach(p => catalogMap.set(p.id, p));
+      catalog.forEach(p => {
+        if (p && p.id) {
+          catalogMap.set(String(p.id), p);
+        }
+      });
 
       let calculatedSubtotal = 0;
       const sanitizedItems = [];
 
       for (const item of order.items) {
-        const canonicalProduct = catalogMap.get(item.id);
-        const unitPrice = canonicalProduct ? parseFloat(canonicalProduct.price) : parseFloat(item.price || 0);
+        if (!item || !item.id) {
+          return res.status(400).json({ success: false, error: "بيانات أحد المنتجات في السلة غير صالحة." });
+        }
+        const cleanItemId = String(item.id).trim();
+        const canonicalProduct = catalogMap.get(cleanItemId);
+
+        // Strict Fail-Closed: Reject any product not found in canonical catalog or with invalid price
+        if (!canonicalProduct || canonicalProduct.price === undefined || canonicalProduct.price === null) {
+          return res.status(400).json({
+            success: false,
+            error: "المنتج المختار غير متوفر في كتالوج المعرض المعتمد، ولا يمكن إتمام الطلب بأسعار غير موثقة."
+          });
+        }
+
+        // Server-Side Stock Exhaustion Guard (Deep Race Condition Mitigation)
+        if (canonicalProduct.stock !== undefined && canonicalProduct.stock !== null) {
+          const availableStock = parseInt(canonicalProduct.stock, 10);
+          if (!isNaN(availableStock) && availableStock <= 0) {
+            return res.status(400).json({
+              success: false,
+              error: `عفواً، نفدت الكمية المتاحة من المنتج: "${canonicalProduct.name || cleanItemId}". لا يمكن إتمام الطلب.`
+            });
+          }
+        }
+
+        const unitPrice = parseFloat(canonicalProduct.price);
+        if (isNaN(unitPrice) || unitPrice < 0) {
+          return res.status(400).json({
+            success: false,
+            error: "سعر المنتج في الكتالوج غير صالح."
+          });
+        }
+
         const qty = Math.min(100, Math.max(1, parseInt(item.qty, 10) || 1));
         const itemTotal = unitPrice * qty;
         calculatedSubtotal += itemTotal;
 
         sanitizedItems.push({
           id: sanitizePathId(item.id) || "item",
-          name: canonicalProduct ? canonicalProduct.name : (item.name || "").replace(/[<>]/g, "").slice(0, 100),
+          name: canonicalProduct.name ? String(canonicalProduct.name).slice(0, 100) : "وحدة إضاءة فاخرة",
           price: unitPrice,
           qty: qty,
-          image: canonicalProduct ? canonicalProduct.image : (item.image || ""),
+          image: canonicalProduct.image ? String(canonicalProduct.image).slice(0, 500) : "",
           total: itemTotal
         });
       }
@@ -429,8 +539,21 @@ export default async function handler(req, res) {
         minute: "2-digit"
       });
 
-      const customerEmail = (order.customer?.email || order.email || order.customerEmail || "").trim().toLowerCase().slice(0, 100);
-      const customerId = sanitizePathId(order.customerId || (order.customer && order.customer.id)) || null;
+      // 7. Verified Customer Account Binding (BOLA / IDOR Prevention - CWE-639)
+      const customerAuth = verifyCustomerRequest(req);
+      let verifiedCustomerId = null;
+      let verifiedCustomerEmail = null;
+
+      if (customerAuth && customerAuth.sub) {
+        verifiedCustomerId = sanitizePathId(customerAuth.sub);
+        verifiedCustomerEmail = customerAuth.email ? String(customerAuth.email).trim().toLowerCase().slice(0, 100) : null;
+      } else {
+        // Guest submission: Strictly ignore any client-provided customerId to prevent account spoofing
+        verifiedCustomerId = null;
+        if (order.customer?.email || order.email) {
+          verifiedCustomerEmail = String(order.customer?.email || order.email).trim().toLowerCase().slice(0, 100);
+        }
+      }
 
       const finalizedOrder = {
         id: highEntropyId,
@@ -443,11 +566,11 @@ export default async function handler(req, res) {
           { status: "received", timestamp: now, note: "تم استلام الطلب وحجزه سحابياً" }
         ],
         isRead: false,
-        customerId: customerId,
-        email: customerEmail || null,
+        customerId: verifiedCustomerId,
+        email: verifiedCustomerEmail,
         customer: {
-          id: customerId,
-          email: customerEmail || null,
+          id: verifiedCustomerId,
+          email: verifiedCustomerEmail,
           name: name,
           phone: phone,
           city: selectedArea ? selectedArea.nameAr : (order.customer.city || "الشيخ زايد"),
@@ -477,6 +600,13 @@ export default async function handler(req, res) {
         });
       }
 
+      // Auto-prune memory cache to prevent long-term serverless memory leaks (CWE-400)
+      if (recentOrdersSubmissionCache.size > 150) {
+        const pruneNow = Date.now();
+        for (const [k, v] of recentOrdersSubmissionCache.entries()) {
+          if (pruneNow - v.time > 30000) recentOrdersSubmissionCache.delete(k);
+        }
+      }
       recentOrdersSubmissionCache.set(duplicateKey, { time: now, order: finalizedOrder });
 
       return res.status(201).json({
@@ -503,6 +633,17 @@ export default async function handler(req, res) {
       const ordersList = Array.isArray(payload) ? payload : (payload && payload.orders ? payload.orders : null);
       if (!ordersList || !Array.isArray(ordersList)) {
         return res.status(400).json({ error: "بيانات الطلبات غير صالحة" });
+      }
+
+      // Step-Up Authentication / Blast Radius Safety Floor (Assume-Breach Mitigation)
+      if (ordersList.length === 0) {
+        const confirmHeader = req.headers["x-destructive-confirm"];
+        if (confirmHeader !== "CONFIRM_EMPTY_ORDERS_DATABASE") {
+          return res.status(403).json({
+            success: false,
+            error: "عملية تفريغ كافة سجلات الطلبات تتطلب تأكيداً إدارياً إضافياً فائق الأمان (Destructive Action Step-up Required)."
+          });
+        }
       }
 
       const ok = await saveBatchOrdersToCloud(req, ordersList);
@@ -584,7 +725,7 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
-    console.error("API error in /api/orders:", err);
-    return res.status(500).json({ error: "Server error", message: err.message });
+    console.error("API error in /api/orders:", err.message);
+    return res.status(500).json({ success: false, error: "حدث خطأ غير متوقع في معالجة الطلب." });
   }
 }

@@ -23,12 +23,19 @@
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
 
-  const showToast = window.showToast || function (message) {
+  const showToast = window.showToast || function (message, type = "info") {
     const container = document.getElementById("toastContainer");
     if (!container) return;
     const toast = document.createElement("div");
     toast.className = "toast";
-    toast.innerHTML = `<i class="fas fa-info-circle toast-icon"></i><span>${window.escapeHtml(message)}</span>`;
+    const icon = document.createElement("i");
+    const isError = type === "error" || (typeof message === "string" && (message.includes("خطأ") || message.includes("تعذر") || message.includes("❌")));
+    icon.className = isError ? "fas fa-circle-exclamation toast-icon" : "fas fa-info-circle toast-icon";
+    if (isError) icon.style.color = "#EF4444";
+    const span = document.createElement("span");
+    span.textContent = String(message || "");
+    toast.appendChild(icon);
+    toast.appendChild(span);
     container.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add("show"));
     setTimeout(() => {

@@ -7,6 +7,7 @@ import {
   verifyCustomerRequest,
   sanitizePathId,
   getFirebaseUrl,
+  getClientIp,
   setSecurityHeaders
 } from "./_auth.js";
 
@@ -78,7 +79,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const clientIp = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown_ip";
+  const clientIp = getClientIp(req);
   if (!checkRateLimit(clientIp)) {
     return res.status(429).json({
       success: false,
@@ -167,26 +168,26 @@ export default async function handler(req, res) {
 
       if ((authEmail && orderEmail && authEmail === orderEmail) ||
           (authSub && orderCustId && authSub === orderCustId) ||
-          (authPhone && orderPhone && (orderPhone.endsWith(authPhone) || authPhone.endsWith(orderPhone)))) {
+          (authPhone && orderPhone && authPhone.length === 11 && orderPhone.length === 11 && authPhone === orderPhone)) {
         isAuthenticatedOwner = true;
       }
     }
 
-    // Two-factor verification: If not authenticated owner, require matching phone verification (F-08)
+    // Two-factor verification: If not authenticated owner, require matching full phone verification (F-08)
     const storedPhone = (targetOrder.customer?.phone || "").replace(/[^0-9]/g, "");
     if (!isAuthenticatedOwner && storedPhone && storedPhone.length >= 10) {
-      if (!cleanPhone || cleanPhone.length < 4) {
+      if (!cleanPhone || cleanPhone.length !== 11 || (!cleanPhone.startsWith("01") && !cleanPhone.startsWith("201"))) {
         return res.status(400).json({
           success: false,
           requirePhoneVerification: true,
-          error: "لأمان وخصوصية بياناتك، يرجى إدخال رقم الهاتف المسجل لتأكيد تتبع الطلب."
+          error: "لأمان وخصوصية بياناتك، يرجى إدخال رقم الهاتف المصري المكون من 11 رقماً والمسجل في الطلب."
         });
       }
 
-      // Check if phone matches (exact match or last 8 digits)
-      const phoneMatches = storedPhone.endsWith(cleanPhone) || cleanPhone.endsWith(storedPhone);
+      // Check if phone matches (strict exact equality - zero suffix matching)
+      const phoneMatches = storedPhone === cleanPhone;
       if (!phoneMatches) {
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 600));
         return res.status(403).json({
           success: false,
           error: "رقم الهاتف غير مطابق لبيانات صاحب هذا الطلب. يرجى التأكد من الرقم المسجل."
@@ -250,6 +251,7 @@ export default async function handler(req, res) {
       }
     });
   } catch (err) {
-    return res.status(500).json({ success: false, error: "حدث خطأ أثناء معالجة الطلب", message: err.message });
+    console.error("API error in /api/track:", err.message);
+    return res.status(500).json({ success: false, error: "حدث خطأ غير متوقع أثناء معالجة طلب التتبع." });
   }
 }

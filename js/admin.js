@@ -10,18 +10,25 @@ window.formatPrice = window.formatPrice || function(num) {
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
 
-window.showToast = window.showToast || function(message) {
+window.showToast = window.showToast || function(message, type = "info") {
   const container = document.getElementById("toastContainer");
   if (!container) return;
 
   const toast = document.createElement("div");
   toast.className = "toast";
-  toast.innerHTML = `
-    <i class="fas fa-check-circle toast-icon"></i>
-    <span>${message}</span>
-  `;
 
+  const icon = document.createElement("i");
+  const isError = type === "error" || (typeof message === "string" && (message.includes("خطأ") || message.includes("تعذر") || message.includes("❌")));
+  icon.className = isError ? "fas fa-circle-exclamation toast-icon" : "fas fa-check-circle toast-icon";
+  if (isError) icon.style.color = "#EF4444";
+
+  const span = document.createElement("span");
+  span.textContent = String(message || ""); // Strictly Safe Plain Text (Zero XSS)
+
+  toast.appendChild(icon);
+  toast.appendChild(span);
   container.appendChild(toast);
+
   requestAnimationFrame(() => {
     toast.classList.add("show");
   });
@@ -47,40 +54,38 @@ window.escapeHtml = window.escapeHtml || function(str) {
 // 0. SERVER-SIDE ADMIN SECURITY GATE & SESSION VAULT
 // ----------------------------------------------------------------------------
 const ADMIN_TOKEN_KEY = "kk_admin_token";
+let activeAdminChallengeId = "";
 
 async function checkAdminSecurityGate() {
   const gateEl = document.getElementById("adminAuthGate");
   const rootEl = document.getElementById("adminPageRoot");
   if (!gateEl || !rootEl) return;
 
+  // Clean any legacy tokens stored insecurely in localStorage / sessionStorage
+  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem("kk_admin_authorized");
+  localStorage.removeItem("kk_admin_device_linked");
+
   // Check URL params for force lock or relock (e.g. ?lock=1 or ?logout=1)
   const urlParams = new URLSearchParams(window.location.search);
   const isForceRelock = urlParams.has("logout") || urlParams.has("lock") || urlParams.has("relock");
   if (isForceRelock) {
     try {
-      fetch("/api/auth", {
+      await fetch("/api/auth", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "logout" })
       });
     } catch(e) {}
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-    localStorage.removeItem(ADMIN_TOKEN_KEY);
-    localStorage.removeItem("kk_admin_authorized");
-    localStorage.removeItem("kk_admin_device_linked");
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
-  let token = sessionStorage.getItem(ADMIN_TOKEN_KEY) || localStorage.getItem(ADMIN_TOKEN_KEY) || "";
-
-  // Verify session with server-side authentication endpoint (supports both HttpOnly Cookie & Bearer Header)
+  // Verify session with server-side authentication endpoint via HttpOnly Secure Cookie
   try {
-    const headers = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
     const res = await fetch("/api/auth", {
-      credentials: "same-origin",
-      headers
+      credentials: "same-origin"
     });
     const data = await res.json();
 
@@ -102,8 +107,6 @@ async function checkAdminSecurityGate() {
   } catch (err) {}
 
   // Not authenticated: show gate
-  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-  localStorage.removeItem(ADMIN_TOKEN_KEY);
   document.body.classList.remove("is-admin-user", "is-admin-authenticated");
   gateEl.style.display = "flex";
   rootEl.style.display = "none";
@@ -154,6 +157,7 @@ async function handleAdminPinSubmit(e) {
 
       // Case A: 2FA OTP Step Required (Owner requested 6-digit email security)
       if (data.step === "otp_required") {
+        activeAdminChallengeId = data.challengeId || "";
         const step1 = document.getElementById("adminAuthStep1");
         const step2 = document.getElementById("adminAuthStep2");
         if (step1) step1.style.display = "none";
@@ -220,16 +224,18 @@ async function handleAdminOtpSubmit(e) {
   try {
     const res = await fetch("/api/auth", {
       method: "POST",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "verify_otp", otp: code })
+      body: JSON.stringify({ action: "verify_otp", otp: code, challengeId: activeAdminChallengeId })
     });
 
     const data = await res.json();
 
-    if (res.ok && data.success && data.token) {
+    if (res.ok && data.success) {
       if (errorEl) errorEl.style.display = "none";
       if (otpTimerInterval) clearInterval(otpTimerInterval);
-      completeAdminAuthSuccess(data.token);
+      activeAdminChallengeId = "";
+      completeAdminAuthSuccess();
     } else {
       if (errorEl) {
         if (errorTextEl) errorTextEl.textContent = data.error || "رمز التحقق غير صحيح أو انتهت صلاحيته";
@@ -255,11 +261,12 @@ async function handleAdminOtpSubmit(e) {
   }
 }
 
-function completeAdminAuthSuccess(token) {
-  sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
-  localStorage.setItem(ADMIN_TOKEN_KEY, token);
-  localStorage.setItem("kk_admin_authorized", "true");
-  localStorage.setItem("kk_admin_device_linked", "true");
+function completeAdminAuthSuccess() {
+  // Purge any tokens from client storage to prevent XSS exfiltration
+  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem("kk_admin_authorized");
+  localStorage.removeItem("kk_admin_device_linked");
 
   const gateEl = document.getElementById("adminAuthGate");
   const rootEl = document.getElementById("adminPageRoot");
@@ -567,12 +574,12 @@ function showAdminLiveOrderAlert(order) {
     <div class="admin-live-banner-inner">
       <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
         <span class="live-banner-pulse"></span>
-        <strong style="color: #FFFFFF; font-size: 0.95rem;">🚨 تنبيه فوري: تم استلام طلب جديد برقم #${order.id}</strong>
-        <span style="color: #FDE68A; font-size: 0.88rem;">العميل: ${order.customer?.name || 'عميل'} • الإجمالي: ${formatPrice(order.total)} ج.م</span>
+        <strong style="color: #FFFFFF; font-size: 0.95rem;">🚨 تنبيه فوري: تم استلام طلب جديد برقم #${escapeHtml(order.id)}</strong>
+        <span style="color: #FDE68A; font-size: 0.88rem;">العميل: ${escapeHtml(order.customer?.name || 'عميل')} • الإجمالي: ${formatPrice(order.total)} ج.م</span>
       </div>
       <div style="display: flex; align-items: center; gap: 0.6rem;">
         <a href="admin.html" class="btn-primary" style="padding: 0.35rem 0.85rem; font-size: 0.78rem; text-decoration: none; background: #F59E0B; color: #0F172A; font-weight: 700;">عرض في لوحة التحكم</a>
-        <button type="button" class="banner-close-btn" onclick="dismissAdminLiveOrderAlert('${order.id}')">×</button>
+        <button type="button" class="banner-close-btn" data-action="dismiss-live-alert" data-order-id="${escapeHtml(order.id)}">×</button>
       </div>
     </div>
   `;
@@ -943,11 +950,11 @@ function renderAdminOrders(statusFilter = null) {
           </div>
 
           <div class="order-action-buttons">
-            <button class="btn-whatsapp-customer" onclick="contactCustomerViaWhatsApp('${order.id}')">
+            <button type="button" class="btn-whatsapp-customer" data-action="contact-whatsapp" data-order-id="${escapeHtml(order.id)}">
               <i class="fab fa-whatsapp"></i>
               <span>مراسلة العميل بالطلب عبر واتساب</span>
             </button>
-            <button class="btn-secondary" style="padding: 0.5rem 0.85rem; font-size: 0.8rem; color: #EF4444;" onclick="deleteOrder('${order.id}')">
+            <button type="button" class="btn-secondary" style="padding: 0.5rem 0.85rem; font-size: 0.8rem; color: #EF4444;" data-action="delete-order" data-order-id="${escapeHtml(order.id)}">
               <i class="fas fa-trash-alt"></i>
               <span>حذف</span>
             </button>
@@ -986,7 +993,7 @@ function deleteOrder(orderId) {
   }
 }
 
-// Global Delegation for Order Actions (XSS-Safe & CSP-Hardened) (F-07)
+// Global Delegation for Order & Inventory Actions (XSS-Safe & CSP-Hardened) (F-07)
 document.addEventListener("click", function(e) {
   const toggleBtn = e.target.closest('[data-action="toggle-payment"]');
   if (toggleBtn) {
@@ -995,6 +1002,152 @@ document.addEventListener("click", function(e) {
     if (orderId && payment && typeof toggleOrderPayment === "function") {
       toggleOrderPayment(orderId, payment);
     }
+    return;
+  }
+
+  const waBtn = e.target.closest('[data-action="contact-whatsapp"]');
+  if (waBtn) {
+    const orderId = waBtn.getAttribute("data-order-id");
+    if (orderId && typeof contactCustomerViaWhatsApp === "function") {
+      contactCustomerViaWhatsApp(orderId);
+    }
+    return;
+  }
+
+  const delOrderBtn = e.target.closest('[data-action="delete-order"]');
+  if (delOrderBtn) {
+    const orderId = delOrderBtn.getAttribute("data-order-id");
+    if (orderId && typeof deleteOrder === "function") {
+      deleteOrder(orderId);
+    }
+    return;
+  }
+
+  const editProdBtn = e.target.closest('[data-action="edit-product"]');
+  if (editProdBtn) {
+    const prodId = editProdBtn.getAttribute("data-product-id");
+    if (prodId && typeof openEditProductModal === "function") {
+      openEditProductModal(prodId);
+    }
+    return;
+  }
+
+  const delProdBtn = e.target.closest('[data-action="delete-product"]');
+  if (delProdBtn) {
+    const prodId = delProdBtn.getAttribute("data-product-id");
+    if (prodId && typeof deleteProduct === "function") {
+      deleteProduct(prodId);
+    }
+    return;
+  }
+
+  const editCatBtn = e.target.closest('[data-action="edit-category"]');
+  if (editCatBtn) {
+    const catId = editCatBtn.getAttribute("data-cat-id");
+    if (catId && typeof editCategoryPrompt === "function") {
+      editCategoryPrompt(catId);
+    }
+    return;
+  }
+
+  const delCatBtn = e.target.closest('[data-action="delete-category"]');
+  if (delCatBtn) {
+    const catId = delCatBtn.getAttribute("data-cat-id");
+    if (catId && typeof deleteCategoryConfirm === "function") {
+      deleteCategoryConfirm(catId);
+    }
+    return;
+  }
+
+  const copyEmailBtn = e.target.closest('[data-action="copy-email"]');
+  if (copyEmailBtn) {
+    const email = copyEmailBtn.getAttribute("data-email");
+    if (email && typeof copyToClipboard === "function") {
+      copyToClipboard(email, "تم نسخ البريد الإلكتروني");
+    }
+    return;
+  }
+
+  const filterOrdersBtn = e.target.closest('[data-action="filter-customer-orders"]');
+  if (filterOrdersBtn) {
+    const customer = filterOrdersBtn.getAttribute("data-customer");
+    if (customer && typeof filterOrdersByCustomer === "function") {
+      filterOrdersByCustomer(customer);
+    }
+    return;
+  }
+
+  const dismissAlertBtn = e.target.closest('[data-action="dismiss-live-alert"]');
+  if (dismissAlertBtn) {
+    const orderId = dismissAlertBtn.getAttribute("data-order-id");
+    if (typeof dismissAdminLiveOrderAlert === "function") {
+      dismissAdminLiveOrderAlert(orderId);
+    }
+    return;
+  }
+
+  const trackChipBtn = e.target.closest('[data-action="load-track-order"]');
+  if (trackChipBtn) {
+    const orderId = trackChipBtn.getAttribute("data-order-id");
+    if (orderId && typeof loadAndRenderTrackOrder === "function") {
+      loadAndRenderTrackOrder(orderId);
+    }
+    return;
+  }
+
+  const contactSupportBtn = e.target.closest('[data-action="contact-support-track"]');
+  if (contactSupportBtn) {
+    const query = contactSupportBtn.getAttribute("data-query");
+    if (typeof contactSupportAboutTrackedOrder === "function") {
+      contactSupportAboutTrackedOrder(query);
+    }
+    return;
+  }
+
+  const restorePointBtn = e.target.closest('[data-action="restore-web-point"]');
+  if (restorePointBtn) {
+    const pointId = restorePointBtn.getAttribute("data-point-id");
+    if (pointId && typeof restoreWebPointById === "function") {
+      restoreWebPointById(pointId);
+    }
+    return;
+  }
+
+  const delPointBtn = e.target.closest('[data-action="delete-web-point"]');
+  if (delPointBtn) {
+    const pointId = delPointBtn.getAttribute("data-point-id");
+    if (pointId && typeof deleteWebPointById === "function") {
+      deleteWebPointById(pointId);
+    }
+    return;
+  }
+
+  const delAreaBtn = e.target.closest('[data-action="delete-delivery-area"]');
+  if (delAreaBtn) {
+    const areaId = delAreaBtn.getAttribute("data-area-id");
+    if (areaId && typeof deleteDeliveryAreaRow === "function") {
+      deleteDeliveryAreaRow(areaId);
+    }
+    return;
+  }
+
+  const modRevBtn = e.target.closest('[data-action="moderate-review"]');
+  if (modRevBtn) {
+    const revId = modRevBtn.getAttribute("data-review-id");
+    const revStatus = modRevBtn.getAttribute("data-review-status");
+    if (revId && revStatus && typeof moderateReviewAction === "function") {
+      moderateReviewAction(revId, revStatus);
+    }
+    return;
+  }
+
+  const delRevBtn = e.target.closest('[data-action="delete-review"]');
+  if (delRevBtn) {
+    const revId = delRevBtn.getAttribute("data-review-id");
+    if (revId && typeof deleteAdminReview === "function") {
+      deleteAdminReview(revId);
+    }
+    return;
   }
 });
 
@@ -1102,10 +1255,10 @@ function renderAdminInventory() {
         </td>
         <td>
           <div style="display: flex; gap: 0.45rem; align-items: center; justify-content: flex-end;">
-            <button type="button" class="action-btn-sm" style="color: #2563EB; background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.25); border-radius: 6px; padding: 0.35rem 0.65rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;" onclick="openEditProductModal('${escapeHtml(item.id)}')" title="تعديل كافة تفاصيل القطعة">
+            <button type="button" class="action-btn-sm" style="color: #2563EB; background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.25); border-radius: 6px; padding: 0.35rem 0.65rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;" data-action="edit-product" data-product-id="${escapeHtml(item.id)}" title="تعديل كافة تفاصيل القطعة">
               <i class="fas fa-pen-to-square"></i> تعديل
             </button>
-            <button type="button" class="cart-item-remove-btn" style="color: #EF4444;" onclick="deleteProduct('${escapeHtml(item.id)}')" title="حذف المنتج من المتجر">
+            <button type="button" class="cart-item-remove-btn" style="color: #EF4444;" data-action="delete-product" data-product-id="${escapeHtml(item.id)}" title="حذف المنتج من المتجر">
               <i class="fas fa-trash-alt"></i> حذف
             </button>
           </div>
@@ -2368,8 +2521,8 @@ function renderCustomerRecentOrderChips() {
     if (recent.length > 0) {
       wrap.style.display = "block";
       container.innerHTML = recent.map(id => `
-        <button type="button" class="track-chip-btn ${id === window.currentTrackedOrderId ? 'active' : ''}" onclick="loadAndRenderTrackOrder('${id}')">
-          <i class="fas fa-tag"></i> #${id}
+        <button type="button" class="track-chip-btn ${id === window.currentTrackedOrderId ? 'active' : ''}" data-action="load-track-order" data-order-id="${escapeHtml(id)}">
+          <i class="fas fa-tag"></i> #${escapeHtml(id)}
         </button>
       `).join("");
     } else {
@@ -2455,9 +2608,9 @@ async function loadAndRenderTrackOrder(query) {
       emptyState.style.display = "block";
       emptyState.innerHTML = `
         <i class="fas fa-triangle-exclamation" style="font-size: 2.2rem; color: #F59E0B; margin-bottom: 0.75rem;"></i>
-        <h4 style="color: var(--text-main); margin-bottom: 0.35rem; font-weight: 700;">لم يتم العثور على طلب برقم "${query}"</h4>
+        <h4 style="color: var(--text-main); margin-bottom: 0.35rem; font-weight: 700;">لم يتم العثور على طلب برقم "${escapeHtml(query)}"</h4>
         <p style="color: var(--text-muted); font-size: 0.82rem; margin: 0 0 1rem 0;">يرجى التأكد من كتابة الكود كاملاً كما ظهر لك، أو التواصل معنا مباشرة</p>
-        <button type="button" class="btn-whatsapp-customer" style="margin: 0 auto; padding: 0.5rem 1rem; font-size: 0.8rem;" onclick="contactSupportAboutTrackedOrder('${query}')">
+        <button type="button" class="btn-whatsapp-customer" style="margin: 0 auto; padding: 0.5rem 1rem; font-size: 0.8rem;" data-action="contact-support-track" data-query="${escapeHtml(query)}">
           <i class="fab fa-whatsapp"></i> استفسار عبر واتساب
         </button>
       `;
@@ -2722,8 +2875,8 @@ function renderAdminCategories() {
           </span>
         </td>
         <td>
-          <div style="font-weight: 800; color: #0F172A; font-size: 0.95rem;">${main.name}</div>
-          <code style="font-size: 0.72rem; color: #64748B;">ID: ${main.id}</code>
+          <div style="font-weight: 800; color: #0F172A; font-size: 0.95rem;">${escapeHtml(main.name)}</div>
+          <code style="font-size: 0.72rem; color: #64748B;">ID: ${escapeHtml(main.id)}</code>
         </td>
         <td>
           <span style="color: var(--text-muted); font-size: 0.82rem;">-</span>
@@ -2736,10 +2889,10 @@ function renderAdminCategories() {
             ${isAll ? `
               <span style="font-size: 0.75rem; color: var(--text-muted);">قسم أساسي ثابت</span>
             ` : `
-              <button type="button" class="action-btn-sm" onclick="editCategoryPrompt('${main.id}')" title="تعديل اسم القسم">
+              <button type="button" class="action-btn-sm" data-action="edit-category" data-cat-id="${escapeHtml(main.id)}" title="تعديل اسم القسم">
                 <i class="fas fa-pen-to-square"></i> تعديل
               </button>
-              <button type="button" class="action-btn-sm btn-danger" onclick="deleteCategoryConfirm('${main.id}')" title="حذف القسم وجميع أقسامه الفرعية">
+              <button type="button" class="action-btn-sm btn-danger" data-action="delete-category" data-cat-id="${escapeHtml(main.id)}" title="حذف القسم وجميع أقسامه الفرعية">
                 <i class="fas fa-trash-alt"></i> حذف
               </button>
             `}
@@ -2758,21 +2911,21 @@ function renderAdminCategories() {
             </span>
           </td>
           <td style="padding-right: 1.5rem;">
-            <div style="font-weight: 700; color: #1E293B; font-size: 0.9rem;">↳ ${sub.name}</div>
-            <code style="font-size: 0.72rem; color: #94A3B8;">ID: ${sub.id}</code>
+            <div style="font-weight: 700; color: #1E293B; font-size: 0.9rem;">↳ ${escapeHtml(sub.name)}</div>
+            <code style="font-size: 0.72rem; color: #94A3B8;">ID: ${escapeHtml(sub.id)}</code>
           </td>
           <td>
-            <span style="font-size: 0.82rem; font-weight: 700; color: #475569;">${main.name}</span>
+            <span style="font-size: 0.82rem; font-weight: 700; color: #475569;">${escapeHtml(main.name)}</span>
           </td>
           <td>
             <span style="font-weight: 700; color: #2563EB;">${subProdCount} قطعة</span>
           </td>
           <td>
             <div class="action-btn-group">
-              <button type="button" class="action-btn-sm" onclick="editCategoryPrompt('${sub.id}')" title="تعديل اسم القسم الفرعي">
+              <button type="button" class="action-btn-sm" data-action="edit-category" data-cat-id="${escapeHtml(sub.id)}" title="تعديل اسم القسم الفرعي">
                 <i class="fas fa-pen-to-square"></i> تعديل
               </button>
-              <button type="button" class="action-btn-sm btn-danger" onclick="deleteCategoryConfirm('${sub.id}')" title="حذف القسم الفرعي">
+              <button type="button" class="action-btn-sm btn-danger" data-action="delete-category" data-cat-id="${escapeHtml(sub.id)}" title="حذف القسم الفرعي">
                 <i class="fas fa-trash-alt"></i> حذف
               </button>
             </div>
@@ -3061,10 +3214,10 @@ function renderAdminBackupView() {
         </td>
         <td>
           <div class="action-btn-group">
-            <button type="button" class="action-btn-sm btn-restore" onclick="restoreWebPointById('${p.id}')" title="استرجاع هذه النقطة فوراً">
+            <button type="button" class="action-btn-sm btn-restore" data-action="restore-web-point" data-point-id="${escapeHtml(p.id)}" title="استرجاع هذه النقطة فوراً">
               <i class="fas fa-rotate-left"></i> استرجاع بنقرة واحدة
             </button>
-            <button type="button" class="action-btn-sm btn-danger" onclick="deleteWebPointById('${p.id}')" title="حذف النقطة">
+            <button type="button" class="action-btn-sm btn-danger" data-action="delete-web-point" data-point-id="${escapeHtml(p.id)}" title="حذف النقطة">
               <i class="fas fa-trash-alt"></i>
             </button>
           </div>
@@ -3292,7 +3445,7 @@ function renderAdminDeliveryAreas() {
         <td class="del-col-names">
           <div class="del-card-header-mobile">
             <span class="del-zone-badge"><i class="fas fa-map-marker-alt"></i> نطاق توصيل #${index + 1}</span>
-            <button type="button" class="del-delete-btn-mobile" onclick="deleteDeliveryAreaRow('${escapeHtml(area.id)}')" title="حذف نطاق التوصيل">
+            <button type="button" class="del-delete-btn-mobile" data-action="delete-delivery-area" data-area-id="${escapeHtml(area.id)}" title="حذف نطاق التوصيل">
               <i class="fas fa-trash-alt"></i> <span>حذف النطاق</span>
             </button>
           </div>
@@ -3323,7 +3476,7 @@ function renderAdminDeliveryAreas() {
           </label>
         </td>
         <td class="del-col-actions">
-          <button type="button" class="btn-secondary del-delete-btn-desktop" onclick="deleteDeliveryAreaRow('${escapeHtml(area.id)}')" title="حذف نطاق التوصيل">
+          <button type="button" class="btn-secondary del-delete-btn-desktop" data-action="delete-delivery-area" data-area-id="${escapeHtml(area.id)}" title="حذف نطاق التوصيل">
             <i class="fas fa-trash-alt"></i>
           </button>
         </td>
@@ -3473,16 +3626,16 @@ async function renderAdminReviews(statusFilter = null) {
 
           <div style="display: flex; gap: 0.45rem; align-items: center;">
             ${rev.status !== 'approved' ? `
-              <button type="button" class="btn-primary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; background: #10B981; border: none; font-weight: 700;" onclick="moderateReviewAction('${escapeHtml(rev.id)}', 'approved')">
+              <button type="button" class="btn-primary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; background: #10B981; border: none; font-weight: 700;" data-action="moderate-review" data-review-id="${escapeHtml(rev.id)}" data-review-status="approved">
                 <i class="fas fa-check"></i> <span>اعتماد ونشر</span>
               </button>
             ` : ''}
             ${rev.status !== 'rejected' ? `
-              <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; color: #D97706;" onclick="moderateReviewAction('${escapeHtml(rev.id)}', 'rejected')">
+              <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; color: #D97706;" data-action="moderate-review" data-review-id="${escapeHtml(rev.id)}" data-review-status="rejected">
                 <i class="fas fa-eye-slash"></i> <span>حجب</span>
               </button>
             ` : ''}
-            <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem; color: #DC2626;" onclick="deleteAdminReview('${escapeHtml(rev.id)}')">
+            <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem; color: #DC2626;" data-action="delete-review" data-review-id="${escapeHtml(rev.id)}">
               <i class="fas fa-trash-alt"></i>
             </button>
           </div>
@@ -3975,8 +4128,8 @@ function displayFilteredGoogleUsers() {
       }
     }
 
-    const avatarHtml = avatar 
-      ? `<img src="${escapeHtml(avatar)}" alt="${escapeHtml(name)}" style="width: 54px; height: 54px; border-radius: 50%; object-fit: cover; border: 2px solid ${isGoogle ? '#4285F4' : 'var(--accent)'}; box-shadow: 0 4px 10px rgba(0,0,0,0.1); flex-shrink: 0;" onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg, #1e293b, #0f172a);color:#D4AF37;font-weight:800;font-size:1.3rem;display:flex;align-items:center;justify-content:center;border:2px solid var(--accent);\\'>${escapeHtml(monogram)}</div>';">`
+    const avatarHtml = (avatar && /^https?:\/\//i.test(avatar))
+      ? `<img src="${escapeHtml(avatar)}" alt="${escapeHtml(name)}" style="width: 54px; height: 54px; border-radius: 50%; object-fit: cover; border: 2px solid ${isGoogle ? '#4285F4' : 'var(--accent)'}; box-shadow: 0 4px 10px rgba(0,0,0,0.1); flex-shrink: 0;">`
       : `<div style="width: 54px; height: 54px; border-radius: 50%; background: linear-gradient(135deg, ${isGoogle ? '#4285F4' : 'var(--accent)'}, ${isGoogle ? '#1a73e8' : '#9A7B2C'}); color: #FFFFFF; font-weight: 800; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); flex-shrink: 0;">${escapeHtml(monogram)}</div>`;
 
     return `
@@ -4025,7 +4178,7 @@ function displayFilteredGoogleUsers() {
         <!-- Card Actions -->
         <div style="display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center; margin-top: 0.5rem;">
           ${email ? `
-            <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;" onclick="copyToClipboard('${escapeHtml(email)}', 'تم نسخ البريد الإلكتروني')">
+            <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;" data-action="copy-email" data-email="${escapeHtml(email)}">
               <i class="fas fa-copy"></i> <span>نسخ الإيميل</span>
             </button>
           ` : ''}
@@ -4034,7 +4187,7 @@ function displayFilteredGoogleUsers() {
               <i class="fab fa-whatsapp"></i> <span>واتساب</span>
             </a>
           ` : ''}
-          <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;" onclick="filterOrdersByCustomer('${escapeHtml(email || phone)}')">
+          <button type="button" class="btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;" data-action="filter-customer-orders" data-customer="${escapeHtml(email || phone)}">
             <i class="fas fa-receipt"></i> <span>الطلبات</span>
           </button>
         </div>

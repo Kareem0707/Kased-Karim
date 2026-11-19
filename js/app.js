@@ -137,7 +137,7 @@ function renderActiveSubcategoriesStrip(parentCat, cats) {
       <i class="fas fa-layer-group"></i>
       <span>${isEn ? `Subcategories for ${escapeFn(parentName)}:` : `الأقسام الفرعية لـ ${escapeFn(parentName)}:`}</span>
     </span>
-    <button type="button" class="subcat-chip ${isParentSelected ? 'active' : ''}" onclick="selectSubcategory('${parentCat.id}')" title="${isEn ? `View all ${escapeFn(parentName)}` : `عرض كافة منتجات ${escapeFn(parentName)}`}">
+    <button type="button" class="subcat-chip ${isParentSelected ? 'active' : ''}" data-action="select-subcategory" data-cat-id="${escapeFn(parentCat.id)}" title="${isEn ? `View all ${escapeFn(parentName)}` : `عرض كافة منتجات ${escapeFn(parentName)}`}">
       <span>${isEn ? `All in ${escapeFn(parentName)}` : `الكل في ${escapeFn(parentName)}`}</span>
       <span class="subcat-count">${totalParentCount}</span>
     </button>
@@ -148,7 +148,7 @@ function renderActiveSubcategoriesStrip(parentCat, cats) {
     const isActive = STATE.activeCategory === sub.id;
     const subName = (isEn && sub.enName) ? sub.enName : sub.name;
     html += `
-      <button type="button" class="subcat-chip ${isActive ? 'active' : ''}" onclick="selectSubcategory('${sub.id}')" title="${isEn ? `Subcategory: ${escapeFn(subName)}` : `قسم فرعي: ${escapeFn(subName)}`}">
+      <button type="button" class="subcat-chip ${isActive ? 'active' : ''}" data-action="select-subcategory" data-cat-id="${escapeFn(sub.id)}" title="${isEn ? `Subcategory: ${escapeFn(subName)}` : `قسم فرعي: ${escapeFn(subName)}`}">
         <span>${escapeFn(subName)}</span>
         <span class="subcat-count">${count}</span>
       </button>
@@ -157,6 +157,17 @@ function renderActiveSubcategoriesStrip(parentCat, cats) {
 
   strip.innerHTML = html;
   strip.style.display = "flex";
+
+  if (!strip.__kk_listener_attached) {
+    strip.addEventListener("click", (e) => {
+      const btn = e.target.closest('[data-action="select-subcategory"]');
+      if (btn) {
+        const catId = btn.getAttribute("data-cat-id");
+        if (catId) selectSubcategory(catId);
+      }
+    });
+    strip.__kk_listener_attached = true;
+  }
 }
 
 window.selectSubcategory = function(catId) {
@@ -823,19 +834,30 @@ function updateCartUI() {
 
     cartList.innerHTML = STATE.cart.map(item => `
       <div class="cart-item-row">
-        <img class="cart-item-img" src="${item.image}" alt="${item.name}">
+        <img class="cart-item-img" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}">
         <div class="cart-item-info">
-          <div class="cart-item-name">${item.name}</div>
-          <div class="cart-item-spec">${item.categoryName} • الكمية: ${item.qty}</div>
+          <div class="cart-item-name">${escapeHtml(item.name)}</div>
+          <div class="cart-item-spec">${escapeHtml(item.categoryName)} • الكمية: ${escapeHtml(item.qty)}</div>
           <div class="cart-item-price-row">
             <div class="cart-item-price">${formatPrice(item.price * item.qty)} ج.م</div>
-            <button class="cart-item-remove-btn" onclick="removeFromCart('${item.id}')" title="حذف">
+            <button type="button" class="cart-item-remove-btn" data-action="remove-from-cart" data-item-id="${escapeHtml(item.id)}" title="حذف">
               <i class="fas fa-trash-alt"></i>
             </button>
           </div>
         </div>
       </div>
     `).join("");
+
+    if (!cartList.__kk_listener_attached) {
+      cartList.addEventListener("click", (e) => {
+        const btn = e.target.closest('[data-action="remove-from-cart"]');
+        if (btn) {
+          const id = btn.getAttribute("data-item-id");
+          if (id) removeFromCart(id);
+        }
+      });
+      cartList.__kk_listener_attached = true;
+    }
   }
 }
 
@@ -989,19 +1011,26 @@ function handleAddProductSubmit(e) {
   form.reset();
 }
 
-// 9. Toast Notification Helper
-function showToast(message) {
+// 9. Toast Notification Helper (Safe textContent DOM Construction - CWE-79 Protected)
+function showToast(message, type = "info") {
   const container = document.getElementById("toastContainer");
   if (!container) return;
 
   const toast = document.createElement("div");
   toast.className = "toast";
-  toast.innerHTML = `
-    <i class="fas fa-check-circle toast-icon"></i>
-    <span>${message}</span>
-  `;
 
+  const icon = document.createElement("i");
+  const isError = type === "error" || (typeof message === "string" && (message.includes("خطأ") || message.includes("تعذر") || message.includes("❌")));
+  icon.className = isError ? "fas fa-circle-exclamation toast-icon" : "fas fa-check-circle toast-icon";
+  if (isError) icon.style.color = "#EF4444";
+
+  const span = document.createElement("span");
+  span.textContent = String(message || ""); // Strictly Safe Plain Text (Zero XSS)
+
+  toast.appendChild(icon);
+  toast.appendChild(span);
   container.appendChild(toast);
+
   requestAnimationFrame(() => {
     toast.classList.add("show");
   });
@@ -1190,25 +1219,6 @@ function setupEventListeners() {
     if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
   });
 
-  // Secret Admin Device Link: 5 clicks on logo activates executive shield button
-  let logoClickCount = 0;
-  let logoTimer = null;
-  document.querySelectorAll(".brand-link, .top-bar-brand, .brand-title-en").forEach(logo => {
-    logo.addEventListener("click", () => {
-      logoClickCount++;
-      clearTimeout(logoTimer);
-      logoTimer = setTimeout(() => { logoClickCount = 0; }, 2500);
-      if (logoClickCount >= 5) {
-        logoClickCount = 0;
-        localStorage.setItem("kk_admin_authorized", "true");
-        checkAndDisplayAdminHeaderIcon();
-        if (typeof showToast === "function") {
-          showToast("🛡️ تم إظهار وتثبيت أيقونة الإدارة التنفيذية في الهيدر بنجاح ✓");
-        }
-      }
-    });
-  });
-
   // Deep-link / Modal Query Trigger Support
   try {
     const urlParams = new URLSearchParams(window.location.search);
@@ -1235,24 +1245,27 @@ function setupEventListeners() {
 }
 
 // ----------------------------------------------------------------------------
-// PERSISTENT EXECUTIVE ADMIN HEADER BUTTON CONTROLLER
+// PERSISTENT EXECUTIVE ADMIN HEADER BUTTON CONTROLLER (STRICT SERVER-VERIFIED)
 // ----------------------------------------------------------------------------
-function checkAndDisplayAdminHeaderIcon() {
+async function checkAndDisplayAdminHeaderIcon() {
   const adminBtn = document.getElementById("adminHeaderBtn");
   const adminBadge = document.getElementById("adminHeaderBadge");
+  if (!adminBtn) return;
 
-  const token = localStorage.getItem("kk_admin_token") || sessionStorage.getItem("kk_admin_token");
-  const isAuth = !!token || 
-                 localStorage.getItem("kk_admin_authorized") === "true" ||
-                 localStorage.getItem("kk_admin_device_linked") === "true";
+  // Verify server-side session via HttpOnly Cookie (Zero Client Storage Reliance)
+  let isAuth = false;
+  try {
+    const res = await fetch("/api/auth", { credentials: "same-origin" });
+    if (res.ok) {
+      const data = await res.json();
+      isAuth = !!(data && data.authenticated);
+    }
+  } catch (e) {}
 
   if (isAuth) {
     document.documentElement.classList.add("is-admin-device");
     if (document.body) document.body.classList.add("is-admin-device", "is-admin-user");
-
-    if (adminBtn) {
-      adminBtn.style.setProperty("display", "inline-flex", "important");
-    }
+    adminBtn.style.setProperty("display", "inline-flex", "important");
 
     const unreadCount = window.KK_DB && typeof window.KK_DB.getUnreadOrdersCount === "function"
       ? window.KK_DB.getUnreadOrdersCount()
@@ -1263,12 +1276,10 @@ function checkAndDisplayAdminHeaderIcon() {
       adminBadge.style.display = unreadCount > 0 ? "flex" : "none";
     }
 
-    if (adminBtn) {
-      if (unreadCount > 0) {
-        adminBtn.classList.add("has-new-orders");
-      } else {
-        adminBtn.classList.remove("has-new-orders");
-      }
+    if (unreadCount > 0) {
+      adminBtn.classList.add("has-new-orders");
+    } else {
+      adminBtn.classList.remove("has-new-orders");
     }
   } else {
     document.documentElement.classList.remove("is-admin-device");
@@ -1672,6 +1683,7 @@ window.completeGoogleCustomerSignIn = async function (credential) {
   try {
     const res = await fetch("/api/customer?action=google", {
       method: "POST",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         credential,
@@ -1682,9 +1694,7 @@ window.completeGoogleCustomerSignIn = async function (credential) {
       const data = await res.json();
       if (data && data.success && data.customer) {
         customerData = data.customer;
-        if (data.token) {
-          localStorage.setItem("kk_customer_token", data.token);
-        }
+        localStorage.removeItem("kk_customer_token"); // Purge any legacy token from localStorage
       }
     } else {
       showToast(isEn ? "Google verification failed on server" : "تعذر التحقق من هوية Google على الخادم", "error");
@@ -2016,7 +2026,7 @@ async function openCustomerProfileModal() {
           const dateTimeDisplay = dateStr ? `${dateStr}${timeStr ? ' • ' + timeStr : ''}` : '';
 
           return `
-            <div class="customer-order-card" onclick="viewCustomerOrderDetails('${escapeHtml(ord.id)}')" style="background: #FFFFFF; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.9rem 1rem; margin-bottom: 0.85rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03); cursor: pointer; transition: all 0.2s ease;">
+            <div class="customer-order-card" data-action="view-order-details" data-order-id="${escapeHtml(ord.id)}" style="background: #FFFFFF; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.9rem 1rem; margin-bottom: 0.85rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03); cursor: pointer; transition: all 0.2s ease;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.5rem;">
                 <span style="font-weight: 800; font-family: monospace; font-size: 0.95rem; color: var(--text-main); letter-spacing: 0.5px;">#${escapeHtml(ord.id)}</span>
                 <span style="font-size: 0.74rem; font-weight: 800; padding: 3px 10px; border-radius: 4px; color: ${st.color}; background: ${st.bg}; border: 1px solid ${st.color}22;">
@@ -2025,7 +2035,7 @@ async function openCustomerProfileModal() {
               </div>
               ${dateTimeDisplay ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.45rem;"><i class="far fa-calendar-alt" style="margin-left: 4px;"></i>${escapeHtml(dateTimeDisplay)}</div>` : ''}
               <div style="font-size: 0.82rem; color: var(--text-main); margin-bottom: 0.5rem; line-height: 1.5; background: #FAF7F2; padding: 6px 10px; border-radius: 4px; border: 1px solid #EFEAE1;">
-                ${items.map(it => `<strong>${escapeHtml(it.name || 'وحدة')}</strong> × ${it.qty || 1}`).join(" &nbsp;•&nbsp; ")}
+                ${items.map(it => `<strong>${escapeHtml(it.name || 'وحدة')}</strong> × ${escapeHtml(it.qty || 1)}`).join(" &nbsp;•&nbsp; ")}
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-light); padding-top: 0.5rem; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.4rem;">
                 <div>${codNotice}</div>
@@ -2033,7 +2043,7 @@ async function openCustomerProfileModal() {
                   ${formatPrice(ord.total || 0)} ج.م
                 </div>
               </div>
-              <button type="button" class="btn-secondary" style="width: 100%; justify-content: center; font-size: 0.82rem; padding: 0.55rem 0.75rem; font-weight: 700; gap: 0.5rem; border-color: var(--accent); color: var(--accent); background: #FAF7F2;" onclick="event.stopPropagation(); viewCustomerOrderDetails('${escapeHtml(ord.id)}');">
+              <button type="button" class="btn-secondary" style="width: 100%; justify-content: center; font-size: 0.82rem; padding: 0.55rem 0.75rem; font-weight: 700; gap: 0.5rem; border-color: var(--accent); color: var(--accent); background: #FAF7F2;" data-action="view-order-details" data-order-id="${escapeHtml(ord.id)}">
                 <i class="fas fa-eye"></i>
                 <span>عرض تفاصيل وتتبع الطلب بالكامل</span>
                 <i class="fas fa-arrow-left" style="font-size: 0.75rem; margin-right: auto;"></i>
@@ -2041,6 +2051,17 @@ async function openCustomerProfileModal() {
             </div>
           `;
         }).join("");
+
+        if (!listEl.__kk_order_listener) {
+          listEl.addEventListener("click", (e) => {
+            const card = e.target.closest('[data-action="view-order-details"]');
+            if (card) {
+              const orderId = card.getAttribute("data-order-id");
+              if (orderId) viewCustomerOrderDetails(orderId);
+            }
+          });
+          listEl.__kk_order_listener = true;
+        }
       }
     } catch (e) {
       listEl.innerHTML = `<div style="text-align: center; padding: 2rem; color: #EF4444; font-size: 0.85rem;">تعذر تحميل سجل الطلبات</div>`;
@@ -2087,10 +2108,26 @@ function updateCustomerButtonUI() {
     btn.style.height = "38px";
     btn.style.borderRadius = "50%";
 
-    if (avatar) {
-      btn.innerHTML = `<img src="${escapeHtml(avatar)}" alt="${escapeHtml(name)}" class="customer-avatar-header" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; border: 2px solid var(--accent); box-shadow: 0 0 8px rgba(212,175,55,0.35);" onerror="this.onerror=null; this.parentElement.innerHTML='<span style=\\'width:100%;height:100%;border-radius:50%;background:linear-gradient(135deg,var(--accent),#9A7B2C);color:#0F172A;font-weight:800;font-size:0.85rem;display:flex;align-items:center;justify-content:center;\\'>${escapeHtml(monogram)}</span>';">`;
+    btn.innerHTML = "";
+    if (avatar && /^https?:\/\//i.test(avatar)) {
+      const img = document.createElement("img");
+      img.src = avatar;
+      img.alt = name;
+      img.className = "customer-avatar-header";
+      img.style.cssText = "width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; border: 2px solid var(--accent); box-shadow: 0 0 8px rgba(212,175,55,0.35);";
+      img.onerror = () => {
+        btn.innerHTML = "";
+        const span = document.createElement("span");
+        span.style.cssText = "width:100%;height:100%;border-radius:50%;background:linear-gradient(135deg,var(--accent),#9A7B2C);color:#0F172A;font-weight:800;font-size:0.85rem;display:flex;align-items:center;justify-content:center;";
+        span.textContent = monogram;
+        btn.appendChild(span);
+      };
+      btn.appendChild(img);
     } else {
-      btn.innerHTML = `<span style="width: 100%; height: 100%; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #9A7B2C); color: #0F172A; font-weight: 800; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; border: 2px solid #FDFBF7;">${escapeHtml(monogram)}</span>`;
+      const span = document.createElement("span");
+      span.style.cssText = "width: 100%; height: 100%; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #9A7B2C); color: #0F172A; font-weight: 800; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; border: 2px solid #FDFBF7;";
+      span.textContent = monogram;
+      btn.appendChild(span);
     }
     btn.setAttribute("title", isEn ? `Signed in as: ${name}` : `تم تسجيل الدخول: ${name} (${customer.email || customer.phone || ''})`);
   } else {

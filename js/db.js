@@ -34,6 +34,7 @@ class KasedKarimDB {
     this.pageSessionStartTime = Date.now();
     this.isInitialSyncCompleted = false;
     this.audioCtx = null;
+    this.inMemoryOrders = [];
 
     try {
       const storedNotified = localStorage.getItem("kk_notified_orders");
@@ -85,20 +86,20 @@ class KasedKarimDB {
       localStorage.setItem(DB_KEYS.PRODUCTS, JSON.stringify(sanitized));
     }
 
-    // Initialize Orders - sanitize and remove old dummy placeholder and test orders
+    // Initialize Orders - keep in secure memory cache and avoid plaintext localStorage exposure (CWE-312)
     let localOrders = [];
     try {
       const raw = localStorage.getItem(DB_KEYS.ORDERS);
       localOrders = raw ? JSON.parse(raw) : [];
+      // Clean legacy cleartext orders from persistent storage
+      localStorage.removeItem(DB_KEYS.ORDERS);
     } catch (e) {
       localOrders = [];
     }
 
-    localOrders = (localOrders || []).filter(o => o && o.id);
+    this.inMemoryOrders = (localOrders || []).filter(o => o && o.id);
 
-    localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(localOrders));
-
-    localOrders.forEach(o => {
+    this.inMemoryOrders.forEach(o => {
       this.knownOrderIds.add(o.id);
       this.notifiedOrderIds.add(o.id);
     });
@@ -509,14 +510,13 @@ class KasedKarimDB {
         // Mark initial sync complete
         this.isInitialSyncCompleted = true;
 
-        const localOrders = this.getOrders();
-        const localOrdStr = JSON.stringify(localOrders);
-        const cloudOrdStr = JSON.stringify(cleanCloudOrders);
+        this.inMemoryOrders = cleanCloudOrders;
+        this.recalculateAllProductSales();
 
-        if (localOrdStr !== cloudOrdStr) {
-          localStorage.setItem(DB_KEYS.ORDERS, cloudOrdStr);
-          this.recalculateAllProductSales();
-        }
+        // Defense in Depth: Never leave plaintext customer orders in localStorage
+        try {
+          localStorage.removeItem(DB_KEYS.ORDERS);
+        } catch (e) {}
 
         if (trulyNewOrders.length > 0) {
           // Strictly pick the newest order with highest timestamp
@@ -856,9 +856,12 @@ class KasedKarimDB {
   }
 
   // --------------------------------------------------------------------------
-  // ORDERS MANAGEMENT & CHECKOUT
+  // ORDERS MANAGEMENT & CHECKOUT (Protected In-Memory Session Storage - CWE-312)
   // --------------------------------------------------------------------------
   getOrders() {
+    if (this.inMemoryOrders && this.inMemoryOrders.length > 0) {
+      return this.inMemoryOrders;
+    }
     try {
       const data = localStorage.getItem(DB_KEYS.ORDERS);
       let parsed = data ? JSON.parse(data) : [];
@@ -887,9 +890,9 @@ class KasedKarimDB {
         }
       });
 
-      // STRICT CHRONOLOGICAL SORT: Newest orders ALWAYS at index 0 (top of list)
       filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-      return filtered;
+      this.inMemoryOrders = filtered;
+      return this.inMemoryOrders;
     } catch (e) {
       console.error("DB Error getOrders:", e);
       return [];
@@ -969,7 +972,10 @@ class KasedKarimDB {
       const filtered = orders.filter(o => o.id !== fullOrder.id);
       filtered.unshift(fullOrder);
       this.knownOrderIds.add(fullOrder.id);
-      localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(filtered));
+      this.inMemoryOrders = filtered;
+      if (this.isAdminUser()) {
+        localStorage.setItem(DB_KEYS.ORDERS, JSON.stringify(filtered));
+      }
     } catch (e) {}
 
     this.incrementSales(cartItems);
@@ -1800,6 +1806,7 @@ class KasedKarimDB {
   async customerRegister(name, phone, email, password) {
     const res = await fetch("/api/customer?action=register", {
       method: "POST",
+      credentials: "same-origin",
       cache: "no-store",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, phone, email, password })
@@ -1808,8 +1815,8 @@ class KasedKarimDB {
     if (!res.ok || !data.success) {
       throw new Error(data.error || "تعذر إنشاء الحساب");
     }
-    if (data.token && data.customer) {
-      localStorage.setItem(DB_KEYS.CUSTOMER_TOKEN, data.token);
+    if (data.customer) {
+      localStorage.removeItem(DB_KEYS.CUSTOMER_TOKEN);
       localStorage.setItem(DB_KEYS.CUSTOMER_USER, JSON.stringify(data.customer));
       localStorage.setItem("kk_customer_account", JSON.stringify(data.customer));
       window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: data.customer }));
@@ -1820,6 +1827,7 @@ class KasedKarimDB {
   async customerLogin(identifier, password) {
     const res = await fetch("/api/customer?action=login", {
       method: "POST",
+      credentials: "same-origin",
       cache: "no-store",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ identifier, password })
@@ -1828,8 +1836,8 @@ class KasedKarimDB {
     if (!res.ok || !data.success) {
       throw new Error(data.error || "بيانات الدخول غير صحيحة");
     }
-    if (data.token && data.customer) {
-      localStorage.setItem(DB_KEYS.CUSTOMER_TOKEN, data.token);
+    if (data.customer) {
+      localStorage.removeItem(DB_KEYS.CUSTOMER_TOKEN);
       localStorage.setItem(DB_KEYS.CUSTOMER_USER, JSON.stringify(data.customer));
       localStorage.setItem("kk_customer_account", JSON.stringify(data.customer));
       window.dispatchEvent(new CustomEvent("kk_customer_auth_changed", { detail: data.customer }));
@@ -1837,7 +1845,13 @@ class KasedKarimDB {
     return data.customer;
   }
 
-  customerLogout() {
+  async customerLogout() {
+    try {
+      await fetch("/api/customer?action=logout", {
+        method: "POST",
+        credentials: "same-origin"
+      });
+    } catch (e) {}
     localStorage.removeItem(DB_KEYS.CUSTOMER_TOKEN);
     localStorage.removeItem(DB_KEYS.CUSTOMER_USER);
     localStorage.removeItem("kk_customer_account");
@@ -1845,23 +1859,20 @@ class KasedKarimDB {
   }
 
   async getCustomerOrders() {
-    const token = this.getCustomerToken();
     const customer = this.getCustomer();
     let cloudOrders = [];
 
-    if (token) {
-      try {
-        const res = await fetch("/api/customer?action=orders", {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && Array.isArray(data.orders)) {
-            cloudOrders = data.orders;
-          }
+    try {
+      const res = await fetch("/api/customer?action=orders", {
+        credentials: "same-origin"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.orders)) {
+          cloudOrders = data.orders;
         }
-      } catch (e) {}
-    }
+      }
+    } catch (e) {}
 
     // Merge with local orders matching customer email, id or phone so orders are never lost
     const localOrders = this.getOrders();
@@ -1875,7 +1886,7 @@ class KasedKarimDB {
       const oEmail = (o.customer?.email || o.email || "").toLowerCase().trim();
       if (custEmail && oEmail && oEmail === custEmail) return true;
       const oPhone = (o.customer?.phone || "").replace(/[^0-9]/g, "");
-      if (custPhone && oPhone && (oPhone === custPhone || oPhone.endsWith(custPhone) || custPhone.endsWith(oPhone))) return true;
+      if (custPhone && oPhone && oPhone === custPhone) return true;
       return false;
     });
 
