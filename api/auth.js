@@ -98,8 +98,8 @@ async function authHandler(req, res, { requestId, safeBody } = {}) {
       });
     }
 
-    // 1. GET: Verify active session token
-    if (req.method === "GET") {
+    // 1. GET / HEAD: Verify active session token
+    if (req.method === "GET" || req.method === "HEAD") {
       const admin = verifyAdminRequest(req);
       if (!admin) {
         return res.status(401).json({ authenticated: false, error: "جلسة الدخول غير صالحة أو منتهية" });

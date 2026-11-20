@@ -174,37 +174,78 @@
     if (totalEl) totalEl.textContent = `${formatPrice(totalAmount)} ج.م`;
 
     if (summaryList) {
-      summaryList.innerHTML = cartItems
-        .map(
-          item => `
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.45rem 0; border-bottom: 1px dashed var(--border-light); font-size: 0.85rem;">
-          <div style="display: flex; align-items: center; gap: 0.5rem; overflow: hidden;">
-            <img src="${window.escapeHtml(item.image || '')}" alt="${window.escapeHtml(item.name || '')}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=150&q=80'">
-            <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; font-weight: 700;">
-              ${window.escapeHtml(item.name || '')}
-            </div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 0.65rem; white-space: nowrap;">
-            <span style="font-size: 0.75rem; color: var(--text-muted);">× ${parseInt(item.qty, 10) || 1}</span>
-            <span style="font-weight: 800; color: var(--accent);">${formatPrice((Number(item.price) || 0) * (parseInt(item.qty, 10) || 1))} ج.م</span>
-          </div>
-        </div>
-      `
-        )
-        .join("");
+      if (typeof summaryList.replaceChildren === "function") {
+        summaryList.replaceChildren();
+      } else {
+        summaryList.innerHTML = "";
+      }
+
+      cartItems.forEach(item => {
+        const row = document.createElement("div");
+        row.style.cssText = "display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.45rem 0; border-bottom: 1px dashed var(--border-light); font-size: 0.85rem;";
+
+        const left = document.createElement("div");
+        left.style.cssText = "display: flex; align-items: center; gap: 0.5rem; overflow: hidden;";
+
+        const img = document.createElement("img");
+        img.alt = item.name || "";
+        img.style.cssText = "width: 32px; height: 32px; border-radius: 4px; object-fit: cover;";
+        const fallback = "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=150&q=80";
+        img.addEventListener("error", function () {
+          if (this.src !== fallback) this.src = fallback;
+        }, { once: true });
+        img.src = item.image || fallback;
+
+        const nameEl = document.createElement("div");
+        nameEl.style.cssText = "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; font-weight: 700;";
+        nameEl.textContent = item.name || "";
+
+        left.appendChild(img);
+        left.appendChild(nameEl);
+
+        const right = document.createElement("div");
+        right.style.cssText = "display: flex; align-items: center; gap: 0.65rem; white-space: nowrap;";
+
+        const qtyEl = document.createElement("span");
+        qtyEl.style.cssText = "font-size: 0.75rem; color: var(--text-muted);";
+        qtyEl.textContent = `× ${parseInt(item.qty, 10) || 1}`;
+
+        const priceEl = document.createElement("span");
+        priceEl.style.cssText = "font-weight: 800; color: var(--accent);";
+        priceEl.textContent = `${formatPrice((Number(item.price) || 0) * (parseInt(item.qty, 10) || 1))} ج.م`;
+
+        right.appendChild(qtyEl);
+        right.appendChild(priceEl);
+
+        row.appendChild(left);
+        row.appendChild(right);
+        summaryList.appendChild(row);
+      });
     }
 
-    // Populate Delivery Areas Dropdown
+    // Populate Delivery Areas Dropdown (Safe DOM Nodes)
     const areaSelect = document.getElementById("custDeliveryAreaSelect");
     if (areaSelect && window.KK_DB && typeof window.KK_DB.getDeliveryAreas === "function") {
       const areas = window.KK_DB.getDeliveryAreas();
       if (areas && areas.length > 0) {
         const curVal = areaSelect.value || "sheikh-zayed";
-        areaSelect.innerHTML = areas.map(a => `
-          <option value="${window.escapeHtml(a.id)}" ${a.id === curVal ? 'selected' : ''}>
-            ${window.escapeHtml(a.name)} (${a.fee === 0 ? 'توصيل مجاني' : a.fee + ' ج.م'} - ${window.escapeHtml(a.days || '1-3 أيام')})
-          </option>
-        `).join("") + `<option value="unsupported">محافظة أخرى (خارج نطاق التغطية الحالي)</option>`;
+        if (typeof areaSelect.replaceChildren === "function") {
+          areaSelect.replaceChildren();
+        } else {
+          areaSelect.innerHTML = "";
+        }
+        areas.forEach(a => {
+          const opt = document.createElement("option");
+          opt.value = a.id;
+          opt.textContent = `${a.name} (${a.fee === 0 ? "توصيل مجاني" : a.fee + " ج.م"} - ${a.days || "1-3 أيام"})`;
+          if (a.id === curVal) opt.selected = true;
+          areaSelect.appendChild(opt);
+        });
+        const otherOpt = document.createElement("option");
+        otherOpt.value = "unsupported";
+        otherOpt.textContent = "محافظة أخرى (خارج نطاق التغطية الحالي)";
+        if (curVal === "unsupported") otherOpt.selected = true;
+        areaSelect.appendChild(otherOpt);
       }
     }
 
@@ -929,33 +970,69 @@
       } else if (order.timeFormatted) {
         dateText = `${order.dateFormatted} • ${order.timeFormatted}`;
       }
-      dateDisplay.innerHTML = `<i class="fas fa-clock"></i> تم التسجيل: ${window.escapeHtml(dateText)}`;
+      if (typeof dateDisplay.replaceChildren === "function") {
+        dateDisplay.replaceChildren();
+      } else {
+        dateDisplay.innerHTML = "";
+      }
+      const clockIcon = document.createElement("i");
+      clockIcon.className = "fas fa-clock";
+      dateDisplay.appendChild(clockIcon);
+      dateDisplay.appendChild(document.createTextNode(` تم التسجيل: ${dateText}`));
     }
     if (totalSum) totalSum.textContent = `${formatPrice(order.total)} ج.م`;
 
-    // Render Items List Safely
+    // Render Items List Safely (Safe DOM Nodes, Zero innerHTML, Zero inline handlers)
     const itemsContainer = document.getElementById("trackItemsList");
     if (itemsContainer) {
       const itemsList = Array.isArray(order.items)
         ? order.items
         : (order.items && typeof order.items === "object" ? Object.values(order.items) : []);
 
-      itemsContainer.innerHTML = itemsList
-        .map(
-          item => `
-        <div style="display: flex; align-items: center; justify-content: space-between; background: #FFFFFF; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.6rem 0.85rem;">
-          <div style="display: flex; align-items: center; gap: 0.65rem;">
-            <img src="${window.escapeHtml(item.image || '')}" alt="${window.escapeHtml(item.name || '')}" style="width: 42px; height: 42px; border-radius: 6px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
-            <div>
-              <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">${window.escapeHtml(item.name || '')}</div>
-              <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-brand);">${window.escapeHtml(item.categoryName || 'إضاءة فاخرة')} • الكمية: ${parseInt(item.qty, 10) || 1}</div>
-            </div>
-          </div>
-          <div style="font-weight: 800; font-size: 0.85rem; color: var(--accent-hover);">${formatPrice((Number(item.price) || 0) * (parseInt(item.qty, 10) || 1))} ج.م</div>
-        </div>
-      `
-        )
-        .join("");
+      if (typeof itemsContainer.replaceChildren === "function") {
+        itemsContainer.replaceChildren();
+      } else {
+        itemsContainer.innerHTML = "";
+      }
+
+      itemsList.forEach(item => {
+        const row = document.createElement("div");
+        row.style.cssText = "display: flex; align-items: center; justify-content: space-between; background: #FFFFFF; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.6rem 0.85rem;";
+
+        const left = document.createElement("div");
+        left.style.cssText = "display: flex; align-items: center; gap: 0.65rem;";
+
+        const img = document.createElement("img");
+        img.alt = item.name || "";
+        img.style.cssText = "width: 42px; height: 42px; border-radius: 6px; object-fit: cover;";
+        const fallback = "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80";
+        img.addEventListener("error", function () {
+          if (this.src !== fallback) this.src = fallback;
+        }, { once: true });
+        img.src = item.image || fallback;
+
+        const info = document.createElement("div");
+        const title = document.createElement("div");
+        title.style.cssText = "font-weight: 700; font-size: 0.85rem; color: var(--text-main);";
+        title.textContent = item.name || "";
+
+        const sub = document.createElement("div");
+        sub.style.cssText = "font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-brand);";
+        sub.textContent = `${item.categoryName || "إضاءة فاخرة"} • الكمية: ${parseInt(item.qty, 10) || 1}`;
+
+        info.appendChild(title);
+        info.appendChild(sub);
+        left.appendChild(img);
+        left.appendChild(info);
+
+        const priceEl = document.createElement("div");
+        priceEl.style.cssText = "font-weight: 800; font-size: 0.85rem; color: var(--accent-hover);";
+        priceEl.textContent = `${formatPrice((Number(item.price) || 0) * (parseInt(item.qty, 10) || 1))} ج.م`;
+
+        row.appendChild(left);
+        row.appendChild(priceEl);
+        itemsContainer.appendChild(row);
+      });
     }
 
     // 5-Stage Stepper
@@ -1113,7 +1190,10 @@
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = `track-chip-btn ${id === window.currentTrackedOrderId ? "active" : ""}`;
-          btn.innerHTML = `<i class="fas fa-tag"></i> #${window.escapeHtml(id)}`;
+          const tagIcon = document.createElement("i");
+          tagIcon.className = "fas fa-tag";
+          btn.appendChild(tagIcon);
+          btn.appendChild(document.createTextNode(` #${id}`));
           btn.addEventListener("click", () => {
             const savedPhone = localStorage.getItem("kk_customer_phone") || "";
             const searchInput = document.getElementById("trackSearchInput");

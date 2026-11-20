@@ -372,7 +372,10 @@ export async function cancelResponseBody(res) {
 // 7. UNIFIED TOP-LEVEL ERROR BOUNDARY & HARDENING WRAPPER
 // -----------------------------------------------------------------------------
 export function withApiHardening(handler, options = {}) {
-  const allowedMethods = options.allowedMethods || ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+  let allowedMethods = options.allowedMethods ? [...options.allowedMethods] : ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+  if (allowedMethods.includes("GET") && !allowedMethods.includes("HEAD")) {
+    allowedMethods.push("HEAD");
+  }
   const maxBodyBytes = options.maxBodyBytes || 64 * 1024;
   const maxDepth = options.maxDepth || 6;
   const maxKeys = options.maxKeys || 200;

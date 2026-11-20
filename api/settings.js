@@ -51,9 +51,9 @@ async function settingsHandler(req, res, { requestId, safeBody } = {}) {
     }
 
     // -------------------------------------------------------------------------
-    // 1. GET: Fetch Categories and/or Showroom Settings
+    // 1. GET / HEAD: Fetch Categories and/or Showroom Settings
     // -------------------------------------------------------------------------
-    if (req.method === "GET") {
+    if (req.method === "GET" || req.method === "HEAD") {
       const t = Date.now();
       const admin = verifyAdminRequest(req);
       let categories = null;

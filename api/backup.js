@@ -47,9 +47,9 @@ async function backupHandler(req, res, { requestId, safeBody } = {}) {
 
   try {
     // -------------------------------------------------------------------------
-    // 1. GET: Fetch Latest Cloud Snapshot, Export Entire Allowed State, or Sync Version
+    // 1. GET / HEAD: Fetch Latest Cloud Snapshot, Export Entire Allowed State, or Sync Version
     // -------------------------------------------------------------------------
-    if (req.method === "GET") {
+    if (req.method === "GET" || req.method === "HEAD") {
       const t = Date.now();
       const action = req.query?.action;
 

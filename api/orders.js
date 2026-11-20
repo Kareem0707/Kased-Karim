@@ -283,7 +283,7 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
     // -------------------------------------------------------------------------
     // 1. GET: Fetch Orders (Admin Full View OR Customer Personal View with ?mine=1)
     // -------------------------------------------------------------------------
-    if (req.method === "GET") {
+    if (req.method === "GET" || req.method === "HEAD") {
       const isMine = req.query?.mine === "1" || req.query?.mine === "true";
 
       // SUB-CASE A: AUTHENTICATED CUSTOMER ORDERS HISTORY (Axis 4: BOLA Prevention)

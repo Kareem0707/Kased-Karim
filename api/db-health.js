@@ -20,10 +20,10 @@ const PUBLIC_CACHE_TTL_MS = 15 * 1000; // 15 seconds
 
 async function dbHealthHandler(req, res, { requestId } = {}) {
   // 1. Mandatory CORS & Security Headers Gate (ASVS 14.4 & 14.5)
-  if (setSecurityHeaders(req, res, { allowedMethods: ["GET", "OPTIONS"] })) return;
+  if (setSecurityHeaders(req, res, { allowedMethods: ["GET", "HEAD", "OPTIONS"] })) return;
 
-  if (req.method !== "GET") {
-    res.setHeader("Allow", "GET, OPTIONS");
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.setHeader("Allow", "GET, HEAD, OPTIONS");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 

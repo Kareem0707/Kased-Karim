@@ -443,9 +443,9 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
 
   try {
     // -------------------------------------------------------------------------
-    // 1. GET: Fetch Products (Separated Public Storefront vs Admin Catalog)
+    // 1. GET / HEAD: Fetch Products (Separated Public Storefront vs Admin Catalog)
     // -------------------------------------------------------------------------
-    if (req.method === "GET") {
+    if (req.method === "GET" || req.method === "HEAD") {
       const { all, includeInactive, id } = req.query || {};
       const isAdminQuery = all === "1" || all === "true" || includeInactive === "1" || includeInactive === "true";
 

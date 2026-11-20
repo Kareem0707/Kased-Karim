@@ -136,7 +136,7 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
   }
 
   const normalizedAction = (rawAction || "").trim().toLowerCase();
-  const effectiveAction = normalizedAction || (req.method === "GET" ? "me" : "");
+  const effectiveAction = normalizedAction || (req.method === "GET" || req.method === "HEAD" ? "me" : "");
 
   // Fail-Closed Action Validation
   if (!effectiveAction || !ALLOWED_ACTIONS.has(effectiveAction)) {

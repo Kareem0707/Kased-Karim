@@ -65,9 +65,9 @@ async function reviewsHandler(req, res, { requestId, safeBody } = {}) {
     }
 
     // -------------------------------------------------------------------------
-    // 1. GET: Fetch Product Reviews (Public Approved vs Admin Moderation)
+    // 1. GET / HEAD: Fetch Product Reviews (Public Approved vs Admin Moderation)
     // -------------------------------------------------------------------------
-    if (req.method === "GET") {
+    if (req.method === "GET" || req.method === "HEAD") {
       const { productId, all, status } = req.query || {};
 
       // SUB-CASE A: ADMIN-ONLY REVIEWS MODERATION ACCESS (Axis 1: BFLA)
