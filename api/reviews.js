@@ -1,24 +1,44 @@
 // Vercel Serverless Function: /api/reviews
 // Product Reviews Submission & Administrative Moderation Engine
-// PRD Section 11: Moderation before public display (Pending -> Approved / Rejected)
+// Enforces Strict Input Validation, Moderation Before Display & Zero-PII (OWASP API3, API5 & ASVS Level 3)
 
 import crypto from "crypto";
 import {
   verifyAdminRequest,
+  verifyCustomerRequest,
   sanitizePathId,
-  getFirebaseUrl,
+  firebaseFetch,
+  buildSafeRtdbPath,
+  assertSafeRtdbPayload,
   getClientIp,
   checkDistributedRateLimit,
-  setSecurityHeaders
+  sanitizeReview,
+  redactSecretUrl,
+  setSecurityHeaders,
+  withApiHardening,
+  safeLogError
 } from "./_auth.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-async function fetchReviews() {
+// O(1) Direct Review Fetcher
+async function fetchReviewById(reviewId) {
+  const safeId = sanitizePathId(reviewId);
+  if (!safeId) return null;
   try {
-    const firebaseUrl = getFirebaseUrl("reviews.json", { t: Date.now() });
-    const res = await fetch(firebaseUrl, { cache: "no-store" });
+    const res = await firebaseFetch(buildSafeRtdbPath("reviews", safeId), { cache: "no-store" }, { t: Date.now() });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {}
+  return null;
+}
+
+// Collection Fetcher
+async function fetchAllReviewsFromCloud() {
+  try {
+    const res = await firebaseFetch(buildSafeRtdbPath("reviews"), { cache: "no-store" }, { t: Date.now() });
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data === "object") {
@@ -29,95 +49,152 @@ async function fetchReviews() {
   return [];
 }
 
-async function saveReview(review) {
-  const safeId = sanitizePathId(review.id);
-  if (!safeId) return false;
-  const firebaseUrl = getFirebaseUrl(`reviews/${safeId}.json`);
-  const res = await fetch(firebaseUrl, {
-    method: "PUT",
-    cache: "no-store",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(review)
-  });
-  return res.ok;
-}
-
-export default async function handler(req, res) {
-  setSecurityHeaders(req, res);
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+async function reviewsHandler(req, res, { requestId, safeBody } = {}) {
+  // 1. Mandatory CORS & Security Headers Gate (Axis 7: ASVS 14.4 & 14.5)
+  if (setSecurityHeaders(req, res, { cacheControl: "no-store, no-cache, must-revalidate, private" })) return;
 
   try {
-    // Payload Size Limit Check (DoS Mitigation - CWE-400)
-    const MAX_REVIEW_PAYLOAD = 50 * 1024; // 50 KB
+    // 2. Payload Size Limit Guard (DoS Mitigation - CWE-400 / OWASP API4)
+    const MAX_REVIEW_PAYLOAD = 10 * 1024; // 10 KB
     const contentLength = parseInt(req.headers["content-length"] || "0", 10);
     if (contentLength > MAX_REVIEW_PAYLOAD) {
-      return res.status(413).json({ success: false, error: "حجم الطلب يتجاوز الحد الأقصى المسموح به (50 كيلوبايت)" });
+      return res.status(413).json({
+        success: false,
+        error: "حجم الطلب يتجاوز الحد الأقصى المسموح به لتقييمات المنتجات (10 كيلوبايت)."
+      });
     }
 
     // -------------------------------------------------------------------------
-    // 1. GET REVIEWS
+    // 1. GET: Fetch Product Reviews (Public Approved vs Admin Moderation)
     // -------------------------------------------------------------------------
     if (req.method === "GET") {
-      const { productId, all } = req.query || {};
+      const { productId, all, status } = req.query || {};
 
-      if (all === "1" || all === "true") {
-        // ADMIN ONLY: View all reviews (Pending, Approved, Rejected) (F-06)
+      // SUB-CASE A: ADMIN-ONLY REVIEWS MODERATION ACCESS (Axis 1: BFLA)
+      if (all === "1" || all === "true" || status) {
         const admin = verifyAdminRequest(req);
         if (!admin) {
-          return res.status(401).json({ success: false, error: "غير مصرح بالوصول لمراجعة التقييمات" });
+          return res.status(401).json({
+            success: false,
+            error: "غير مصرح بالوصول لمراجعة التقييمات المعلقة أو المرفوضة."
+          });
         }
-        const reviews = await fetchReviews();
-        reviews.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        return res.status(200).json({ success: true, reviews });
+
+        const allReviews = await fetchAllReviewsFromCloud();
+        let filtered = allReviews;
+
+        if (status && ["pending", "approved", "rejected"].includes(status)) {
+          filtered = filtered.filter(r => r && r.status === status);
+        }
+        if (productId) {
+          const safeProd = sanitizePathId(productId);
+          if (safeProd) {
+            filtered = filtered.filter(r => r && r.productId === safeProd);
+          }
+        }
+
+        filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        const adminSanitized = filtered.map(r => sanitizeReview(r, { forAdmin: true })).filter(Boolean);
+
+        return res.status(200).json({
+          success: true,
+          count: adminSanitized.length,
+          reviews: adminSanitized
+        });
       }
 
-      // PUBLIC STOREFRONT: Only approved reviews for a specific product
-      const reviews = await fetchReviews();
-      const approved = reviews.filter(r => {
+      // SUB-CASE B: PUBLIC STOREFRONT READ (Axis 4: Approved Only, Zero-PII)
+      const allReviews = await fetchAllReviewsFromCloud();
+      const safeProd = productId ? sanitizePathId(productId) : null;
+
+      const approved = allReviews.filter(r => {
         if (!r || r.status !== "approved") return false;
-        if (productId && r.productId !== productId) return false;
+        if (safeProd && r.productId !== safeProd) return false;
         return true;
       });
-      approved.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-      return res.status(200).json({ success: true, reviews: approved });
+      approved.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      const publicSanitized = approved.map(r => sanitizeReview(r, { forAdmin: false })).filter(Boolean);
+
+      return res.status(200).json({
+        success: true,
+        count: publicSanitized.length,
+        reviews: publicSanitized
+      });
     }
 
     // -------------------------------------------------------------------------
-    // 2. POST: SUBMIT NEW PRODUCT REVIEW (Requires Moderation)
+    // 2. POST: Submit New Product Review (Public Submission with Moderation Enforcement)
     // -------------------------------------------------------------------------
     if (req.method === "POST") {
-      // Distributed Rate Limiting (Anti-Spam / Anti-Flood)
+      // Distributed Rate Limiting (Anti-Spam / Anti-Flooding) (Axis 6)
       const clientIp = getClientIp(req);
       const rateLimit = await checkDistributedRateLimit(clientIp, "submit_review", 3, 15 * 60 * 1000);
       if (!rateLimit.allowed) {
+        res.setHeader("Retry-After", String(rateLimit.remainingSec || 900));
         return res.status(429).json({
           success: false,
-          error: `تم تجاوز الحد المسموح لإرسال التقييمات. يرجى الانتظار ${rateLimit.remainingSec || "بضع"} ثوانٍ والمحاولة مجدداً.`
+          error: `تم تجاوز الحد المسموح لإرسال التقييمات. يرجى الانتظار ${rateLimit.remainingSec || 900} ثانية والمحاولة مجدداً.`
         });
       }
 
       let body = req.body;
       if (typeof body === "string") {
-        try { body = JSON.parse(body); } catch (e) {}
-      }
-      body = body || {};
-
-      const productId = sanitizePathId(body.productId || "");
-      const productName = (body.productName || "").trim().replace(/[<>]/g, "").slice(0, 100);
-      const author = (body.author || body.name || "عميل موثوق").trim().replace(/[<>]/g, "").slice(0, 50);
-      const rating = Math.min(5, Math.max(1, parseInt(body.rating, 10) || 5));
-      const comment = (body.comment || body.text || "").trim().replace(/[<>]/g, "").slice(0, 500);
-
-      if (!productId) {
-        return res.status(400).json({ success: false, error: "معرف المنتج غير صحيح" });
+        try {
+          body = JSON.parse(body);
+        } catch (e) {
+          return res.status(400).json({ success: false, error: "حزمة البيانات المرسلة غير صالحة (Invalid JSON Body)." });
+        }
       }
 
-      // High-Entropy Cryptographic ID (CWE-330 Mitigation)
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return res.status(400).json({ success: false, error: "بيانات التقييم غير صالحة." });
+      }
+
+      // Strict Product ID Sanitation & Validation (Axis 4)
+      const rawProductId = typeof body.productId === "string" ? body.productId : "";
+      const productId = sanitizePathId(rawProductId);
+      if (!productId || productId.length < 2 || productId.length > 64) {
+        return res.status(400).json({ success: false, error: "معرف المنتج غير صحيح أو مفقود." });
+      }
+
+      // Strict Rating Validation (Axis 4: Strict Integer 1 to 5)
+      const rawRating = body.rating;
+      if (!Number.isInteger(rawRating) || rawRating < 1 || rawRating > 5) {
+        return res.status(400).json({
+          success: false,
+          error: "التقييم يجب أن يكون عدداً صحيحاً محصوراً بين 1 و 5 نجوم حصراً."
+        });
+      }
+      const rating = rawRating;
+
+      // Author Name Sanitization (Axis 4)
+      const rawAuthor = typeof body.author === "string" ? body.author : (typeof body.name === "string" ? body.name : "");
+      const author = rawAuthor.replace(/[<>]/g, "").replace(/[\x00-\x1F\x7F]/g, "").trim().slice(0, 60);
+      if (author.length < 2) {
+        return res.status(400).json({ success: false, error: "اسم كاتب التقييم يجب ألا يقل عن حرفين." });
+      }
+
+      // Comment Sanitization & Stored XSS Mitigation (Axis 4)
+      const rawComment = typeof body.comment === "string" ? body.comment : (typeof body.text === "string" ? body.text : "");
+      const comment = rawComment.replace(/[<>]/g, "").replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim().slice(0, 1000);
+      if (comment.length < 3) {
+        return res.status(400).json({ success: false, error: "نص التقييم يجب ألا يقل عن 3 أحرف." });
+      }
+
+      const productName = typeof body.productName === "string"
+        ? body.productName.replace(/[<>]/g, "").trim().slice(0, 100)
+        : "وحدة إضاءة فاخرة";
+
+      // Bind Authenticated Customer ID if caller has valid customer JWT session
+      const customerAuth = verifyCustomerRequest(req);
+      const verifiedCustomerId = customerAuth && customerAuth.sub ? sanitizePathId(customerAuth.sub) : null;
+
+      // Cryptographically Secure High-Entropy Review ID (Axis 4)
       const reviewId = "REV-" + Date.now() + "-" + crypto.randomBytes(8).toString("hex").toUpperCase();
+
+      // MANDATORY SERVER-CONTROLLED FIELDS (Axis 4: Moderation Bypass Prevention)
+      // Client-supplied status, approved, adminReply, or verified flags are STRICTLY IGNORED
       const newReview = {
         id: reviewId,
         productId,
@@ -125,77 +202,164 @@ export default async function handler(req, res) {
         author,
         rating,
         comment,
-        status: "pending", // PRD: Requires administrative moderation before publication
+        status: "pending", // PRD: Strictly requires administrative review before publishing
+        approved: false,
+        adminReply: "",
         timestamp: Date.now()
       };
 
-      await saveReview(newReview);
+      if (verifiedCustomerId) {
+        newReview.customerId = verifiedCustomerId;
+      }
+
+      assertSafeRtdbPayload(newReview);
+      const putRes = await firebaseFetch(buildSafeRtdbPath("reviews", reviewId), {
+        method: "PUT",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newReview)
+      });
+
+      if (!putRes.ok) {
+        return res.status(502).json({ success: false, error: "تعذر حفظ التقييم على السحابة في الوقت الحالي." });
+      }
 
       return res.status(201).json({
         success: true,
-        message: "تم إرسال تقييمك بنجاح وسوف يظهر بعد مراجعته من إدارة المعرض.",
-        review: newReview
+        message: "تم استلام تقييمكم بنجاح وسوف يظهر على صفحة المنتج فور اعتماده من إدارة المعرض.",
+        review: sanitizeReview(newReview, { forAdmin: false })
       });
     }
 
     // -------------------------------------------------------------------------
-    // 3. PATCH: MODERATE REVIEW (ADMIN ONLY) (F-06)
+    // 3. PATCH / PUT: Moderate Review (ADMIN ONLY) (Axis 1: BFLA)
     // -------------------------------------------------------------------------
-    if (req.method === "PATCH") {
+    if (req.method === "PATCH" || req.method === "PUT") {
       const admin = verifyAdminRequest(req);
       if (!admin) {
-        return res.status(401).json({ success: false, error: "غير مصرح" });
+        return res.status(401).json({
+          success: false,
+          error: "غير مصرح بالوصول. يلزم صلاحيات الإدارة العليا لمراجعة واعتماد التقييمات."
+        });
       }
 
       let body = req.body;
       if (typeof body === "string") {
-        try { body = JSON.parse(body); } catch (e) {}
+        try {
+          body = JSON.parse(body);
+        } catch (e) {
+          return res.status(400).json({ success: false, error: "حزمة البيانات غير صالحة (Invalid JSON)." });
+        }
       }
       body = body || {};
 
       const safeId = sanitizePathId(body.id);
       if (!safeId) {
-        return res.status(400).json({ success: false, error: "معرف التقييم غير صحيح" });
+        return res.status(400).json({ success: false, error: "معرف التقييم غير صحيح أو مفقود." });
       }
 
-      const reviews = await fetchReviews();
-      const target = reviews.find(r => r.id === safeId);
-      if (!target) {
-        return res.status(404).json({ success: false, error: "التقييم غير موجود" });
+      const existingReview = await fetchReviewById(safeId);
+      if (!existingReview) {
+        return res.status(404).json({ success: false, error: "التقييم المطلوب غير موجود." });
       }
 
+      // Update Moderation Status
       if (body.status && ["approved", "rejected", "pending"].includes(body.status)) {
-        target.status = body.status;
+        existingReview.status = body.status;
+        existingReview.approved = body.status === "approved";
       }
-      target.moderatedAt = Date.now();
-      target.moderatedBy = admin.sub || "admin";
 
-      await saveReview(target);
+      // Update Administrative Reply
+      if (body.adminReply !== undefined) {
+        existingReview.adminReply = typeof body.adminReply === "string"
+          ? body.adminReply.replace(/[<>]/g, "").trim().slice(0, 500)
+          : "";
+      }
 
-      return res.status(200).json({ success: true, message: "تم تحديث حالة التقييم بنجاح", review: target });
+      existingReview.moderatedAt = Date.now();
+      existingReview.moderatedBy = admin.sub || "admin";
+
+      assertSafeRtdbPayload(existingReview);
+      const updateRes = await firebaseFetch(buildSafeRtdbPath("reviews", safeId), {
+        method: "PUT",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(existingReview)
+      });
+
+      if (!updateRes.ok) {
+        return res.status(502).json({ success: false, error: "تعذر تحديث حالة التقييم على السحابة." });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "تم تحديث حالة التقييم واعتماده بنجاح.",
+        review: sanitizeReview(existingReview, { forAdmin: true })
+      });
     }
 
     // -------------------------------------------------------------------------
-    // 4. DELETE: REMOVE REVIEW (ADMIN ONLY) (F-06)
+    // 4. DELETE: Remove Review (ADMIN ONLY & Empty-ID Protected) (Axis 1 & Axis 5)
     // -------------------------------------------------------------------------
     if (req.method === "DELETE") {
       const admin = verifyAdminRequest(req);
       if (!admin) {
-        return res.status(401).json({ success: false, error: "غير مصرح" });
+        return res.status(401).json({
+          success: false,
+          error: "غير مصرح بالوصول. يلزم صلاحيات الإدارة لحذف التقييمات."
+        });
       }
 
-      const { id } = req.query || {};
-      const safeId = sanitizePathId(id);
-      if (!safeId) return res.status(400).json({ error: "معرف التقييم غير صحيح" });
+      const rawId = req.query?.id || (req.body && req.body.id);
+      if (typeof rawId !== "string" || !rawId.trim()) {
+        return res.status(400).json({
+          success: false,
+          error: "معرف التقييم مطلوب ويجب أن يكون نصاً غير فارغ."
+        });
+      }
 
-      const firebaseUrl = getFirebaseUrl(`reviews/${safeId}.json`);
-      await fetch(firebaseUrl, { method: "DELETE", cache: "no-store" });
-      return res.status(200).json({ success: true, message: "تم حذف التقييم" });
+      const safeId = sanitizePathId(rawId);
+      // Strict Empty-ID Wipe Prevention (Axis 5)
+      if (!safeId || safeId.includes("..") || safeId.includes("/") || safeId.includes("\\")) {
+        return res.status(400).json({
+          success: false,
+          error: "معرف التقييم غير صحيح ويحظر الحذف الجماعي لعقدة التقييمات."
+        });
+      }
+
+      const delRes = await firebaseFetch(buildSafeRtdbPath("reviews", safeId), {
+        method: "DELETE",
+        cache: "no-store"
+      });
+
+      if (!delRes.ok) {
+        return res.status(502).json({ success: false, error: "تعذر حذف التقييم من السحابة." });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "تم حذف التقييم بنجاح."
+      });
     }
 
-    return res.status(405).json({ error: "Method not allowed" });
+    // 5. Reject all unhandled HTTP methods (Axis 1: ASVS 13.1)
+    return res.status(405).json({ success: false, error: "طريقة الطلب غير مسموح بها (Method Not Allowed)." });
   } catch (err) {
-    console.error("API error in /api/reviews:", err.message);
-    return res.status(500).json({ success: false, error: "حدث خطأ غير متوقع في معالجة التقييم." });
+    // Axis 8: Zero-leakage log hygiene.
+    safeLogError("/api/reviews", requestId, err);
+    return res.status(500).json({
+      success: false,
+      ok: false,
+      error: "حدث خطأ غير متوقع في معالجة التقييم.",
+      requestId
+    });
   }
 }
+
+export default withApiHardening(reviewsHandler, {
+  allowedMethods: ["GET", "POST", "PATCH", "DELETE"],
+  maxBodyBytes: 16 * 1024,
+  maxDepth: 4,
+  maxKeys: 30,
+  context: "/api/reviews"
+});

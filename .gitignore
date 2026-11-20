@@ -1,37 +1,68 @@
-# Logs
+# Logs & Runtime
 *.log
 npm-debug.log*
-
-# Runtime data
+yarn-debug.log*
+yarn-error.log*
 pids
 *.pid
 *.seed
+*.pid.lock
 
 # Dependencies
 node_modules/
 .pnp
 .pnp.js
 
-# Environment variables & sensitive credentials
+# Environment variables & local secrets (Fail-Closed)
 .env
-.env*.local
-.env.development
-.env.test
-.env.production
+.env.*
+!.env.example
 *.pem
 *.key
 *.crt
+*.p12
+*.pfx
 
-# Vercel deployment artifacts
-.vercel
+# Service Account Keys & Database Credentials
+*service-account*.json
+*firebase-adminsdk*.json
+*google-credentials*.json
 
-# Security audits and internal reports
+# Backups, Database dumps & Temporary Files
+backups/
+*.backup.json
+*.bak
+*.old
+*.sql
+*.sqlite
+
+# Scratch & Local Development Scripts
+scratch/
+test-results/
+coverage/
+
+# Security Audits & Internal Vulnerability Reports
 *.pdf
+Kased_Karim_*_Report.html
+Pre_Purchase_*_Report.html
+
+# Source Maps & Build Artifacts
+*.map
+.vercel
 
 # OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Editor directories
+# Editor & IDE configurations
 .vscode/
 .idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo

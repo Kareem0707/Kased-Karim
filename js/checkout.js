@@ -2,12 +2,16 @@
  * KASED KARIM LIGHTING - SHEIKH ZAYED
  * Storefront Checkout & Privacy-Protected Tracking Controller (js/checkout.js)
  * إدارة سلة الطلبات، التحقق الصارم من صحة البيانات، وإرسال وتتبع الطلبات السحابية
+ * Hardened according to OWASP ASVS Level 3 & OWASP API Security Top 10 (3B-1)
  */
 
 (function () {
   "use strict";
 
-  // Safe HTML Escaping Utility (XSS Prevention)
+  // Double-submission lock flag
+  let isSubmittingOrder = false;
+
+  // Safe HTML Escaping Utility (XSS Prevention - CWE-79)
   window.escapeHtml = function (str) {
     if (str === null || str === undefined) return "";
     return String(str)
@@ -19,8 +23,9 @@
   };
 
   const formatPrice = window.formatPrice || function (num) {
-    if (!num) return "0";
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    if (!num && num !== 0) return "0";
+    const n = Math.round(Number(num) || 0);
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
 
   const showToast = window.showToast || function (message, type = "info") {
@@ -43,6 +48,21 @@
       setTimeout(() => toast.remove(), 400);
     }, 3500);
   };
+
+  // Cryptographically safe UUID generator for Idempotency-Key
+  function generateIdempotencyKey() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40; // RFC 4122 v4
+      bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant
+      return [...bytes].map((b, i) => ([4, 6, 8, 10].includes(i) ? "-" : "") + b.toString(16).padStart(2, "0")).join("");
+    }
+    return "idemp_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+  }
 
   // --------------------------------------------------------------------------
   // 1. CHECKOUT MODAL CONTROLLER & CART RETRIEVAL
@@ -80,10 +100,10 @@
     const totalEl = document.getElementById("checkoutTotalSum");
 
     const cartItems = getCartItems();
-    const subtotal = cartItems.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0);
+    const subtotal = cartItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (parseInt(item.qty, 10) || 1), 0);
     if (subtotalEl) subtotalEl.textContent = `${formatPrice(subtotal)} ج.م`;
 
-    if (!area || area.active === false) {
+    if (!area || area.active === false || areaId === "unsupported") {
       if (areaError) areaError.style.display = "flex";
       if (submitBtn) submitBtn.disabled = true;
       if (feeEl) {
@@ -97,7 +117,7 @@
     if (areaError) areaError.style.display = "none";
     if (submitBtn) submitBtn.disabled = false;
 
-    // Delivery fee rule (PRD Section 4 & 5): Free in Sheikh Zayed or orders >= 5,000 EGP
+    // Delivery fee rule: Free in Sheikh Zayed or orders >= 5,000 EGP
     let fee = Number(area.fee) || 0;
     if (area.id === "sheikh-zayed" || subtotal >= 5000) {
       fee = 0;
@@ -121,7 +141,7 @@
       return;
     }
 
-    // PRD Section 4: Customer account check before checkout (Guest cart preserved)
+    // Customer account check before checkout (Guest checkout allowed)
     const isCustomerLoggedIn = (window.KK_DB && typeof window.KK_DB.getCustomer === "function" && window.KK_DB.getCustomer()) ||
       (() => {
         try {
@@ -149,7 +169,7 @@
     const subtotalEl = document.getElementById("checkoutSubtotalSum");
     const totalEl = document.getElementById("checkoutTotalSum") || document.getElementById("checkoutTotalSummary");
 
-    const totalAmount = cartItems.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0);
+    const totalAmount = cartItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (parseInt(item.qty, 10) || 1), 0);
     if (subtotalEl) subtotalEl.textContent = `${formatPrice(totalAmount)} ج.م`;
     if (totalEl) totalEl.textContent = `${formatPrice(totalAmount)} ج.م`;
 
@@ -159,14 +179,14 @@
           item => `
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.45rem 0; border-bottom: 1px dashed var(--border-light); font-size: 0.85rem;">
           <div style="display: flex; align-items: center; gap: 0.5rem; overflow: hidden;">
-            <img src="${window.escapeHtml(item.image)}" alt="${window.escapeHtml(item.name)}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=150&q=80'">
+            <img src="${window.escapeHtml(item.image || '')}" alt="${window.escapeHtml(item.name || '')}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=150&q=80'">
             <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; font-weight: 700;">
-              ${window.escapeHtml(item.name)}
+              ${window.escapeHtml(item.name || '')}
             </div>
           </div>
           <div style="display: flex; align-items: center; gap: 0.65rem; white-space: nowrap;">
-            <span style="font-size: 0.75rem; color: var(--text-muted);">× ${item.qty || 1}</span>
-            <span style="font-weight: 800; color: var(--accent);">${formatPrice((item.price || 0) * (item.qty || 1))} ج.م</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">× ${parseInt(item.qty, 10) || 1}</span>
+            <span style="font-weight: 800; color: var(--accent);">${formatPrice((Number(item.price) || 0) * (parseInt(item.qty, 10) || 1))} ج.م</span>
           </div>
         </div>
       `
@@ -370,10 +390,15 @@
   }
 
   // --------------------------------------------------------------------------
-  // 3. SECURE CHECKOUT SUBMISSION (Awaiting Central Server Confirmation)
+  // 3. SECURE CHECKOUT SUBMISSION (Zero-Trust Server Confirmation - Axis 6)
   // --------------------------------------------------------------------------
   window.handleCheckoutSubmit = async function (e) {
     if (e) e.preventDefault();
+
+    // Prevent concurrent double submissions (Anti-Double-Submission Guard)
+    if (isSubmittingOrder) {
+      return;
+    }
 
     const submitBtn = document.getElementById("btnSubmitCheckout") || document.getElementById("checkoutSubmitBtn");
     if (submitBtn && submitBtn.disabled) return;
@@ -383,11 +408,13 @@
     const phoneInput = document.getElementById("custPhoneInput") || form?.custPhone || document.getElementById("checkoutCustomerPhone");
     const addressInput = document.getElementById("custAddressInput") || form?.custAddress || document.getElementById("checkoutCustomerAddress");
     const notesInput = form?.custNotes || document.querySelector("textarea[name='custNotes']") || document.getElementById("checkoutCustomerNotes");
+    const couponInput = document.getElementById("custCouponInput") || form?.custCoupon || document.getElementById("checkoutCouponInput");
 
     const rawName = (nameInput ? nameInput.value : "").trim();
     const rawPhone = (phoneInput ? phoneInput.value : "").trim();
     const rawAddress = (addressInput ? addressInput.value : "").trim();
     const rawNotes = (notesInput ? notesInput.value : "").trim();
+    const rawCoupon = (couponInput ? couponInput.value : "").trim().toUpperCase();
 
     const nameVal = validateCustomerName(rawName);
     const phoneVal = validateCustomerPhone(rawPhone);
@@ -481,7 +508,7 @@
       return;
     }
 
-    // PRD Section 4 & 5: Validate Delivery Area and calculate breakdown
+    // Validate Delivery Area
     const areaSelect = document.getElementById("custDeliveryAreaSelect");
     const selectedAreaId = areaSelect ? areaSelect.value : "sheikh-zayed";
     const areas = (window.KK_DB && typeof window.KK_DB.getDeliveryAreas === "function") 
@@ -496,34 +523,31 @@
       return;
     }
 
-    const subtotal = cartItems.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0);
-    let shippingFee = Number(selectedArea.fee) || 0;
-    if (selectedArea.id === "sheikh-zayed" || subtotal >= 5000) {
-      shippingFee = 0;
-    }
-    const grandTotal = subtotal + shippingFee;
-
     const currentCustomer = (window.KK_DB && typeof window.KK_DB.getCustomer === "function") 
       ? window.KK_DB.getCustomer() 
       : null;
 
+    // Zero-Trust Payload: Notice that prices and totals sent are advisory only.
+    // The server recalculates everything from the authoritative database.
     const customerData = {
       name: nameVal.cleanName,
       phone: phoneVal.cleanPhone,
       city: selectedArea.name || "الشيخ زايد",
       deliveryArea: selectedArea.id,
       deliveryAreaName: selectedArea.name,
-      shippingFee: shippingFee,
-      subtotal: subtotal,
-      total: grandTotal,
       address: addressVal.cleanAddress,
       notes: rawNotes,
+      coupon: rawCoupon || undefined,
       customerId: currentCustomer ? currentCustomer.id : null,
       customerEmail: currentCustomer ? currentCustomer.email : null,
-      paymentMethod: "cod",
-      paymentStatus: "uncollected"
+      paymentMethod: "cod"
     };
 
+    // Generate unique client-side idempotency key for this order attempt
+    const idempotencyKey = generateIdempotencyKey();
+
+    // Lock submission state
+    isSubmittingOrder = true;
     const originalBtnHtml = submitBtn ? submitBtn.innerHTML : "";
     if (submitBtn) {
       submitBtn.disabled = true;
@@ -531,12 +555,13 @@
     }
 
     try {
-      const newOrder = await window.KK_DB.createOrder(customerData, cartItems);
+      // Send order with Idempotency-Key
+      const newOrder = await window.KK_DB.createOrder(customerData, cartItems, { idempotencyKey });
 
       if (newOrder && newOrder.id) {
         closeCheckoutModal();
 
-        // Clear cart everywhere
+        // Clear cart ONLY upon verified successful order creation
         if (window.STATE) window.STATE.cart = [];
         localStorage.removeItem("kased_karim_quotation_cart");
         if (typeof updateCartUI === "function") updateCartUI();
@@ -551,14 +576,17 @@
         // Save order ID and phone on customer device
         saveCustomerRecentOrder(newOrder.id, customerData.phone);
 
-        // Open order success confirmation modal
+        // Open order success confirmation modal with server-authoritative order data
         openOrderSuccessModal(newOrder);
       } else {
         throw new Error("لم نتمكن من الحصول على تأكيد رقم الطلب من الخادم");
       }
     } catch (err) {
+      // On failure: DO NOT clear cart! Keep user's selections safe.
       showToast(`❌ تعذر إرسال الطلب: ${err.message || "يرجى التحقق من الاتصال بالإنترنت"}`);
     } finally {
+      // Release submission lock
+      isSubmittingOrder = false;
       if (submitBtn) {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnHtml;
@@ -580,7 +608,7 @@
       : (order.items && typeof order.items === "object" ? Object.values(order.items) : []);
 
     const itemsList = items
-      .map((it, idx) => `• *${it.name || it.title || 'وحدة إضاءة'}* (عدد: ${it.qty || it.quantity || 1}) - ${formatPrice((it.price || 0) * (it.qty || it.quantity || 1))} ج.م`)
+      .map((it) => `• *${it.name || it.title || 'وحدة إضاءة'}* (عدد: ${it.qty || it.quantity || 1}) - ${formatPrice((Number(it.price) || 0) * (parseInt(it.qty || it.quantity, 10) || 1))} ج.م`)
       .join("\n");
 
     const trackUrl = `${window.location.origin}/?track=${encodeURIComponent(order.id)}`;
@@ -595,7 +623,7 @@
     msg += `----------------------------------------\n`;
     msg += `🛒 *وحدات الإضاءة المطلوبة:*\n${itemsList || "• وحدات مختارة من الكتالوج"}\n`;
     msg += `----------------------------------------\n`;
-    msg += `💰 *إجمالي قيمة الطلب:* ${formatPrice(order.total || 0)} جنيه مصري\n`;
+    msg += `💰 *إجمالي قيمة الطلب المعتمد:* ${formatPrice(order.total || 0)} جنيه مصري\n`;
     msg += `🔗 *رابط مسار وتتبع الطلب:* ${trackUrl}\n`;
     msg += `----------------------------------------\n`;
     msg += `يرجى تأكيد استلام الحجز وتحديد موعد المعاينة والتسليم بالمعرض بالشيخ زايد.`;
@@ -603,12 +631,26 @@
     return msg;
   };
 
+  function openSafeExternalUrl(url) {
+    if (typeof url !== "string" || !url) return null;
+    const trimmed = url.trim();
+    if (!/^(https:\/\/|mailto:|tel:|\/[^/])/i.test(trimmed)) {
+      return null;
+    }
+    const win = window.open(trimmed, "_blank", "noopener,noreferrer");
+    if (win) {
+      try { win.opener = null; } catch (e) {}
+    }
+    return win;
+  }
+  window.openSafeExternalUrl = openSafeExternalUrl;
+
   window.sendOrderViaWhatsApp = function (order) {
     if (!order) return;
     const msg = window.generateOrderWhatsAppMessage(order);
     const waNumber = (window.SHOWROOM_INFO && window.SHOWROOM_INFO.whatsapp) || "201006367690";
     const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
-    window.open(url, "_blank");
+    openSafeExternalUrl(url);
   };
 
   window.sendCurrentOrderViaWhatsApp = function () {
@@ -623,7 +665,7 @@
       } else {
         const waNumber = (window.SHOWROOM_INFO && window.SHOWROOM_INFO.whatsapp) || "201006367690";
         const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(`مرحباً معرض قاصد كريم بالشيخ زايد، أود تأكيد واستلام طلبي رقم #${window.lastPlacedOrderId}.`)}`;
-        window.open(url, "_blank");
+        openSafeExternalUrl(url);
       }
     }
   };
@@ -640,7 +682,7 @@
       const waNumber = (window.SHOWROOM_INFO && window.SHOWROOM_INFO.whatsapp) || "201006367690";
       const msg = `مرحباً معرض قاصد كريم بالشيخ زايد، أود الاستفسار عن تفاصيل وحالة طلبي رقم #${targetId || 'طلب إضاءة'}. هل يمكنكم إفادتي بآخر المستجدات وموعد المعاينة والتوصيل؟`;
       const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
-      window.open(url, "_blank");
+      openSafeExternalUrl(url);
     }
   };
 
@@ -759,7 +801,7 @@
     const resultBox = document.getElementById("trackResultContainer");
     const cleanId = orderId.toUpperCase().replace(/[#]/g, "").trim();
 
-    // 1. Instant Zero-Lag Local Render if available on this browser
+    // 1. Instant Zero-Lag Local Render if available in memory
     if (window.KK_DB) {
       try {
         const localOrders = window.KK_DB.getOrders();
@@ -780,7 +822,16 @@
       const headers = { "Content-Type": "application/json" };
       if (custToken) headers["Authorization"] = `Bearer ${custToken}`;
 
-      const sendPhone = phone || (window.KK_DB && window.KK_DB.getCustomer() ? window.KK_DB.getCustomer().phone : "") || localStorage.getItem("kk_customer_phone") || "";
+      let sendPhone = phone || (window.KK_DB && window.KK_DB.getCustomer() ? window.KK_DB.getCustomer().phone : "") || localStorage.getItem("kk_customer_phone") || "";
+
+      // For unauthenticated guest requests: prompt for phone number upfront to authenticate tracking
+      if (!sendPhone && !custToken) {
+        const enteredPhone = prompt("لأمان وخصوصية بياناتك، يرجى إدخال رقم الهاتف المسجل لتأكيد تتبع الطلب:");
+        if (enteredPhone) {
+          sendPhone = enteredPhone.trim();
+          try { localStorage.setItem("kk_customer_phone", sendPhone); } catch (e) {}
+        }
+      }
 
       const res = await fetch("/api/track", {
         method: "POST",
@@ -792,13 +843,7 @@
 
       if (res.ok && data.success && data.order) {
         renderTrackedOrderUI(data.order);
-        saveCustomerRecentOrder(data.order.id, phone);
-      } else if (data.requirePhoneVerification) {
-        // Customer requested order tracking, require matching phone verification
-        const enteredPhone = prompt("لأمان وخصوصية بياناتك، يرجى إدخال رقم الهاتف المسجل لتأكيد تتبع الطلب:");
-        if (enteredPhone) {
-          loadAndRenderTrackOrder(cleanId, enteredPhone.trim());
-        }
+        saveCustomerRecentOrder(data.order.id, sendPhone);
       } else {
         // If not rendered locally, show safe empty state
         if (!resultBox || resultBox.style.display !== "block") {
@@ -819,6 +864,19 @@
             desc.style.cssText = "color: var(--text-muted); font-size: 0.82rem; margin: 0 0 1rem 0;";
             desc.textContent = "لأمان وخصوصية بياناتك، يرجى كتابة كود الطلب كاملاً ورقم الهاتف المسجل للمعاينة وتتبع المراحل.";
 
+            const retryBtn = document.createElement("button");
+            retryBtn.type = "button";
+            retryBtn.className = "btn-secondary";
+            retryBtn.style.cssText = "margin: 0 auto 0.6rem auto; padding: 0.45rem 0.9rem; font-size: 0.8rem; display: block;";
+            retryBtn.innerHTML = `<i class="fas fa-phone"></i> إعادة إدخال رقم الهاتف المسجل`;
+            retryBtn.addEventListener("click", () => {
+              const reprompt = prompt("يرجى إدخال رقم الهاتف المسجل مع الطلب:");
+              if (reprompt) {
+                try { localStorage.setItem("kk_customer_phone", reprompt.trim()); } catch (e) {}
+                loadAndRenderTrackOrder(cleanId, reprompt.trim());
+              }
+            });
+
             const waBtn = document.createElement("button");
             waBtn.type = "button";
             waBtn.className = "btn-whatsapp-customer";
@@ -827,12 +885,13 @@
             waBtn.addEventListener("click", () => {
               const waNumber = window.SHOWROOM_INFO?.whatsapp || "201006367690";
               const text = encodeURIComponent(`مرحباً معرض قاصد كريم، أود الاستفسار عن حالة طلبي رقم #${cleanId}.`);
-              window.open(`https://wa.me/${waNumber}?text=${text}`, "_blank");
+              openSafeExternalUrl(`https://wa.me/${waNumber}?text=${text}`);
             });
 
             emptyState.appendChild(icon);
             emptyState.appendChild(heading);
             emptyState.appendChild(desc);
+            emptyState.appendChild(retryBtn);
             emptyState.appendChild(waBtn);
           }
           showToast(data.error || "لم يتم العثور على طلب بهذه البيانات");
@@ -877,18 +936,22 @@
     // Render Items List Safely
     const itemsContainer = document.getElementById("trackItemsList");
     if (itemsContainer) {
-      itemsContainer.innerHTML = (order.items || [])
+      const itemsList = Array.isArray(order.items)
+        ? order.items
+        : (order.items && typeof order.items === "object" ? Object.values(order.items) : []);
+
+      itemsContainer.innerHTML = itemsList
         .map(
           item => `
         <div style="display: flex; align-items: center; justify-content: space-between; background: #FFFFFF; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 0.6rem 0.85rem;">
           <div style="display: flex; align-items: center; gap: 0.65rem;">
-            <img src="${window.escapeHtml(item.image)}" alt="${window.escapeHtml(item.name)}" style="width: 42px; height: 42px; border-radius: 6px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
+            <img src="${window.escapeHtml(item.image || '')}" alt="${window.escapeHtml(item.name || '')}" style="width: 42px; height: 42px; border-radius: 6px; object-fit: cover;" onerror="this.src='https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=300&q=80'">
             <div>
-              <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">${window.escapeHtml(item.name)}</div>
-              <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-brand);">${window.escapeHtml(item.categoryName || 'إضاءة فاخرة')} • الكمية: ${item.qty}</div>
+              <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">${window.escapeHtml(item.name || '')}</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-brand);">${window.escapeHtml(item.categoryName || 'إضاءة فاخرة')} • الكمية: ${parseInt(item.qty, 10) || 1}</div>
             </div>
           </div>
-          <div style="font-weight: 800; font-size: 0.85rem; color: var(--accent-hover);">${formatPrice(item.price * item.qty)} ج.م</div>
+          <div style="font-weight: 800; font-size: 0.85rem; color: var(--accent-hover);">${formatPrice((Number(item.price) || 0) * (parseInt(item.qty, 10) || 1))} ج.م</div>
         </div>
       `
         )
@@ -1031,7 +1094,7 @@
       }
       if (msgText) msgText.textContent = order.statusMessage || "تعذر تسليم الطلب، يرجى التواصل مع المعرض عبر واتساب.";
     }
-  }
+  };
 
   // --------------------------------------------------------------------------
   // 6. CUSTOMER RECENT ORDERS CHIPS (Private to Customer Device)
@@ -1099,7 +1162,7 @@
     }
   };
 
-  window.refreshCurrentTrackOrder = function (btn) {
+  window.refreshCurrentTrackOrder = function () {
     if (window.currentTrackedOrderId) {
       const savedPhone = localStorage.getItem("kk_customer_phone") || "";
       loadAndRenderTrackOrder(window.currentTrackedOrderId, savedPhone);
@@ -1123,8 +1186,15 @@
     updateCustomerTrackingBadge();
 
     const checkoutForm = document.getElementById("checkoutOrderForm");
-    if (checkoutForm && !checkoutForm.getAttribute("onsubmit")) {
+    if (checkoutForm) {
       checkoutForm.addEventListener("submit", handleCheckoutSubmit);
+    }
+
+    const areaSelect = document.getElementById("custDeliveryArea");
+    if (areaSelect) {
+      areaSelect.addEventListener("change", function () {
+        handleDeliveryAreaChange(this.value);
+      });
     }
 
     // Modal Close on Escape Key

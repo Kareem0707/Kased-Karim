@@ -1,39 +1,38 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <!-- Security Shield & Anti-Analysis (Executive First Guard) -->
-  <script src="js/security-shield.js?v=20.0"></script>
+  
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>لوحة التحكم وإدارة المعرض | Kased Karim Lighting - الشيخ زايد</title>
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <meta name="referrer" content="no-referrer">
+  <title>لوحة التحكم وإدارة المعرض | Kased Karim Lighting</title>
   
-  <!-- Favicon -->
+  
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon-32x32.png">
 
-  <!-- Google Fonts: Cairo & Archivo Black -->
+  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
-  <!-- Font Awesome 6 Icons (Hardened with Subresource Integrity - SRI) -->
+  
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA==" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-  <!-- Stylesheets -->
+  
   <link rel="stylesheet" href="css/style.css?v=12.0">
   <link rel="stylesheet" href="css/components.css?v=12.0">
   <link rel="stylesheet" href="css/admin.css?v=12.0">
 </head>
 <body class="admin-page-body">
 
-  <!-- ====================================================================
-       EXECUTIVE 2-FACTOR AUTHENTICATION (2FA) GATEWAY (بوابة الإدارة المشفرة)
-       ==================================================================== -->
+  
   <div id="adminAuthGate" class="admin-auth-overlay" role="dialog" aria-modal="true" aria-labelledby="adminAuthTitle" style="display: flex;">
     <div class="admin-auth-card">
       
-      <!-- STEP 1: MASTER PASSWORD VERIFICATION -->
+      
       <div id="adminAuthStep1">
         <div class="admin-auth-emblem">
           <i class="fas fa-shield-halved"></i>
@@ -45,11 +44,11 @@
           هذه الصفحة مخصصة لمديري المعرض ومحمية بالتحقق الثنائي (2FA). أدخل رمز المرور الرئيسي:
         </p>
 
-        <form id="adminPinForm" onsubmit="handleAdminPinSubmit(event)">
+        <form id="adminPinForm" method="post" autocomplete="off" novalidate>
           <div class="admin-pin-input-wrap">
             <label for="adminPinInput" class="visually-hidden">رمز الدخول السري</label>
-            <input type="password" id="adminPinInput" class="admin-pin-input" placeholder="••••••••" maxlength="30" autocomplete="current-password" autofocus required aria-label="رمز الدخول السري">
-            <button type="button" class="btn-toggle-pin" onclick="togglePinVisibility()" title="إظهار / إخفاء الرمز" aria-label="إظهار أو إخفاء الرمز">
+            <input type="password" id="adminPinInput" class="admin-pin-input" placeholder="••••••••" maxlength="128" autocomplete="current-password" autofocus required aria-label="رمز الدخول السري">
+            <button type="button" class="btn-toggle-pin" data-action="toggle-pin-visibility" title="إظهار / إخفاء الرمز" aria-label="إظهار أو إخفاء الرمز">
               <i class="fas fa-eye" id="pinEyeIcon"></i>
             </button>
           </div>
@@ -66,7 +65,7 @@
         </form>
       </div>
 
-      <!-- STEP 2: 6-DIGIT EMAIL OTP VERIFICATION -->
+      
       <div id="adminAuthStep2" style="display: none;">
         <div class="admin-auth-emblem" style="color: #10B981; border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.1);">
           <i class="fas fa-envelope-circle-check"></i>
@@ -81,10 +80,10 @@
 
         <div class="otp-timer-badge">
           <i class="fas fa-clock"></i>
-          <span>صلاحية الرمز: <strong id="otpCountdownTimer">10:00</strong></span>
+          <span>صلاحية الرمز: <strong id="otpCountdownTimer">05:00</strong></span>
         </div>
 
-        <form id="adminOtpForm" onsubmit="handleAdminOtpSubmit(event)">
+        <form id="adminOtpForm" method="post" autocomplete="off" novalidate>
           <div class="otp-inputs-wrapper" id="otpBoxesContainer">
             <input type="text" maxlength="1" inputmode="numeric" class="otp-digit-box" data-idx="0" autofocus autocomplete="one-time-code">
             <input type="text" maxlength="1" inputmode="numeric" class="otp-digit-box" data-idx="1">
@@ -106,10 +105,10 @@
         </form>
 
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.25rem; font-size: 0.82rem;">
-          <button type="button" class="btn-text-link" id="resendOtpBtn" onclick="resendAdminOtp()" style="color: var(--accent);">
+          <button type="button" class="btn-text-link" id="resendOtpBtn" data-action="resend-otp" style="color: var(--accent);">
             <i class="fas fa-rotate-right"></i> <span>إعادة إرسال الكود</span>
           </button>
-          <button type="button" class="btn-text-link" onclick="backToStep1()" style="color: #94A3B8;">
+          <button type="button" class="btn-text-link" data-action="back-to-step1" style="color: #94A3B8;">
             <i class="fas fa-arrow-right"></i> <span>تغيير رمز المرور</span>
           </button>
         </div>
@@ -124,8 +123,8 @@
     </div>
   </div>
 
-  <div id="adminPageRoot" style="display: none;">
-    <!-- Executive Top Header -->
+  <div id="adminPageRoot" hidden style="display: none;">
+    
     <header class="admin-page-header">
       <div class="admin-page-header-inner">
         <div style="display: flex; align-items: center; gap: 1rem;">
@@ -145,15 +144,15 @@
         </div>
 
         <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-          <button type="button" class="btn-daily-backup-top" onclick="triggerFullCloudSync()" title="مزامنة سحابية فورية لجميع الأجهزة والهواتف الآن" style="background: linear-gradient(135deg, #10B981, #059669); color: #FFFFFF; border: none; box-shadow: 0 4px 14px rgba(16,185,129,0.35);">
+          <button type="button" class="btn-daily-backup-top" data-action="cloud-sync" title="مزامنة سحابية فورية لجميع الأجهزة والهواتف الآن" style="background: linear-gradient(135deg, #10B981, #059669); color: #FFFFFF; border: none; box-shadow: 0 4px 14px rgba(16,185,129,0.35);">
             <i class="fas fa-arrows-rotate"></i>
             <span>مزامنة سحابية شاملة</span>
           </button>
-          <button type="button" class="btn-daily-backup-top" onclick="triggerDailyBackupDownload()" title="تحميل النسخة الاحتياطية اليومية للجهاز فوراً (.json)">
+          <button type="button" class="btn-daily-backup-top" data-action="daily-backup-download" title="تحميل النسخة الاحتياطية اليومية للجهاز فوراً (.json)">
             <i class="fas fa-file-arrow-down"></i>
             <span>نسخة اليوم للجهاز</span>
           </button>
-          <button type="button" class="btn-copy-admin-link" onclick="copyAdminSecretLink()" title="نسخ رابط لوحة التحكم">
+          <button type="button" class="btn-copy-admin-link" data-action="copy-secret-link" title="نسخ رابط لوحة التحكم">
             <i class="fas fa-link"></i>
             <span>نسخ رابط لوحة التحكم</span>
           </button>
@@ -161,73 +160,73 @@
             <i class="fas fa-store"></i>
             <span>العودة للمعرض</span>
           </a>
-          <button type="button" class="btn-logout-admin" onclick="logoutAdmin()" title="تسجيل خروج الإدارة">
+          <button type="button" class="btn-logout-admin" data-action="admin-logout" title="تسجيل خروج الإدارة">
             <i class="fas fa-sign-out-alt"></i>
           </button>
         </div>
       </div>
     </header>
 
-    <!-- Admin Navigation Tabs Bar -->
+    
     <nav class="admin-page-nav-wrap">
       <div class="admin-page-nav-inner">
-        <button class="admin-tab-btn active" onclick="switchAdminTab('overview', this)">
+        <button class="admin-tab-btn active" data-action="switch-tab" data-tab="overview">
           <i class="fas fa-chart-line"></i>
           <span>نظرة عامة وأكثر المبيعات</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('orders', this)">
+        <button class="admin-tab-btn" data-action="switch-tab" data-tab="orders">
           <i class="fas fa-receipt"></i>
           <span>سجل الطلبات الواردة</span>
           <span class="admin-badge-count" id="adminHeaderBadge" style="position: static; margin-right: 0.35rem; display: inline-flex;">0</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('googleUsers', this)">
+        <button class="admin-tab-btn" data-action="switch-tab" data-tab="googleUsers">
           <i class="fab fa-google" style="color: #4285F4;"></i>
           <span>عملاء Google والويب</span>
           <span class="admin-badge-count" id="adminUsersCountBadge" style="position: static; margin-right: 0.35rem; display: none; background: #4285F4;">0</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('addProduct', this)">
+        <button class="admin-tab-btn" data-action="switch-tab" data-tab="addProduct">
           <i class="fas fa-plus-circle"></i>
           <span>إضافة وحدة إضاءة جديدة</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('inventory', this)">
+        <button class="admin-tab-btn" data-action="switch-tab" data-tab="inventory">
           <i class="fas fa-boxes-stacked"></i>
           <span>إدارة المخزون والكتالوج</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('bulkImport', this)">
+        <button class="admin-tab-btn" data-action="switch-tab" data-tab="bulkImport">
           <i class="fas fa-file-csv"></i>
           <span>استيراد شيت CSV</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('deliveryAreas', this)">
+        <button class="admin-tab-btn" data-action="switch-tab" data-tab="deliveryAreas">
           <i class="fas fa-truck-ramp-box"></i>
           <span>مناطق ورسوم التوصيل</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('reviews', this)">
+        <button class="admin-tab-btn" data-action="switch-tab" data-tab="reviews">
           <i class="fas fa-star-half-stroke"></i>
           <span>مراجعة التقييمات</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('categories', this)">
+        <button class="admin-tab-btn" data-action="switch-tab" data-tab="categories">
           <i class="fas fa-layer-group"></i>
           <span>أقسام المعرض</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('audit', this)">
+        <button class="admin-tab-btn" data-action="switch-tab" data-tab="audit">
           <i class="fas fa-clock-rotate-left"></i>
           <span>سجل التدقيق والنشاط</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('settings', this)">
+        <button class="admin-tab-btn" data-action="switch-tab" data-tab="settings">
           <i class="fas fa-address-card"></i>
           <span>أرقام التواصل واللينكات</span>
         </button>
-        <button class="admin-tab-btn" onclick="switchAdminTab('backup', this)">
+        <button class="admin-tab-btn" data-action="switch-tab" data-tab="backup">
           <i class="fas fa-shield-halved"></i>
           <span>النسخ الاحتياطي والاسترجاع</span>
         </button>
       </div>
     </nav>
 
-    <!-- Main Content Area -->
+    
     <main class="admin-page-content">
 
-      <!-- Daily Backup Safety Notice Banner -->
+      
       <div id="adminDailyBackupBanner" style="display: none; background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04)); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-md); padding: 1rem 1.5rem; margin-bottom: 1.5rem; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
         <div style="display: flex; align-items: center; gap: 0.85rem;">
           <div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 1.2rem;">
@@ -239,20 +238,18 @@
           </div>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center;">
-          <button type="button" class="btn-primary" style="font-size: 0.82rem; padding: 0.45rem 1rem; background: var(--accent); color: #0F172A; font-weight: 800; border: none;" onclick="triggerDailyBackupDownload()">
+          <button type="button" class="btn-primary" style="font-size: 0.82rem; padding: 0.45rem 1rem; background: var(--accent); color: #0F172A; font-weight: 800; border: none;" data-action="daily-backup-download">
             <i class="fas fa-download"></i> تحميل نسخة اليوم الآن
           </button>
-          <button type="button" class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.75rem;" onclick="dismissDailyBackupBanner()">
+          <button type="button" class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.75rem;" data-action="dismiss-daily-backup">
             <span>تجاهل لليوم</span>
           </button>
         </div>
       </div>
 
-      <!-- ====================================================================
-           TAB 1: OVERVIEW & BEST SELLERS (أكثر المبيعات)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane active" id="adminPane_overview">
-        <!-- KPI Cards Grid -->
+        
         <div class="admin-kpi-grid">
           <div class="admin-kpi-card accent-gold">
             <div class="kpi-title">إجمالي المبيعات المحققة</div>
@@ -272,7 +269,7 @@
           </div>
         </div>
 
-        <!-- Best Sellers Section -->
+        
         <div class="admin-section-block">
           <div class="admin-block-header">
             <div class="admin-block-title">
@@ -298,9 +295,7 @@
         </div>
       </section>
 
-      <!-- ====================================================================
-           TAB 2: ORDERS MANAGER (سجل الطلبات الواردة بالتفاصيل والصور)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane" id="adminPane_orders">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
           <div>
@@ -312,22 +307,22 @@
           </div>
 
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-            <button class="btn-primary" style="font-size: 0.8rem; padding: 0.45rem 0.95rem; background: var(--accent); color: #0F172A; font-weight: 700; border: none; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);" onclick="refreshAdminOrdersFromCloud(this)">
+            <button class="btn-primary" style="font-size: 0.8rem; padding: 0.45rem 0.95rem; background: var(--accent); color: #0F172A; font-weight: 700; border: none; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);" data-action="refresh-orders">
               <i class="fas fa-rotate" id="refreshOrdersIcon"></i>
               <span>تحديث فوري من السحابة</span>
             </button>
-            <button class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" onclick="testAdminChime()">
+            <button class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" data-action="test-chime">
               <i class="fas fa-volume-high" style="color: var(--accent);"></i>
               <span>تجربة التنبيه الصوتي</span>
             </button>
-            <button class="btn-secondary is-active-filter" data-order-filter="all" style="font-size: 0.8rem; padding: 0.45rem 0.9rem; background: #0F172A; color: #FFFFFF; border-color: #0F172A; font-weight: 800;" onclick="renderAdminOrders('all')">كل الطلبات</button>
-            <button class="btn-secondary" data-order-filter="received" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" onclick="renderAdminOrders('received')">وارد ومستلم</button>
-            <button class="btn-secondary" data-order-filter="confirmed" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" onclick="renderAdminOrders('confirmed')">تم التأكيد</button>
-            <button class="btn-secondary" data-order-filter="preparing" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" onclick="renderAdminOrders('preparing')">جاري التجهيز</button>
-            <button class="btn-secondary" data-order-filter="packed" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" onclick="renderAdminOrders('packed')">تم التغليف</button>
-            <button class="btn-secondary" data-order-filter="shipped" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" onclick="renderAdminOrders('shipped')">خرج للتوصيل</button>
-            <button class="btn-secondary" data-order-filter="delivered" style="font-size: 0.8rem; padding: 0.45rem 0.9rem; color: #059669; font-weight: 700;" onclick="renderAdminOrders('delivered')">تم التسليم</button>
-            <button class="btn-secondary" data-order-filter="cancelled" style="font-size: 0.8rem; padding: 0.45rem 0.9rem; color: #DC2626; border-color: rgba(220, 38, 38, 0.35);" onclick="renderAdminOrders('cancelled')">
+            <button class="btn-secondary is-active-filter" data-order-filter="all" style="font-size: 0.8rem; padding: 0.45rem 0.9rem; background: #0F172A; color: #FFFFFF; border-color: #0F172A; font-weight: 800;" data-action="filter-orders" data-filter="all">كل الطلبات</button>
+            <button class="btn-secondary" data-order-filter="received" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" data-action="filter-orders" data-filter="received">وارد ومستلم</button>
+            <button class="btn-secondary" data-order-filter="confirmed" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" data-action="filter-orders" data-filter="confirmed">تم التأكيد</button>
+            <button class="btn-secondary" data-order-filter="preparing" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" data-action="filter-orders" data-filter="preparing">جاري التجهيز</button>
+            <button class="btn-secondary" data-order-filter="packed" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" data-action="filter-orders" data-filter="packed">تم التغليف</button>
+            <button class="btn-secondary" data-order-filter="shipped" style="font-size: 0.8rem; padding: 0.45rem 0.9rem;" data-action="filter-orders" data-filter="shipped">خرج للتوصيل</button>
+            <button class="btn-secondary" data-order-filter="delivered" style="font-size: 0.8rem; padding: 0.45rem 0.9rem; color: #059669; font-weight: 700;" data-action="filter-orders" data-filter="delivered">تم التسليم</button>
+            <button class="btn-secondary" data-order-filter="cancelled" style="font-size: 0.8rem; padding: 0.45rem 0.9rem; color: #DC2626; border-color: rgba(220, 38, 38, 0.35);" data-action="filter-orders" data-filter="cancelled">
               <i class="fas fa-ban"></i> الملغي / تعذر التسليم
             </button>
           </div>
@@ -336,9 +331,7 @@
         <div class="orders-list-grid" id="adminOrdersListContainer"></div>
       </section>
 
-      <!-- ====================================================================
-           TAB 3: ADD PRODUCT FORM (إضافة وحدة إضاءة جديدة)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane" id="adminPane_addProduct">
         <div style="max-width: 860px; margin: 0 auto; background: #FFFFFF; padding: 2.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle);">
           <div style="margin-bottom: 1.75rem;">
@@ -351,7 +344,7 @@
 
           <form id="adminAddProductForm">
             <div class="form-grid">
-              <!-- Name (إجباري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <span>اسم وحدة الإضاءة (عربي)</span>
@@ -360,7 +353,7 @@
                 <input type="text" name="adminUnitName" class="form-input" placeholder="مثال: دلاية موندريان الكريستالية" required>
               </div>
 
-              <!-- Price (إجباري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <span>السعر الحالي (جنيه مصري)</span>
@@ -369,7 +362,7 @@
                 <input type="number" name="adminUnitPrice" class="form-input" placeholder="مثال: 32500" required>
               </div>
 
-              <!-- Primary Image Drag & Drop (إجباري) -->
+              
               <div class="form-group full-width">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.5rem;">
                   <label class="form-label" style="margin: 0;">
@@ -377,14 +370,14 @@
                     <span>صورة وحدة الإضاءة الأساسية</span>
                     <span class="required-tag">* (إجباري)</span>
                   </label>
-                  <button type="button" class="btn-text-link" id="btnToggleImageMode" onclick="toggleImageInputMode()">
+                  <button type="button" class="btn-text-link" id="btnToggleImageMode" data-action="toggle-image-mode">
                     <i class="fas fa-link"></i> <span>استخدام رابط مباشر (URL) بدلاً من الرفع</span>
                   </button>
                 </div>
 
-                <!-- Drag & Drop Area -->
-                <div class="drop-zone-container" id="adminImageDropZone" onclick="triggerFileInput('adminUnitFileInput')">
-                  <input type="file" id="adminUnitFileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(this, 'primary')">
+                
+                <div class="drop-zone-container" id="adminImageDropZone" data-action="trigger-file-input" data-target="adminUnitFileInput">
+                  <input type="file" id="adminUnitFileInput" accept="image/*" style="display: none;" id="adminUnitFileInput">
                   
                   <div class="drop-zone-prompt" id="dropZonePrompt">
                     <div class="drop-zone-icon">
@@ -394,45 +387,45 @@
                     <div class="drop-zone-hint">يدعم JPG, PNG, WEBP • يتم ضغط وتحسين الصورة تلقائياً لتناسب المتجر</div>
                   </div>
 
-                  <!-- Live Preview Box -->
-                  <div class="drop-zone-preview" id="dropZonePreview" style="display: none;" onclick="event.stopPropagation()">
+                  
+                  <div class="drop-zone-preview" id="dropZonePreview" style="display: none;" data-action="stop-propagation">
                     <img id="previewImgElement" src="" alt="معاينة الصورة">
                     <div class="preview-details">
                       <span class="preview-filename" id="previewFileName">image.jpg</span>
                       <span class="preview-filesize" id="previewFileSize">تم تحميل الصورة بنجاح</span>
-                      <button type="button" class="btn-remove-preview" onclick="resetPrimaryImage(event)">
+                      <button type="button" class="btn-remove-preview" data-action="reset-primary-image">
                         <i class="fas fa-trash-alt"></i> إزالة الصورة واختيار أخرى
                       </button>
                     </div>
                   </div>
                 </div>
 
-                <!-- Alternative URL Input (Hidden by default) -->
+                
                 <div id="imageUrlInputWrap" style="display: none; margin-top: 0.5rem;">
-                  <input type="url" id="adminUnitImageUrlInput" class="form-input" placeholder="https://images.unsplash.com/... أدخل رابط الصورة المباشر" oninput="handleUrlImageInput(this.value)">
+                  <input type="url" id="adminUnitImageUrlInput" class="form-input" placeholder="https://images.unsplash.com/... أدخل رابط الصورة المباشر" id="adminUnitImageUrlInput">
                 </div>
 
-                <!-- Hidden Input to Store Final Image Data -->
+                
                 <input type="hidden" name="adminUnitImage" id="adminUnitImageFinal" value="">
               </div>
 
-              <!-- Secondary Image (اختياري) -->
+              
               <div class="form-group full-width">
                 <label class="form-label">
                   <i class="fas fa-images" style="color: var(--text-muted);"></i>
                   <span>صورة ثانوية إضافية</span>
                   <span class="optional-tag">(اختياري)</span>
                 </label>
-                <div class="secondary-drop-zone" id="adminSecDropZone" onclick="triggerFileInput('adminSecFileInput')">
-                  <input type="file" id="adminSecFileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(this, 'secondary')">
+                <div class="secondary-drop-zone" id="adminSecDropZone" data-action="trigger-file-input" data-target="adminSecFileInput">
+                  <input type="file" id="adminSecFileInput" accept="image/*" style="display: none;" id="adminSecFileInput">
                   <div id="secDropPrompt" class="sec-drop-prompt">
                     <i class="fas fa-plus-circle" style="color: var(--accent); font-size: 1.2rem;"></i>
                     <span style="font-size: 0.85rem; color: var(--text-muted);">اسحب صورة إضافية هنا أو انقر للاختيار (اختياري)</span>
                   </div>
-                  <div id="secPreviewWrap" class="sec-preview-wrap" style="display: none;" onclick="event.stopPropagation()">
+                  <div id="secPreviewWrap" class="sec-preview-wrap" style="display: none;" data-action="stop-propagation">
                     <img id="secPreviewImg" src="" alt="صورة ثانوية">
                     <span id="secFileName" style="font-size: 0.82rem; color: var(--text-muted); flex: 1;"></span>
-                    <button type="button" class="btn-remove-preview" onclick="resetSecondaryImage(event)">
+                    <button type="button" class="btn-remove-preview" data-action="reset-secondary-image">
                       <i class="fas fa-trash-alt"></i> حذف
                     </button>
                   </div>
@@ -440,7 +433,7 @@
                 </div>
               </div>
 
-              <!-- English Name (اختياري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <span>الاسم بالإنجليزية (English Name)</span>
@@ -449,7 +442,7 @@
                 <input type="text" name="adminUnitEnName" class="form-input" placeholder="e.g. Mondrian Crystal Pendant">
               </div>
 
-              <!-- Category (إجباري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <i class="fas fa-layer-group" style="color: var(--accent);"></i>
@@ -473,7 +466,7 @@
                 </select>
               </div>
 
-              <!-- Style (اختياري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <span>الطراز / النمط المعماري</span>
@@ -482,7 +475,7 @@
                 <input type="text" name="adminUnitStyle" class="form-input" placeholder="مودرن، نيوكلاسيك، مينيماليست...">
               </div>
 
-              <!-- Old Price (اختياري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <span>السعر القديم قبل الخصم</span>
@@ -491,7 +484,7 @@
                 <input type="number" name="adminUnitOldPrice" class="form-input" placeholder="مثال: 39000">
               </div>
 
-              <!-- Warranty (اختياري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <span>فترة الضمان المعتمد</span>
@@ -500,7 +493,7 @@
                 <input type="text" name="adminUnitWarranty" class="form-input" placeholder="مثال: 5 سنوات ضمان شامل">
               </div>
 
-              <!-- Kelvin (اختياري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <span>درجة حرارة الضوء (Kelvin)</span>
@@ -509,7 +502,7 @@
                 <input type="text" name="adminUnitKelvin" class="form-input" placeholder="3000K دافئ / متغير">
               </div>
 
-              <!-- Detailed Description (اختياري) -->
+              
               <div class="form-group full-width">
                 <label class="form-label">
                   <span>الوصف التفصيلي للوحدة</span>
@@ -518,7 +511,7 @@
                 <textarea name="adminUnitDesc" class="form-textarea" placeholder="شرح جماليات الوحدة واستخداماتها الديكورية للفلل والقصور..."></textarea>
               </div>
 
-              <!-- Dimensions (اختياري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <span>الأبعاد والمقاسات</span>
@@ -527,7 +520,7 @@
                 <input type="text" name="adminUnitDimensions" class="form-input" placeholder="قطر 80 سم × ارتفاع 120 سم">
               </div>
 
-              <!-- Material (اختياري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <span>الخامات وجودة التشطيب</span>
@@ -536,7 +529,7 @@
                 <input type="text" name="adminUnitMaterial" class="form-input" placeholder="نحاس مفرش يدوي + كريستال عصفور">
               </div>
 
-              <!-- Wattage (اختياري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <span>القدرة الكهربائية (Wattage)</span>
@@ -545,7 +538,7 @@
                 <input type="text" name="adminUnitWattage" class="form-input" placeholder="60W LED">
               </div>
 
-              <!-- CRI (اختياري) -->
+              
               <div class="form-group">
                 <label class="form-label">
                   <span>مؤشر نقاء اللون (CRI)</span>
@@ -554,7 +547,7 @@
                 <input type="text" name="adminUnitCri" class="form-input" placeholder="مثال: CRI > 98">
               </div>
 
-              <!-- Badges (اختياري) -->
+              
               <div class="form-group full-width" style="display: flex; gap: 2rem; align-items: center; padding-top: 0.5rem; flex-wrap: wrap;">
                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; font-weight: 700; cursor: pointer;">
                   <input type="checkbox" name="adminIsNew" style="width: 18px; height: 18px; accent-color: var(--accent);" checked>
@@ -581,9 +574,7 @@
         </div>
       </section>
 
-      <!-- ====================================================================
-           TAB 4: INVENTORY & CATALOG MANAGER (إدارة المخزون)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane" id="adminPane_inventory">
         <div class="admin-section-block">
           <div class="admin-block-header">
@@ -592,10 +583,10 @@
               <span>مخزون وكتالوج وحدات الإضاءة المتاحة بالمعرض</span>
             </div>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-              <button class="btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 0.9rem;" onclick="exportCatalogData()" title="تحميل نسخة احتياطية من الكتالوج">
+              <button class="btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 0.9rem;" data-action="export-catalog" title="تحميل نسخة احتياطية من الكتالوج">
                 <i class="fas fa-download"></i> تصدير الكتالوج
               </button>
-              <button class="btn-primary" style="font-size: 0.85rem; padding: 0.5rem 1.1rem;" onclick="switchAdminTab('addProduct', document.querySelectorAll('.admin-tab-btn')[2])">
+              <button class="btn-primary" style="font-size: 0.85rem; padding: 0.5rem 1.1rem;" data-action="switch-tab" data-tab="addProduct">
                 <i class="fas fa-plus"></i> إضافة قطعة جديدة
               </button>
             </div>
@@ -617,14 +608,12 @@
         </div>
       </section>
 
-      <!-- ====================================================================
-           DEDICATED FULL-VIEW PRODUCT EDITOR STUDIO (استوديو تعديل القطع الفاخر)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane admin-product-editor-pane" id="adminPane_editProduct">
-        <!-- Top Navigation Header -->
+        
         <div class="editor-top-nav">
           <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-            <button type="button" class="editor-back-btn" onclick="closeProductEditor()">
+            <button type="button" class="editor-back-btn" data-action="close-product-editor">
               <i class="fas fa-arrow-right"></i>
               <span>العودة لقائمة المنتجات</span>
             </button>
@@ -645,13 +634,13 @@
           </div>
         </div>
 
-        <form id="adminEditProductPageForm" onsubmit="handleEditProductSubmit(event)">
+        <form id="adminEditProductPageForm" >
           <input type="hidden" id="editProductId">
 
           <div class="editor-studio-layout">
-            <!-- RIGHT COLUMN: PRODUCT SPECIFICATIONS & FIELDS -->
+            
             <div class="editor-form-col">
-              <!-- Card 1: Identity & Category -->
+              
               <div class="editor-card">
                 <div class="editor-card-header">
                   <i class="fas fa-tag"></i>
@@ -664,7 +653,7 @@
                       <span>اسم وحدة الإضاءة (عربي)</span>
                       <span class="required-tag">* (إجباري)</span>
                     </label>
-                    <input type="text" id="editProductName" class="form-input" placeholder="مثال: دلاية موندريان الكريستالية" required oninput="updateLiveEditorPreview()">
+                    <input type="text" id="editProductName" class="form-input" placeholder="مثال: دلاية موندريان الكريستالية" required >
                   </div>
 
                   <div class="form-group">
@@ -672,7 +661,7 @@
                       <span>الاسم بالإنجليزية</span>
                       <span class="optional-tag">(اختياري)</span>
                     </label>
-                    <input type="text" id="editProductEnName" class="form-input" placeholder="Mondrian Crystal Pendant" oninput="updateLiveEditorPreview()">
+                    <input type="text" id="editProductEnName" class="form-input" placeholder="Mondrian Crystal Pendant" >
                   </div>
                 </div>
 
@@ -682,7 +671,7 @@
                       <span>القسم أو التبويب الرئيسي</span>
                       <span class="required-tag">* (إجباري)</span>
                     </label>
-                    <select id="editProductCategory" class="form-select" required onchange="updateLiveEditorPreview()"></select>
+                    <select id="editProductCategory" class="form-select" required ></select>
                   </div>
 
                   <div class="form-group">
@@ -690,12 +679,12 @@
                       <span>الستايل / الطراز المعماري</span>
                       <span class="optional-tag">(اختياري)</span>
                     </label>
-                    <input type="text" id="editProductStyle" class="form-input" placeholder="مودرن إيطالي / كلاسيك راقي" oninput="updateLiveEditorPreview()">
+                    <input type="text" id="editProductStyle" class="form-input" placeholder="مودرن إيطالي / كلاسيك راقي" >
                   </div>
                 </div>
               </div>
 
-              <!-- Card 2: Pricing & Badges -->
+              
               <div class="editor-card">
                 <div class="editor-card-header">
                   <i class="fas fa-coins"></i>
@@ -708,7 +697,7 @@
                       <span>السعر الفعلي الحالي (ج.م)</span>
                       <span class="required-tag">* (إجباري)</span>
                     </label>
-                    <input type="number" id="editProductPrice" class="form-input" min="0" placeholder="مثال: 32500" required oninput="updateLiveEditorPreview()">
+                    <input type="number" id="editProductPrice" class="form-input" min="0" placeholder="مثال: 32500" required >
                   </div>
 
                   <div class="form-group">
@@ -716,7 +705,7 @@
                       <span>السعر قبل الخصم (ج.م)</span>
                       <span class="optional-tag">(اختياري)</span>
                     </label>
-                    <input type="number" id="editProductOriginalPrice" class="form-input" min="0" placeholder="مثال: 40000" oninput="updateLiveEditorPreview()">
+                    <input type="number" id="editProductOriginalPrice" class="form-input" min="0" placeholder="مثال: 40000" >
                   </div>
 
                   <div class="form-group">
@@ -724,28 +713,28 @@
                       <span>فترة الضمان المعتمد</span>
                       <span class="optional-tag">(اختياري)</span>
                     </label>
-                    <input type="text" id="editProductWarranty" class="form-input" placeholder="5 سنوات ضمان معتمد" oninput="updateLiveEditorPreview()">
+                    <input type="text" id="editProductWarranty" class="form-input" placeholder="5 سنوات ضمان معتمد" >
                   </div>
                 </div>
 
-                <!-- Badges -->
+                
                 <div style="display: flex; gap: 1.5rem; margin-top: 1.5rem; padding: 1rem 1.25rem; background: #F8FAFC; border-radius: 8px; border: 1px solid var(--border-light); flex-wrap: wrap;">
                   <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
-                    <input type="checkbox" id="editProductIsNew" onchange="updateLiveEditorPreview()" style="width: 18px; height: 18px; accent-color: var(--accent);">
+                    <input type="checkbox" id="editProductIsNew"  style="width: 18px; height: 18px; accent-color: var(--accent);">
                     <span style="color: #059669;">تمييز كـ "جديد 2026" (NEW)</span>
                   </label>
                   <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
-                    <input type="checkbox" id="editProductIsExclusive" onchange="updateLiveEditorPreview()" style="width: 18px; height: 18px; accent-color: var(--accent);">
+                    <input type="checkbox" id="editProductIsExclusive"  style="width: 18px; height: 18px; accent-color: var(--accent);">
                     <span style="color: #D97706;">إصدار حصري بالشيخ زايد (EXCLUSIVE)</span>
                   </label>
                   <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem; font-weight: 700;">
-                    <input type="checkbox" id="editProductIsBestSeller" onchange="updateLiveEditorPreview()" style="width: 18px; height: 18px; accent-color: var(--accent);">
+                    <input type="checkbox" id="editProductIsBestSeller"  style="width: 18px; height: 18px; accent-color: var(--accent);">
                     <span style="color: #DC2626;">شارة "الأكثر طلباً" (BEST SELLER)</span>
                   </label>
                 </div>
               </div>
 
-              <!-- Card 3: Technical Specifications -->
+              
               <div class="editor-card">
                 <div class="editor-card-header">
                   <i class="fas fa-sliders"></i>
@@ -755,40 +744,40 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
                   <div class="form-group">
                     <label class="form-label">الأبعاد والقياسات</label>
-                    <input type="text" id="editProductDimensions" class="form-input" placeholder="القطر 80 سم × الارتفاع 120 سم" oninput="updateLiveEditorPreview()">
+                    <input type="text" id="editProductDimensions" class="form-input" placeholder="القطر 80 سم × الارتفاع 120 سم" >
                   </div>
 
                   <div class="form-group">
                     <label class="form-label">خامات التصنيع</label>
-                    <input type="text" id="editProductMaterial" class="form-input" placeholder="كريستال عصفور نقي + نحاس مطلي بذهب 24k" oninput="updateLiveEditorPreview()">
+                    <input type="text" id="editProductMaterial" class="form-input" placeholder="كريستال عصفور نقي + نحاس مطلي بذهب 24k" >
                   </div>
 
                   <div class="form-group">
                     <label class="form-label">درجة حرارة الإضاءة (CCT)</label>
-                    <input type="text" id="editProductColorTemp" class="form-input" placeholder="3000K أصفر دافئ / ثلاثي درجات الإضاءة" oninput="updateLiveEditorPreview()">
+                    <input type="text" id="editProductColorTemp" class="form-input" placeholder="3000K أصفر دافئ / ثلاثي درجات الإضاءة" >
                   </div>
 
                   <div class="form-group">
                     <label class="form-label">القدرة واستهلاك الطاقة</label>
-                    <input type="text" id="editProductWattage" class="form-input" placeholder="LED 72W موفر للطاقة" oninput="updateLiveEditorPreview()">
+                    <input type="text" id="editProductWattage" class="form-input" placeholder="LED 72W موفر للطاقة" >
                   </div>
                 </div>
               </div>
 
-              <!-- Card 4: Architectural Description -->
+              
               <div class="editor-card">
                 <div class="editor-card-header">
                   <i class="fas fa-align-right"></i>
                   <h4>الوصف المعماري والجمالي للقطعة</h4>
                 </div>
-                <textarea id="editProductDescription" class="form-textarea" rows="4" placeholder="اكتب وصفاً معمارياً فاخراً يبرز جمال وفخامة القطعة في بهو الفيلات والقصور..." oninput="updateLiveEditorPreview()"></textarea>
+                <textarea id="editProductDescription" class="form-textarea" rows="4" placeholder="اكتب وصفاً معمارياً فاخراً يبرز جمال وفخامة القطعة في بهو الفيلات والقصور..." ></textarea>
               </div>
             </div>
 
-            <!-- LEFT COLUMN: LIVE STOREFRONT PREVIEW & IMAGES STUDIO -->
+            
             <div class="editor-preview-col">
               <div class="editor-preview-container">
-                <!-- Live Preview Card -->
+                
                 <div class="editor-card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
                   <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem;">
                     <span style="font-size: 0.85rem; font-weight: 800; color: #0F172A; display: flex; align-items: center; gap: 0.4rem;">
@@ -800,10 +789,10 @@
                     </span>
                   </div>
 
-                  <!-- The Simulated Storefront Card -->
+                  
                   <div class="editor-live-preview-card">
                     <div class="editor-preview-image-wrap">
-                      <img id="previewLiveImg" src="" alt="معاينة القطعة" onerror="this.src='assets/images/default-light.jpg'">
+                      <img id="previewLiveImg" src="" alt="معاينة القطعة" >
                       <div class="editor-preview-badges" id="previewBadgesWrap"></div>
                     </div>
                     <div class="editor-preview-details">
@@ -820,48 +809,48 @@
                   </div>
                 </div>
 
-                <!-- Images Studio Card -->
+                
                 <div class="editor-card">
                   <div class="editor-card-header">
                     <i class="fas fa-camera"></i>
                     <h4>استوديو صور القطعة</h4>
                   </div>
 
-                  <!-- Primary Image -->
+                  
                   <div style="margin-bottom: 1.5rem;">
                     <label class="form-label">
                       <span>الصورة الأساسية للقطعة</span>
                       <span class="required-tag">* (إجباري)</span>
                     </label>
                     <div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
-                      <input type="text" id="editProductImageUrl" class="form-input" placeholder="رابط URL للصورة أو ارفع من الجهاز" oninput="updateLiveEditorPreview()">
-                      <button type="button" class="btn-secondary" style="padding: 0 0.85rem;" onclick="document.getElementById('editProductMainFileInput').click()" title="رفع صورة من الجهاز">
+                      <input type="text" id="editProductImageUrl" class="form-input" placeholder="رابط URL للصورة أو ارفع من الجهاز" >
+                      <button type="button" class="btn-secondary" style="padding: 0 0.85rem;" data-action="trigger-file-input" data-target="editProductMainFileInput" title="رفع صورة من الجهاز">
                         <i class="fas fa-upload"></i>
                       </button>
                     </div>
-                    <input type="file" id="editProductMainFileInput" accept="image/*" style="display: none;" onchange="handleEditImageUpload(this.files[0], false)">
+                    <input type="file" id="editProductMainFileInput" accept="image/*" style="display: none;" >
                     <div style="height: 110px; border-radius: 8px; border: 1px dashed var(--border-light); background: #F8FAFC; display: flex; align-items: center; justify-content: center; overflow: hidden;">
                       <img id="editProductImagePreview" src="" alt="معاينة الصورة" style="max-height: 100%; max-width: 100%; object-fit: contain; display: none;">
                       <span id="editProductImagePlaceholder" style="font-size: 0.8rem; color: var(--text-muted);">لا توجد صورة أساسية</span>
                     </div>
                   </div>
 
-                  <!-- Secondary Image -->
+                  
                   <div>
                     <label class="form-label">
                       <span>الصورة الإضافية / الزاوية الثانية</span>
                       <span class="optional-tag">(اختياري)</span>
                     </label>
                     <div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
-                      <input type="text" id="editProductSecondaryImageUrl" class="form-input" placeholder="رابط URL أو ارفع صورة إضافية" oninput="updateLiveEditorPreview()">
-                      <button type="button" class="btn-secondary" style="padding: 0 0.85rem;" onclick="document.getElementById('editProductSecondaryFileInput').click()" title="رفع صورة إضافية">
+                      <input type="text" id="editProductSecondaryImageUrl" class="form-input" placeholder="رابط URL أو ارفع صورة إضافية" >
+                      <button type="button" class="btn-secondary" style="padding: 0 0.85rem;" data-action="trigger-file-input" data-target="editProductSecondaryFileInput" title="رفع صورة إضافية">
                         <i class="fas fa-upload"></i>
                       </button>
-                      <button type="button" class="btn-secondary" style="color: #DC2626;" onclick="resetEditSecondaryImage(event)" title="إزالة الصورة الإضافية">
+                      <button type="button" class="btn-secondary" style="color: #DC2626;" data-action="reset-edit-secondary-image" title="إزالة الصورة الإضافية">
                         <i class="fas fa-trash-alt"></i>
                       </button>
                     </div>
-                    <input type="file" id="editProductSecondaryFileInput" accept="image/*" style="display: none;" onchange="handleEditImageUpload(this.files[0], true)">
+                    <input type="file" id="editProductSecondaryFileInput" accept="image/*" style="display: none;" >
                     <div style="height: 110px; border-radius: 8px; border: 1px dashed var(--border-light); background: #F8FAFC; display: flex; align-items: center; justify-content: center; overflow: hidden;">
                       <img id="editProductSecondaryImagePreview" src="" alt="معاينة الصورة الإضافية" style="max-height: 100%; max-width: 100%; object-fit: contain; display: none;">
                       <span id="editProductSecondaryImagePlaceholder" style="font-size: 0.8rem; color: var(--text-muted);">لا توجد صورة إضافية</span>
@@ -872,9 +861,9 @@
             </div>
           </div>
 
-          <!-- STICKY ACTION BAR -->
+          
           <div class="editor-sticky-bar">
-            <button type="button" class="editor-cancel-btn" onclick="closeProductEditor()">
+            <button type="button" class="editor-cancel-btn" data-action="close-product-editor">
               <i class="fas fa-arrow-right"></i>
               <span>إلغاء والعودة للمخزون</span>
             </button>
@@ -887,13 +876,11 @@
         </form>
       </section>
 
-      <!-- ====================================================================
-           TAB 5: CATEGORIES MANAGER (إدارة أقسام المعرض والأنواع)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane" id="adminPane_categories">
         <div style="max-width: 960px; margin: 0 auto;">
 
-          <!-- Add Category Card -->
+          
           <div style="background: #FFFFFF; border-radius: var(--radius-md); padding: 2rem; border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle); margin-bottom: 2rem;">
             <div style="margin-bottom: 1.5rem;">
               <span class="section-tag">CATEGORY CREATOR</span>
@@ -906,7 +893,7 @@
               </p>
             </div>
 
-            <form id="adminAddCategoryForm" onsubmit="handleAdminAddCategory(event)">
+            <form id="adminAddCategoryForm" >
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
                 <div class="form-group">
                   <label class="form-label">
@@ -934,7 +921,7 @@
             </form>
           </div>
 
-          <!-- Existing Categories List -->
+          
           <div class="admin-section-block">
             <div class="admin-block-header">
               <div class="admin-block-title">
@@ -963,9 +950,7 @@
         </div>
       </section>
 
-      <!-- ====================================================================
-           TAB 6: SHOWROOM SETTINGS & CONTACT INFO (أرقام التواصل واللينكات)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane" id="adminPane_settings">
         <div style="max-width: 900px; margin: 0 auto; background: #FFFFFF; border-radius: var(--radius-md); padding: 2.25rem; border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle);">
           <div style="margin-bottom: 2rem;">
@@ -979,7 +964,7 @@
             </p>
           </div>
 
-          <form id="adminSettingsForm" onsubmit="handleAdminSettingsSubmit(event)">
+          <form id="adminSettingsForm" >
             
             <h3 style="font-size: 1.05rem; font-weight: 800; color: #0F172A; margin: 1.5rem 0 1rem; border-bottom: 1px solid #E2E8F0; padding-bottom: 0.5rem;">
               <i class="fas fa-phone" style="color: var(--accent); margin-left: 0.4rem;"></i> أرقام الهواتف والمحادثة
@@ -1043,7 +1028,7 @@
                   <i class="fab fa-google" style="color: #EA4335;"></i>
                   <span>معرف عميل جوجل لتسجيل الدخول (Google Client ID)</span>
                 </label>
-                <input type="text" id="settingsGoogleClientId" class="form-input" value="975827952448-e6dekknbl9s5vfechtk9q7q0vgjqsvma.apps.googleusercontent.com" dir="ltr" style="font-family: monospace; font-size: 0.9rem;">
+                <input type="text" id="settingsGoogleClientId" class="form-input" placeholder="أدخل Google Client ID هنا..." dir="ltr" style="font-family: monospace; font-size: 0.9rem;">
                 <small style="color: var(--text-muted); font-size: 0.78rem; margin-top: 4px; display: block;">
                   لتفعيل تسجيل الدخول الحقيقي المباشر بحسابات Google للزوار. يُستخرج مجاناً من Google Cloud Console (APIs &amp; Services &gt; Credentials).
                 </small>
@@ -1073,7 +1058,7 @@
                 <label class="form-label"><i class="fas fa-lock" style="color: var(--accent);"></i> <span>رابط مصمم الموقع (معتمد ومثبت)</span></label>
                 <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: var(--radius-sm); padding: 0.65rem 1rem; font-size: 0.88rem; color: #475569; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
                   <span style="font-weight: 700; color: #0F172A;">Designed by KarimoDesign</span>
-                  <a href="https://karimodesign.vercel.app/" target="_blank" style="color: var(--accent); font-weight: 700; text-decoration: none; font-size: 0.85rem;">https://karimodesign.vercel.app/ <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.75rem;"></i></a>
+                  <a href="https://karimodesign.vercel.app/" target="_blank" rel="noopener noreferrer" style="color: var(--accent); font-weight: 700; text-decoration: none; font-size: 0.85rem;">https://karimodesign.vercel.app/ <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.75rem;"></i></a>
                 </div>
               </div>
             </div>
@@ -1083,7 +1068,7 @@
                 <i class="fas fa-floppy-disk"></i>
                 <span>حفظ وتطبيق التعديلات فوراً</span>
               </button>
-              <button type="button" class="btn-secondary" onclick="loadAdminSettingsValues()">
+              <button type="button" class="btn-secondary" data-action="load-settings">
                 <i class="fas fa-rotate-left"></i>
                 <span>إعادة ضبط الحقول</span>
               </button>
@@ -1092,13 +1077,11 @@
         </div>
       </section>
 
-      <!-- ====================================================================
-           TAB 7: DUAL BACKUP & RESTORE CENTER (النسخ الاحتياطي والاسترجاع المزدوج)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane" id="adminPane_backup">
         <div style="max-width: 960px; margin: 0 auto;">
 
-          <!-- Format A: Downloadable Daily File Backup -->
+          
           <div style="background: linear-gradient(135deg, #0F172A, #1E293B); border-radius: var(--radius-md); padding: 2.25rem; color: #FFFFFF; box-shadow: var(--shadow-elevated); margin-bottom: 2rem;">
             <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem;">
               <div>
@@ -1117,21 +1100,21 @@
                 </div>
               </div>
 
-              <button type="button" class="btn-primary" style="padding: 0.95rem 1.85rem; font-size: 1rem; font-weight: 800; background: linear-gradient(135deg, #10B981, #059669); color: #FFFFFF; border: none; box-shadow: 0 4px 18px rgba(16, 185, 129, 0.4);" onclick="triggerDailyBackupDownload()">
+              <button type="button" class="btn-primary" style="padding: 0.95rem 1.85rem; font-size: 1rem; font-weight: 800; background: linear-gradient(135deg, #10B981, #059669); color: #FFFFFF; border: none; box-shadow: 0 4px 18px rgba(16, 185, 129, 0.4);" data-action="daily-backup-download">
                 <i class="fas fa-file-arrow-down" style="font-size: 1.15rem;"></i>
                 <span>تحميل نسخة اليوم للجهاز الآن</span>
               </button>
             </div>
 
-            <!-- Restore from Local File Dropzone -->
+            
             <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
               <div style="font-size: 0.95rem; font-weight: 700; color: #F1F5F9; margin-bottom: 0.75rem;">
                 <i class="fas fa-file-import" style="color: var(--accent); margin-left: 0.4rem;"></i>
                 استرجاع البيانات من ملف محفوظ سابقاً على جهازك:
               </div>
 
-              <div class="drop-zone-container" style="background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.2);" onclick="document.getElementById('backupFileInput').click()">
-                <input type="file" id="backupFileInput" accept=".json,application/json" style="display: none;" onchange="handleBackupFileSelected(this)">
+              <div class="drop-zone-container" style="background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.2);" data-action="trigger-file-input" data-target="backupFileInput">
+                <input type="file" id="backupFileInput" accept=".json,application/json" style="display: none;" >
                 
                 <div class="drop-zone-prompt" id="backupFilePrompt">
                   <div class="drop-zone-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--accent);">
@@ -1152,10 +1135,10 @@
                   </div>
                   <div id="backupFileStatsDisplay" style="font-size: 0.85rem; color: #CBD5E1; margin-top: 0.75rem;"></div>
                   <div style="display: flex; gap: 0.75rem; justify-content: center; margin-top: 1rem;">
-                    <button type="button" class="btn-primary" style="background: #10B981; border: none;" onclick="applyFileRestore(event)">
+                    <button type="button" class="btn-primary" style="background: #10B981; border: none;" data-action="apply-file-restore">
                       <i class="fas fa-arrow-rotate-left"></i> تأكيد استرجاع هذه البيانات
                     </button>
-                    <button type="button" class="btn-secondary" style="color: #FFFFFF; border-color: rgba(255,255,255,0.3);" onclick="cancelFileRestore(event)">
+                    <button type="button" class="btn-secondary" style="color: #FFFFFF; border-color: rgba(255,255,255,0.3);" data-action="cancel-file-restore">
                       إلغاء
                     </button>
                   </div>
@@ -1164,7 +1147,7 @@
             </div>
           </div>
 
-          <!-- Format B: Web Restore Points -->
+          
           <div class="admin-section-block" style="margin-bottom: 2rem;">
             <div class="admin-block-header">
               <div>
@@ -1181,7 +1164,7 @@
                 </p>
               </div>
 
-              <button type="button" class="btn-secondary" style="font-size: 0.85rem; padding: 0.55rem 1.15rem;" onclick="createManualWebRestorePoint()">
+              <button type="button" class="btn-secondary" style="font-size: 0.85rem; padding: 0.55rem 1.15rem;" data-action="create-restore-point">
                 <i class="fas fa-bookmark" style="color: var(--accent);"></i>
                 <span>حفظ نقطة استرجاع يدوية الآن</span>
               </button>
@@ -1203,7 +1186,7 @@
             </div>
           </div>
 
-          <!-- Factory Defaults / Reset -->
+          
           <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: var(--radius-md); padding: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
             <div>
               <div style="font-weight: 800; color: #92400E; font-size: 0.95rem;">
@@ -1215,7 +1198,7 @@
               </div>
             </div>
 
-            <button type="button" class="btn-secondary" style="background: #FFFFFF; border-color: #F59E0B; color: #B45309; font-weight: 700; font-size: 0.85rem; padding: 0.55rem 1.15rem;" onclick="emergencyFactoryReset()">
+            <button type="button" class="btn-secondary" style="background: #FFFFFF; border-color: #F59E0B; color: #B45309; font-weight: 700; font-size: 0.85rem; padding: 0.55rem 1.15rem;" data-action="factory-reset">
               <i class="fas fa-rotate-left"></i>
               <span>استعادة ضبط المصنع</span>
             </button>
@@ -1224,9 +1207,7 @@
         </div>
       </section>
 
-      <!-- ====================================================================
-           TAB: BULK CSV PRODUCT IMPORT (استيراد المنتجات من شيت - PRD Section 6)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane" id="adminPane_bulkImport">
         <div style="max-width: 960px; margin: 0 auto; background: #FFFFFF; padding: 2.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle);">
           <div style="margin-bottom: 1.5rem;">
@@ -1240,7 +1221,7 @@
             </p>
           </div>
 
-          <!-- Template Download & Format Guide -->
+          
           <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
             <div>
               <div style="font-weight: 800; font-size: 0.88rem; color: var(--text-main);">الأعمدة المطلوبة في الملف:</div>
@@ -1248,41 +1229,39 @@
                 id, name, enName, price, originalPrice, category, stock, image, description
               </div>
             </div>
-            <button type="button" class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" onclick="downloadSampleCsvTemplate()">
+            <button type="button" class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" data-action="download-csv-template">
               <i class="fas fa-download"></i> <span>تحميل نموذج CSV تجريبي (.test)</span>
             </button>
           </div>
 
-          <!-- Paste or Upload Area -->
+          
           <div style="margin-bottom: 1.5rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
               <label class="form-label" style="margin: 0; font-weight: 800;">محتوى ملف الـ CSV:</label>
               <label class="btn-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.75rem; cursor: pointer;">
                 <i class="fas fa-upload"></i> <span>اختيار ملف من جهازك</span>
-                <input type="file" id="bulkCsvFileInput" accept=".csv,text/csv" style="display: none;" onchange="handleCsvFileSelected(this)">
+                <input type="file" id="bulkCsvFileInput" accept=".csv,text/csv" style="display: none;" >
               </label>
             </div>
             <textarea id="bulkCsvTextInput" class="form-textarea" rows="8" placeholder="الصق بيانات الـ CSV هنا أو قم برفع الملف أعلاه..." style="font-family: monospace; font-size: 0.82rem; direction: ltr; text-align: left;"></textarea>
           </div>
 
           <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1.5rem;">
-            <button type="button" class="btn-primary" style="font-weight: 700; padding: 0.65rem 1.5rem;" onclick="validateBulkCsvData()">
+            <button type="button" class="btn-primary" style="font-weight: 700; padding: 0.65rem 1.5rem;" data-action="validate-bulk-csv">
               <i class="fas fa-shield-check"></i>
               <span>فحص والتحقق من صحة الصفوف</span>
             </button>
-            <button type="button" class="btn-secondary" onclick="clearBulkCsvForm()">
+            <button type="button" class="btn-secondary" data-action="clear-bulk-csv">
               <span>مسح</span>
             </button>
           </div>
 
-          <!-- Validation Report Container -->
+          
           <div id="bulkCsvReportBox" style="display: none; border-radius: var(--radius-sm); padding: 1.25rem; margin-top: 1.25rem;"></div>
         </div>
       </section>
 
-      <!-- ====================================================================
-           TAB: DELIVERY AREAS & FEES (مناطق ورسوم التوصيل - PRD Sections 4 & 5)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane" id="adminPane_deliveryAreas">
         <div class="delivery-areas-card-container">
           <div class="delivery-areas-header-row">
@@ -1297,10 +1276,10 @@
               </p>
             </div>
             <div class="delivery-areas-action-buttons">
-              <button type="button" class="btn-secondary btn-add-delivery-zone" onclick="addNewDeliveryAreaRow()">
+              <button type="button" class="btn-secondary btn-add-delivery-zone" data-action="add-delivery-zone">
                 <i class="fas fa-plus"></i> <span>إضافة نطاق مناطق جديد</span>
               </button>
-              <button type="button" class="btn-primary btn-save-delivery-zones" onclick="saveDeliveryAreasChanges()">
+              <button type="button" class="btn-primary btn-save-delivery-zones" data-action="save-delivery-zones">
                 <i class="fas fa-save"></i> <span>حفظ تعديلات التوصيل</span>
               </button>
             </div>
@@ -1324,9 +1303,7 @@
         </div>
       </section>
 
-      <!-- ====================================================================
-           TAB: REVIEWS MODERATION (مراجعة تقييمات العملاء - PRD Section 2 & 3)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane" id="adminPane_reviews">
         <div style="max-width: 960px; margin: 0 auto; background: #FFFFFF; padding: 2.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
@@ -1341,10 +1318,10 @@
               </p>
             </div>
             <div style="display: flex; gap: 0.5rem;">
-              <button type="button" class="btn-secondary is-active-filter" data-rev-filter="all" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" onclick="renderAdminReviews('all')">الكل</button>
-              <button type="button" class="btn-secondary" data-rev-filter="pending" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" onclick="renderAdminReviews('pending')">قيد المراجعة</button>
-              <button type="button" class="btn-secondary" data-rev-filter="approved" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" onclick="renderAdminReviews('approved')">معتمدة</button>
-              <button type="button" class="btn-secondary" data-rev-filter="rejected" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" onclick="renderAdminReviews('rejected')">محجوبة</button>
+              <button type="button" class="btn-secondary is-active-filter" data-rev-filter="all" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" data-action="filter-reviews" data-filter="all">الكل</button>
+              <button type="button" class="btn-secondary" data-rev-filter="pending" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" data-action="filter-reviews" data-filter="pending">قيد المراجعة</button>
+              <button type="button" class="btn-secondary" data-rev-filter="approved" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" data-action="filter-reviews" data-filter="approved">معتمدة</button>
+              <button type="button" class="btn-secondary" data-rev-filter="rejected" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" data-action="filter-reviews" data-filter="rejected">محجوبة</button>
             </div>
           </div>
 
@@ -1352,9 +1329,7 @@
         </div>
       </section>
 
-      <!-- ====================================================================
-           TAB: AUDIT HISTORY (سجل التدقيق والنشاطات - PRD Section 3)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane" id="adminPane_audit">
         <div style="max-width: 960px; margin: 0 auto; background: #FFFFFF; padding: 2.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
@@ -1368,7 +1343,7 @@
                 توثيق زمني غير قابل للتلاعب لكافة العمليات الحساسة (تغيير الأسعار، تحديث المخزون، التحصيل النقدي، اعتماد التقييمات).
               </p>
             </div>
-            <button type="button" class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" onclick="renderAdminAuditLogs()">
+            <button type="button" class="btn-secondary" style="font-size: 0.8rem; padding: 0.45rem 0.85rem;" data-action="refresh-audit-logs">
               <i class="fas fa-rotate"></i> <span>تحديث السجل</span>
             </button>
           </div>
@@ -1389,13 +1364,11 @@
         </div>
       </section>
 
-      <!-- ====================================================================
-           TAB: GOOGLE & REGISTERED WEB USERS (دليل عملاء الويب ومستخدمي Google)
-           ==================================================================== -->
+      
       <section class="admin-tab-pane" id="adminPane_googleUsers">
         <div style="max-width: 1140px; margin: 0 auto; background: #FFFFFF; padding: 2.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-light); box-shadow: var(--shadow-subtle);">
           
-          <!-- Header block -->
+          
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border-light); padding-bottom: 1.25rem;">
             <div>
               <span class="section-tag" style="background: rgba(66,133,244,0.1); color: #1a73e8; border: 1px solid rgba(66,133,244,0.25);">
@@ -1411,16 +1384,16 @@
             </div>
             
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-              <button type="button" class="btn-secondary" style="font-size: 0.82rem; padding: 0.5rem 1rem;" onclick="refreshAdminGoogleUsers()">
+              <button type="button" class="btn-secondary" style="font-size: 0.82rem; padding: 0.5rem 1rem;" data-action="refresh-google-users">
                 <i class="fas fa-rotate"></i> <span>تحديث السجل</span>
               </button>
-              <button type="button" class="btn-primary" style="font-size: 0.82rem; padding: 0.5rem 1rem;" onclick="exportAdminGoogleUsersCSV()">
+              <button type="button" class="btn-primary" style="font-size: 0.82rem; padding: 0.5rem 1rem;" data-action="export-google-users-csv">
                 <i class="fas fa-file-arrow-down"></i> <span>تصدير CSV</span>
               </button>
             </div>
           </div>
 
-          <!-- KPI Cards Grid -->
+          
           <div class="admin-kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1.75rem;">
             <div class="admin-kpi-card accent-blue">
               <div class="kpi-title">إجمالي العملاء المسجلين</div>
@@ -1436,22 +1409,22 @@
             </div>
           </div>
 
-          <!-- Filter & Search Toolbar -->
+          
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem; background: #F8FAFC; padding: 0.85rem 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
             <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; max-width: 380px;">
               <i class="fas fa-search" style="color: var(--text-muted);"></i>
-              <input type="text" id="adminGoogleUsersSearchInput" placeholder="بحث بالاسم أو البريد الإلكتروني أو الهاتف..." style="width: 100%; border: 1px solid var(--border-light); background: #FFFFFF; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.85rem; font-family: inherit;" oninput="filterAdminGoogleUsers()">
+              <input type="text" id="adminGoogleUsersSearchInput" placeholder="بحث بالاسم أو البريد الإلكتروني أو الهاتف..." style="width: 100%; border: 1px solid var(--border-light); background: #FFFFFF; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.85rem; font-family: inherit;" >
             </div>
             <div style="display: flex; gap: 0.4rem; align-items: center;">
-              <button type="button" class="btn-secondary is-active-user-filter" data-user-filter="all" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;" onclick="setAdminGoogleUsersFilter('all')">الكل</button>
-              <button type="button" class="btn-secondary" data-user-filter="google" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;" onclick="setAdminGoogleUsersFilter('google')"><i class="fab fa-google" style="color: #4285F4; margin-left: 3px;"></i> Google فقط</button>
-              <button type="button" class="btn-secondary" data-user-filter="local" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;" onclick="setAdminGoogleUsersFilter('local')">تسجيل محلي</button>
+              <button type="button" class="btn-secondary is-active-user-filter" data-user-filter="all" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;" data-action="filter-google-users" data-filter="all">الكل</button>
+              <button type="button" class="btn-secondary" data-user-filter="google" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;" data-action="filter-google-users" data-filter="google"><i class="fab fa-google" style="color: #4285F4; margin-left: 3px;"></i> Google فقط</button>
+              <button type="button" class="btn-secondary" data-user-filter="local" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;" data-action="filter-google-users" data-filter="local">تسجيل محلي</button>
             </div>
           </div>
 
-          <!-- Users Cards Grid Container -->
+          
           <div id="adminGoogleUsersListContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem;">
-            <!-- Rendered by JS -->
+            
           </div>
 
         </div>
@@ -1460,13 +1433,13 @@
     </main>
   </div>
 
-  <!-- Toast Notification Container -->
+  
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- JavaScript Scripts -->
-  <script src="js/i18n.js?v=20.0"></script>
-  <script src="js/data.js?v=20.0"></script>
-  <script src="js/db.js?v=20.0"></script>
-  <script src="js/admin.js?v=20.0"></script>
+  
+  <script src="js/i18n.js?v=20.0" defer></script>
+  <script src="js/data.js?v=20.0" defer></script>
+  <script src="js/db.js?v=20.0" defer></script>
+  <script src="js/admin.js?v=20.0" defer></script>
 </body>
 </html>

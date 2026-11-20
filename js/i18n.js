@@ -1,15 +1,23 @@
 /**
  * KASED KARIM LIGHTING - SHEIKH ZAYED
  * Dedicated Bilingual Internationalization & Localization Engine (js/i18n.js)
- * PRD Section 7: Arabic (RTL) & English (LTR) Native Storefront Support
+ * Hardened per OWASP ASVS Level 3 (V5 Output Validation & V8 Data Protection)
+ * Features:
+ *  - 100% Free of embedded HTML (Pure textContent enforcement)
+ *  - Prototype Pollution & Poisoning Defense (Object.hasOwn, Object.freeze)
+ *  - Secure Parameter Substitution (No eval, no regex replacement exploitation)
+ *  - Safe Storage Wrapper & Whitelisted Language Enforcement ("ar" | "en")
  */
 
 (function () {
   "use strict";
 
   const STORAGE_KEY = "kk_lang";
+  const ALLOWED_LANGS = new Set(["ar", "en"]);
+  const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
-  const TRANSLATIONS = {
+  // Raw Translation Dictionaries (100% Raw Literal Strings, Zero HTML Markup)
+  const RAW_TRANSLATIONS = {
     ar: {
       // General & Brand
       brandName: "قاصد كريم",
@@ -48,7 +56,9 @@
       // Hero Section
       heroTag: "صُنعت لقصور وفيلات الشيخ زايد",
       heroTitle: "فخامة النور في أبهى تجلياتها",
-      heroEditorialHeadingHtml: `قاصد كريم <span class="highlight-champagne">للإضاءة</span> الفاخرة`,
+      heroHeadingPrefix: "قاصد كريم ",
+      heroHeadingHighlight: "للإضاءة",
+      heroHeadingSuffix: " الفاخرة",
       heroEditorialDesc: "نصيغ الضوء ليتحول إلى تحفة فنية تليق بقصوركم وفيلاتكم الراقية. تشكيلات إيطالية حصرية من الدلايات الفاخرة، أنظمة المسارات المغناطيسية، وتنسيق متكامل يبرز فخامة المكان وأناقته.",
       heroSubtitle: "المعرض الأول للإضاءة الإيطالية الفاخرة، المسارات المغناطيسية المعمارية، وحلول الإنارة المتكاملة لكبار مهندسي الديكور وأصحاب الذوق الرفيع.",
       heroBtnExplore: "استكشف الكتالوج الفاخر",
@@ -173,9 +183,13 @@
       // Auth & Form Placeholders
       ph_fullName: "مثال: كريم محمود",
       ph_phone: "010XXXXXXXX (11 رقماً)",
-      ph_email: "name@example.com",
+      ph_email: "client@domain.com",
       ph_password: "•••••••• (6 خانات على الأقل)",
-      ph_loginIdentifier: "010XXXXXXXX أو your@email.com"
+      ph_loginIdentifier: "010XXXXXXXX أو client@domain.com",
+
+      // Parameterized Message Templates
+      welcomeUser: "مرحباً، {name}",
+      orderPlacedSuccess: "تم تسجيل طلبكم رقم {orderId} بنجاح"
     },
 
     en: {
@@ -216,7 +230,9 @@
       // Hero Section
       heroTag: "Crafted for Sheikh Zayed Palaces & Villas",
       heroTitle: "The Pure Splendor of Masterpiece Lighting",
-      heroEditorialHeadingHtml: `KASED KARIM <span class="highlight-champagne">LUXURY</span> LIGHTING`,
+      heroHeadingPrefix: "KASED KARIM ",
+      heroHeadingHighlight: "LUXURY",
+      heroHeadingSuffix: " LIGHTING",
       heroEditorialDesc: "Crafting light into an artistic masterpiece worthy of prestigious estates and villas. Exclusive Italian chandeliers, architectural magnetic tracks, and bespoke luxury illuminations.",
       heroSubtitle: "Egypt's premier destination for Italian luxury luminaires, architectural magnetic tracks, and complete lighting solutions for distinguished architects and homeowners.",
       heroBtnExplore: "Explore Luxury Catalog",
@@ -341,26 +357,50 @@
       // Auth & Form Placeholders
       ph_fullName: "e.g., Karim Mahmoud",
       ph_phone: "010XXXXXXXX (11 digits)",
-      ph_email: "name@example.com",
+      ph_email: "client@domain.com",
       ph_password: "•••••••• (min 6 characters)",
-      ph_loginIdentifier: "010XXXXXXXX or your@email.com"
+      ph_loginIdentifier: "010XXXXXXXX or client@domain.com",
+
+      // Parameterized Message Templates
+      welcomeUser: "Welcome, {name}",
+      orderPlacedSuccess: "Your order #{orderId} has been successfully placed"
     }
   };
+
+  // Deeply freeze translation objects to prevent prototype / runtime tampering
+  Object.freeze(RAW_TRANSLATIONS.ar);
+  Object.freeze(RAW_TRANSLATIONS.en);
+  const TRANSLATIONS = Object.freeze(RAW_TRANSLATIONS);
 
   class I18nManager {
     constructor() {
       let saved = "ar";
       try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlLang = urlParams.get("lang");
-        if (urlLang === "en" || urlLang === "ar") {
-          saved = urlLang;
-          localStorage.setItem(STORAGE_KEY, urlLang);
-        } else {
-          saved = localStorage.getItem(STORAGE_KEY) || "ar";
+        if (typeof window !== "undefined" && window.location && window.location.search) {
+          const urlParams = new URLSearchParams(window.location.search);
+          const urlLang = urlParams.get("lang");
+          if (urlLang && ALLOWED_LANGS.has(urlLang)) {
+            saved = urlLang;
+            try {
+              localStorage.setItem(STORAGE_KEY, urlLang);
+            } catch (e) {}
+          } else {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored && ALLOWED_LANGS.has(stored)) {
+              saved = stored;
+            }
+          }
+        } else if (typeof localStorage !== "undefined") {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored && ALLOWED_LANGS.has(stored)) {
+            saved = stored;
+          }
         }
       } catch (e) {}
-      if (saved !== "en" && saved !== "ar") saved = "ar";
+
+      if (!ALLOWED_LANGS.has(saved)) {
+        saved = "ar";
+      }
       this.currentLang = saved;
     }
 
@@ -373,33 +413,57 @@
     }
 
     isEn() {
-      return (this.currentLang || "ar") === "en";
+      return this.currentLang === "en";
     }
 
     isRTL() {
-      return (this.currentLang || "ar") === "ar";
+      return this.currentLang === "ar";
     }
 
-    t(key, fallback = "") {
-      const dict = TRANSLATIONS[this.currentLang] || TRANSLATIONS.ar;
-      if (dict && dict[key] !== undefined) {
-        return dict[key];
+    t(key, params = null, fallback = "") {
+      if (typeof key !== "string" || !key || FORBIDDEN_KEYS.has(key)) {
+        return typeof fallback === "string" ? fallback : "";
       }
-      const arDict = TRANSLATIONS.ar;
-      if (arDict && arDict[key] !== undefined) {
-        return arDict[key];
+
+      const activeLang = ALLOWED_LANGS.has(this.currentLang) ? this.currentLang : "ar";
+      const dict = TRANSLATIONS[activeLang];
+      let val = null;
+
+      if (dict && Object.hasOwn(dict, key)) {
+        val = dict[key];
+      } else if (Object.hasOwn(TRANSLATIONS.ar, key)) {
+        val = TRANSLATIONS.ar[key];
       }
-      return fallback || key;
+
+      if (val === null || val === undefined) {
+        val = typeof fallback === "string" && fallback ? fallback : key;
+      }
+
+      // Safe parameter substitution (prevents ReDoS and replacement token exploitation like $&, $`, $')
+      if (params && typeof params === "object") {
+        val = String(val).replace(/\{([a-zA-Z0-9_]{1,32})\}/g, (match, paramName) => {
+          if (FORBIDDEN_KEYS.has(paramName)) return match;
+          if (Object.hasOwn(params, paramName)) {
+            const rawVal = params[paramName];
+            return rawVal !== null && rawVal !== undefined ? String(rawVal) : "";
+          }
+          return match;
+        });
+      }
+
+      return String(val);
     }
 
     setLang(lang) {
-      if (lang !== "en" && lang !== "ar") return;
+      if (!ALLOWED_LANGS.has(lang)) return;
       this.currentLang = lang;
       try {
         localStorage.setItem(STORAGE_KEY, lang);
       } catch (e) {}
       this.applyLanguageToDOM();
-      window.dispatchEvent(new CustomEvent("kk_language_changed", { detail: { lang } }));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("kk_language_changed", { detail: { lang } }));
+      }
     }
 
     toggleLanguage() {
@@ -408,122 +472,128 @@
     }
 
     applyLanguageToDOM() {
+      if (typeof document === "undefined") return;
+
       const isEn = this.currentLang === "en";
       const dir = isEn ? "ltr" : "rtl";
       const lang = isEn ? "en" : "ar";
 
-      document.documentElement.lang = lang;
-      document.documentElement.dir = dir;
-
-      if (isEn) {
-        document.body.classList.add("is-en");
-        document.body.classList.remove("is-ar");
-      } else {
-        document.body.classList.add("is-ar");
-        document.body.classList.remove("is-en");
+      if (document.documentElement) {
+        document.documentElement.lang = lang;
+        document.documentElement.dir = dir;
       }
 
-      // Update text nodes with data-i18n attribute
+      if (document.body) {
+        if (isEn) {
+          document.body.classList.add("is-en");
+          document.body.classList.remove("is-ar");
+        } else {
+          document.body.classList.add("is-ar");
+          document.body.classList.remove("is-en");
+        }
+      }
+
+      // 1. Update text nodes with data-i18n attribute (Pure textContent, Zero innerHTML)
       const elements = document.querySelectorAll("[data-i18n]");
-      elements.forEach(el => {
+      elements.forEach((el) => {
         const key = el.getAttribute("data-i18n");
+        if (!key || FORBIDDEN_KEYS.has(key)) return;
         const val = this.t(key);
         if (val) {
           el.textContent = val;
         }
       });
 
-      // Update HTML nodes with data-i18n-html attribute
-      const htmlElements = document.querySelectorAll("[data-i18n-html]");
-      htmlElements.forEach(el => {
-        const key = el.getAttribute("data-i18n-html");
-        const val = this.t(key);
-        if (val) {
-          el.innerHTML = val;
+      // 2. Update CTA arrow direction via safe Unicode textContent
+      const ctaArrow = document.getElementById("heroCtaArrow");
+      if (ctaArrow) {
+        ctaArrow.textContent = isEn ? "→" : "←";
+      }
+
+      // 3. Update sort dropdown labels
+      const sortMap = {
+        featured: isEn ? "Featured Collections" : "المعروضات المميزة",
+        "price-desc": isEn ? "Price: High to Low" : "السعر: من الأعلى للأقل",
+        "price-asc": isEn ? "Price: Low to High" : "السعر: من الأقل للأعلى",
+        newest: isEn ? "Newest Arrivals 2026" : "أحدث الوصولات 2026"
+      };
+
+      document.querySelectorAll(".luxury-sort-option").forEach((opt) => {
+        const v = opt.getAttribute("data-value");
+        const sp = opt.querySelector("span");
+        if (v && sp && sortMap[v]) {
+          sp.textContent = sortMap[v];
         }
       });
 
-      // Update CTA arrow direction
-      const ctaArrow = document.getElementById("heroCtaArrow");
-      if (ctaArrow) {
-        ctaArrow.innerHTML = isEn ? "&rarr;" : "&larr;";
-      }
-
-      // Update sort dropdown labels
-      const sortMap = {
-        "featured": isEn ? "Featured Collections" : "المعروضات المميزة",
-        "price-desc": isEn ? "Price: High to Low" : "السعر: من الأعلى للأقل",
-        "price-asc": isEn ? "Price: Low to High" : "السعر: من الأقل للأعلى",
-        "newest": isEn ? "Newest Arrivals 2026" : "أحدث الوصولات 2026"
-      };
-      document.querySelectorAll(".luxury-sort-option").forEach(opt => {
-        const v = opt.getAttribute("data-value");
-        const sp = opt.querySelector("span");
-        if (v && sp && sortMap[v]) sp.textContent = sortMap[v];
-      });
       const sortTriggerLabel = document.getElementById("sortTriggerLabel");
       const sortSelect = document.getElementById("sortSelect");
       if (sortTriggerLabel && sortSelect && sortMap[sortSelect.value || "featured"]) {
         sortTriggerLabel.textContent = sortMap[sortSelect.value || "featured"];
       }
 
-      // Update placeholders with data-i18n-placeholder attribute
+      // 4. Update placeholders with data-i18n-placeholder attribute
       const placeholders = document.querySelectorAll("[data-i18n-placeholder]");
-      placeholders.forEach(el => {
+      placeholders.forEach((el) => {
         const key = el.getAttribute("data-i18n-placeholder");
+        if (!key || FORBIDDEN_KEYS.has(key)) return;
         const val = this.t(key);
         if (val) {
           el.setAttribute("placeholder", val);
         }
       });
 
-      // Update titles with data-i18n-title attribute
+      // 5. Update titles with data-i18n-title attribute
       const titles = document.querySelectorAll("[data-i18n-title]");
-      titles.forEach(el => {
+      titles.forEach((el) => {
         const key = el.getAttribute("data-i18n-title");
+        if (!key || FORBIDDEN_KEYS.has(key)) return;
         const val = this.t(key);
         if (val) {
           el.setAttribute("title", val);
         }
       });
 
-      // Update Language Switcher Buttons in DOM
+      // 6. Update Language Switcher Buttons in DOM
       const switcherLabels = document.querySelectorAll(".lang-switcher-text");
-      switcherLabels.forEach(lbl => {
+      switcherLabels.forEach((lbl) => {
         lbl.textContent = isEn ? "العربية" : "English";
       });
 
       const currentLangTags = document.querySelectorAll(".lang-current-tag");
-      currentLangTags.forEach(tag => {
+      currentLangTags.forEach((tag) => {
         tag.textContent = isEn ? "EN" : "عربي";
       });
     }
   }
 
-  window.KK_I18N = new I18nManager();
-  window.KK_I18N.getCurrentLanguage = function () {
-    return (window.KK_I18N && window.KK_I18N.currentLang) || "ar";
-  };
-  window.KK_I18N.getLang = function () {
-    return (window.KK_I18N && window.KK_I18N.currentLang) || "ar";
-  };
-  window.KK_I18N.isEn = function () {
-    return (window.KK_I18N && window.KK_I18N.currentLang) === "en";
-  };
-  window.t = function (key, fallback) {
-    return window.KK_I18N.t(key, fallback);
+  // Global Exports
+  const instance = new I18nManager();
+  window.KK_I18N = instance;
+  window.t = function (key, params, fallback) {
+    if (typeof params === "string" && !fallback) {
+      fallback = params;
+      params = null;
+    }
+    return instance.t(key, params, fallback);
   };
   window.toggleLanguage = function () {
-    window.KK_I18N.toggleLanguage();
+    instance.toggleLanguage();
   };
   window.formatCurrency = function (amount) {
     const num = Math.round(Number(amount) || 0);
     const formatted = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    const sym = window.KK_I18N.t("currency");
-    return window.KK_I18N.isRTL() ? `${formatted} ${sym}` : `${formatted} ${sym}`;
+    const sym = instance.t("currency");
+    return `${formatted} ${sym}`;
   };
 
-  document.addEventListener("DOMContentLoaded", () => {
-    window.KK_I18N.applyLanguageToDOM();
-  });
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => {
+        instance.applyLanguageToDOM();
+      });
+    } else {
+      instance.applyLanguageToDOM();
+    }
+  }
 })();

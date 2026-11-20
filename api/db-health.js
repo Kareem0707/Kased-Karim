@@ -1,66 +1,95 @@
 // Vercel Serverless Function: /api/db-health
-// Safe health check and database connectivity indicator with In-Memory Response Caching (CWE-400 DoS Mitigation)
+// Hardened Database Health Check & Diagnostic Gateway (OWASP ASVS Level 3 & Secrets Management Cheat Sheet)
 
-import { getFirebaseUrl, setSecurityHeaders } from "./_auth.js";
+import {
+  setSecurityHeaders,
+  verifyAdminRequest,
+  firebaseFetch,
+  redactSecretUrl,
+  withApiHardening,
+  safeLogError
+} from "./_auth.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// In-Memory Cache to prevent RTDB connection & quota exhaustion
-let cachedHealthResponse = null;
-let lastHealthCheckTime = 0;
-const HEALTH_CACHE_TTL_MS = 30 * 1000; // 30 seconds
+// Short In-Memory Cache for Public Probes (CWE-400 / DoS & Quota Exhaustion Mitigation)
+let cachedPublicResponse = null;
+let lastPublicProbeTime = 0;
+const PUBLIC_CACHE_TTL_MS = 15 * 1000; // 15 seconds
 
-export default async function handler(req, res) {
-  setSecurityHeaders(req, res);
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+async function dbHealthHandler(req, res, { requestId } = {}) {
+  // 1. Mandatory CORS & Security Headers Gate (ASVS 14.4 & 14.5)
+  if (setSecurityHeaders(req, res, { allowedMethods: ["GET", "OPTIONS"] })) return;
 
   if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.setHeader("Allow", "GET, OPTIONS");
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
+  // 3. Role & Access Control Gate (Dual-Mode: Public vs. Verified Admin)
+  const admin = verifyAdminRequest(req);
   const now = Date.now();
-  if (cachedHealthResponse && (now - lastHealthCheckTime < HEALTH_CACHE_TTL_MS)) {
-    return res.status(200).json({
-      ...cachedHealthResponse,
-      cached: true,
-      timestamp: now
-    });
+
+  // If public caller, serve from short in-memory cache if fresh (Prevents Firebase Quota DoS)
+  if (!admin && cachedPublicResponse && (now - lastPublicProbeTime < PUBLIC_CACHE_TTL_MS)) {
+    const statusCode = cachedPublicResponse.ok ? 200 : 503;
+    return res.status(statusCode).json(cachedPublicResponse);
   }
 
-  const hasKV = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-  const firebaseUrl = getFirebaseUrl(".json", { shallow: "true" });
+  // 4. Lightweight, Read-Only Database Connectivity Probe
+  const startTime = Date.now();
+  let isConnected = false;
 
-  let firebasePing = "standby";
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-    const pingRes = await fetch(firebaseUrl, {
-      signal: controller.signal,
-      cache: "no-store"
-    });
-    clearTimeout(timeoutId);
-    firebasePing = pingRes.ok ? "connected" : "status_" + pingRes.status;
-  } catch (e) {
-    firebasePing = "offline";
+    // Probe a dedicated lightweight node in the server vault with shallow=true (Zero root enumeration)
+    const probeRes = await firebaseFetch("_server_vault/health_ping.json", {
+      method: "GET",
+      cache: "no-store",
+      timeoutMs: 3000
+    }, { shallow: "true" });
+
+    // HTTP 200 (node exists or null) or 404 (vault path not found yet) indicates active connection to Firebase RTDB
+    isConnected = probeRes.ok || probeRes.status === 404;
+    await probeRes.body?.cancel?.().catch(() => {});
+  } catch (probeError) {
+    // Log sanitized error internally without leaking database credentials or URLs
+    console.warn("DB Health Probe Note:", redactSecretUrl(probeError?.message || "Probe unreachable"));
+    isConnected = false;
   }
 
-  const healthData = {
-    status: "ok",
-    environment: "production",
+  const durationMs = Date.now() - startTime;
+
+  // 5. Dual-Mode Response Generation
+  if (!admin) {
+    // PUBLIC RESPONSE: Zero Metadata / Zero Info-Disclosure (ASVS 7.1.1)
+    const publicPayload = { ok: isConnected };
+    cachedPublicResponse = publicPayload;
+    lastPublicProbeTime = now;
+
+    const statusCode = isConnected ? 200 : 503;
+    return res.status(statusCode).json(publicPayload);
+  }
+
+  // VERIFIED ADMIN RESPONSE: Rich Diagnostic Details without Leaking Secrets (ASVS 7.1.2)
+  const adminPayload = {
+    ok: isConnected,
+    authenticated: true,
     timestamp: now,
+    latencyMs: durationMs,
     database: {
-      provider: hasKV ? "primary-kv" : (firebasePing === "connected" ? "primary-cloud" : "local-cache"),
-      connected: hasKV || firebasePing === "connected",
-      readyForProduction: true
+      connected: isConnected,
+      status: isConnected ? "healthy" : "unreachable"
     }
   };
 
-  cachedHealthResponse = healthData;
-  lastHealthCheckTime = now;
-
-  return res.status(200).json(healthData);
+  const statusCode = isConnected ? 200 : 503;
+  return res.status(statusCode).json(adminPayload);
 }
+
+export default withApiHardening(dbHealthHandler, {
+  allowedMethods: ["GET"],
+  maxBodyBytes: 1024,
+  requireJsonBody: false,
+  context: "/api/db-health"
+});

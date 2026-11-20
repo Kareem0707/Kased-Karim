@@ -1,6 +1,37 @@
+# Version Control & CI/CD
 .git
 .github
-*.pdf
-*.log
+.gitignore
+
+# Environment & Local Configuration
+.env*
+!.env.example
+
+# Sensitive Database Configuration & Package Metadata
+database.rules.json
+package.json
+package-lock.json
+
+# Documentation & Markdown Files
 README.md
-Kased_Karim_Security_Remediation_Report.html
+*.md
+docs/
+
+# Scratch, Testing & Temporary Directories
+scratch/
+tests/
+test-results/
+coverage/
+
+# Internal Security Audits & PDF/HTML Reports
+*.pdf
+Kased_Karim_*_Report.html
+Pre_Purchase_*_Report.html
+
+# Database Backups & Log Files
+backups/
+*.backup.json
+*.bak
+*.old
+*.sql
+*.log
