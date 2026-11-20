@@ -1613,7 +1613,8 @@ function setupEventListeners() {
 async function checkAndDisplayAdminHeaderIcon() {
   const adminBtn = document.getElementById("adminHeaderBtn");
   const adminBadge = document.getElementById("adminHeaderBadge");
-  if (!adminBtn) return;
+  const mobileAdminItem = document.getElementById("mobileAdminNavItem");
+  if (!adminBtn && !mobileAdminItem) return;
 
   let isAuth = false;
   try {
@@ -1627,7 +1628,8 @@ async function checkAndDisplayAdminHeaderIcon() {
   if (isAuth) {
     document.documentElement.classList.add("is-admin-device");
     if (document.body) document.body.classList.add("is-admin-device", "is-admin-user");
-    adminBtn.style.setProperty("display", "inline-flex", "important");
+    if (adminBtn) adminBtn.style.setProperty("display", "inline-flex", "important");
+    if (mobileAdminItem) mobileAdminItem.style.setProperty("display", "block", "important");
 
     const unreadCount = window.KK_DB && typeof window.KK_DB.getUnreadOrdersCount === "function"
       ? window.KK_DB.getUnreadOrdersCount()
@@ -1639,9 +1641,9 @@ async function checkAndDisplayAdminHeaderIcon() {
     }
 
     if (unreadCount > 0) {
-      adminBtn.classList.add("has-new-orders");
+      adminBtn?.classList.add("has-new-orders");
     } else {
-      adminBtn.classList.remove("has-new-orders");
+      adminBtn?.classList.remove("has-new-orders");
     }
   } else {
     document.documentElement.classList.remove("is-admin-device");
@@ -1649,6 +1651,9 @@ async function checkAndDisplayAdminHeaderIcon() {
     if (adminBtn) {
       adminBtn.style.setProperty("display", "none", "important");
       adminBtn.classList.remove("has-new-orders");
+    }
+    if (mobileAdminItem) {
+      mobileAdminItem.style.setProperty("display", "none", "important");
     }
   }
 }

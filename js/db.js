@@ -505,12 +505,8 @@ class KasedKarimDB {
   }
 
   isAdminUser() {
-    if (typeof document === "undefined") return false;
-    return (
-      document.body.classList.contains("is-admin-user") ||
-      !!document.getElementById("adminPageRoot") ||
-      (typeof window !== "undefined" && window.location.pathname.includes("admin.html"))
-    );
+    if (typeof document === "undefined" || !document.body) return false;
+    return document.body.classList.contains("is-admin-authenticated");
   }
 
   // --------------------------------------------------------------------------
@@ -522,13 +518,8 @@ class KasedKarimDB {
     this.syncCategoriesFromCloud();
     this.syncSettingsFromCloud();
 
-    const isAdminPage = typeof window !== "undefined" && (
-      window.location.pathname.includes("admin.html") ||
-      (typeof document !== "undefined" && !!document.getElementById("adminPageRoot"))
-    );
-
-    // Initial admin orders fetch if on admin view
-    if (isAdminPage) {
+    // Initial admin orders fetch ONLY if authenticated as admin (Fail-Closed)
+    if (this.isAdminUser()) {
       this.syncFromCloud(false);
     }
 
@@ -540,7 +531,7 @@ class KasedKarimDB {
       if (catalogInterval) clearInterval(catalogInterval);
 
       // Admin orders polling: every 15s (when on dashboard and page visible)
-      if (isAdminPage) {
+      if (this.isAdminUser()) {
         orderInterval = setInterval(() => {
           if (typeof document !== "undefined" && !document.hidden) {
             this.syncFromCloud(true);
