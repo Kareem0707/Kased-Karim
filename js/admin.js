@@ -4439,15 +4439,6 @@ function renderAdminBackupView() {
           }, [
             createSafeEl("i", { class: "fas fa-rotate-left" }),
             document.createTextNode(" استرجاع بنقرة واحدة")
-          ]),
-          createSafeEl("button", {
-            type: "button",
-            class: "action-btn-sm btn-danger",
-            dataset: { action: "delete-web-point", pointId: String(p.id) },
-            title: "حذف النقطة"
-          }, [
-            createSafeEl("i", { class: "fas fa-trash-alt" }),
-            document.createTextNode(" حذف")
           ])
         ])
       ])
@@ -4491,11 +4482,7 @@ async function restoreWebPointById(pointId) {
 }
 
 function deleteWebPointById(pointId) {
-  if (!window.KK_DB) return;
-  if (!confirm("هل أنت متأكد من حذف نقطة الاسترجاع هذه نهائياً؟")) return;
-  window.KK_DB.deleteWebRestorePoint(pointId);
-  showToast("🗑️ تم حذف نقطة الاسترجاع");
-  renderAdminBackupView();
+  showToast("🛡️ نقاط الاسترجاع والأمان محمية ومؤرشفة دائماً لمنع فقدان البيانات نهائياً.", "info");
 }
 
 function handleBackupFileSelected(input) {

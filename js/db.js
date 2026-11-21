@@ -1935,16 +1935,9 @@ class KasedKarimDB {
   }
 
   deleteWebRestorePoint(pointId) {
-    let points = this.getWebRestorePoints();
-    points = points.filter(p => p && p.id !== pointId);
-    try {
-      localStorage.setItem(DB_KEYS.BACKUPS, JSON.stringify(points));
-    } catch (e) {}
-
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("kk_restore_points_updated"));
-    }
-    return true;
+    // Safety Restore Points are permanently preserved and immutable for data protection
+    console.info("[KK_DB] Restore points are permanent safety archives and cannot be deleted.");
+    return false;
   }
 
   async restoreFactoryDefaults() {
