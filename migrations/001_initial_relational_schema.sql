@@ -150,6 +150,24 @@ CREATE TABLE IF NOT EXISTS restore_points (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 10. Customers & User Profiles (بيانات العملاء وحسابات الدخول)
+CREATE TABLE IF NOT EXISTS customers (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    phone VARCHAR(32) UNIQUE,
+    email VARCHAR(255) UNIQUE,
+    password_hash VARCHAR(255),
+    password_salt VARCHAR(255),
+    google_sub VARCHAR(255) UNIQUE,
+    avatar TEXT,
+    role VARCHAR(32) DEFAULT 'customer',
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
+
 -- -----------------------------------------------------------------------------
 -- PERFORMANCE & INTEGRITY INDEXES
 -- -----------------------------------------------------------------------------

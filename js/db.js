@@ -2033,7 +2033,22 @@ class KasedKarimDB {
     return null;
   }
 
-  async customerRegister(name, phone, email, password) {
+  async customerRegister(name, phone, param3, param4) {
+    let email = "";
+    let password = "";
+    // Robustly handle both signatures: (name, phone, email, password) and (name, phone, password, email)
+    if (param4 !== undefined) {
+      if (typeof param3 === "string" && param3.includes("@")) {
+        email = param3;
+        password = param4;
+      } else {
+        password = param3;
+        email = param4 || "";
+      }
+    } else {
+      password = param3;
+    }
+
     const res = await safeApiFetch("/api/customer?action=register", {
       method: "POST",
       body: JSON.stringify({ name, phone, email, password })
@@ -2047,6 +2062,22 @@ class KasedKarimDB {
       this.saveCustomer(res.data.customer);
     }
     return res.data.customer;
+  }
+
+  async customerGoogleAuth(credential) {
+    const res = await safeApiFetch("/api/customer?action=google", {
+      method: "POST",
+      body: JSON.stringify({ credential })
+    });
+
+    if (!res.ok || !res.data || !res.data.success) {
+      throw new Error((res.data && res.data.error) || "تعذر إتمام الدخول عبر Google");
+    }
+
+    if (res.data.customer) {
+      this.saveCustomer(res.data.customer);
+    }
+    return res.data;
   }
 
   async customerLogin(identifier, password) {

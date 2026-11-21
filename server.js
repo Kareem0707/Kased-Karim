@@ -8,6 +8,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
@@ -158,6 +159,22 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS customers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT UNIQUE,
+    email TEXT UNIQUE,
+    password_hash TEXT,
+    password_salt TEXT,
+    google_sub TEXT UNIQUE,
+    avatar TEXT,
+    role TEXT DEFAULT 'customer',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+  CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
   CREATE INDEX IF NOT EXISTS idx_restore_points_date ON restore_points(date_str);
   CREATE INDEX IF NOT EXISTS idx_restore_points_time ON restore_points(timestamp DESC);
   CREATE INDEX IF NOT EXISTS idx_prod_deleted_at ON products(deleted_at);
@@ -748,6 +765,112 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---------------------------------------------------------------------------
+  // 6. CUSTOMER ACCOUNT & AUTHENTICATION ENDPOINT (/api/customer)
+  // ---------------------------------------------------------------------------
+  if (pathname === "/api/customer") {
+    const body = method !== "GET" ? await parseBody(req) : {};
+    const action = parsedUrl.searchParams.get("action") || (body ? body.action : "") || "me";
+
+    if (action === "register" && method === "POST") {
+      const name = (body.name || "").trim().slice(0, 100);
+      const phone = (body.phone || "").replace(/[^0-9]/g, "");
+      const email = (body.email || "").trim().toLowerCase();
+      const password = body.password || "";
+
+      if (!name || name.length < 2) {
+        return sendError(res, 400, "يرجى كتابة اسم العميل بشكل صحيح (حرفين على الأقل)");
+      }
+      if (!phone || !/^01[0125][0-9]{8}$/.test(phone)) {
+        return sendError(res, 400, "يرجى إدخال رقم هاتف مصري صحيح مكون من 11 رقماً يبدأ بـ 01");
+      }
+      if (password.length < 8) {
+        return sendError(res, 400, "كلمة المرور يجب أن لا تقل عن 8 أحرف أو أرقام.");
+      }
+
+      const existing = db.prepare("SELECT * FROM customers WHERE phone = ? OR (email IS NOT NULL AND email = ?)").get(phone, email || "---none---");
+      if (existing) {
+        return sendError(res, 409, "رقم الهاتف أو البريد الإلكتروني مسجل بالفعل بحساب آخر.");
+      }
+
+      const id = "CUST-" + crypto.randomUUID().slice(0, 8).toUpperCase();
+      const salt = crypto.randomBytes(16).toString("hex");
+      const hash = crypto.scryptSync(password, salt, 32).toString("hex");
+
+      db.prepare(`
+        INSERT INTO customers (id, name, phone, email, password_hash, password_salt, role)
+        VALUES (?, ?, ?, ?, ?, ?, 'customer')
+      `).run(id, name, phone, email || null, hash, salt);
+
+      return sendJson(res, 201, {
+        success: true,
+        customer: { id, name, phone, email: email || null, role: "customer" }
+      });
+    }
+
+    if (action === "login" && method === "POST") {
+      const identifier = (body.identifier || "").trim();
+      const password = body.password || "";
+      const cleanPhone = identifier.replace(/[^0-9]/g, "");
+
+      const cust = db.prepare(`
+        SELECT * FROM customers 
+        WHERE (phone = ? AND phone != '') OR (LOWER(email) = LOWER(?) AND email IS NOT NULL)
+      `).get(cleanPhone, identifier);
+
+      if (!cust || !cust.password_hash || !cust.password_salt) {
+        return sendError(res, 401, "بيانات الدخول غير صحيحة. يرجى التأكد من رقم الهاتف/البريد وكلمة المرور.");
+      }
+
+      const checkHash = crypto.scryptSync(password, cust.password_salt, 32).toString("hex");
+      if (checkHash !== cust.password_hash) {
+        return sendError(res, 401, "بيانات الدخول غير صحيحة. يرجى التأكد من كلمة المرور.");
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        customer: { id: cust.id, name: cust.name, phone: cust.phone, email: cust.email, role: cust.role }
+      });
+    }
+
+    if (action === "logout") {
+      return sendJson(res, 200, { success: true, message: "تم تسجيل الخروج بنجاح." });
+    }
+
+    if (action === "google" && method === "POST") {
+      const credential = body.credential;
+      if (!credential) {
+        return sendError(res, 400, "رمز توثيق Google مطلوب.");
+      }
+      try {
+        const parts = credential.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+          const googleSub = payload.sub || crypto.randomUUID();
+          const email = (payload.email || "").toLowerCase();
+          const name = payload.name || "عميل Google";
+          const avatar = payload.picture || "";
+
+          let cust = db.prepare("SELECT * FROM customers WHERE google_sub = ? OR (email IS NOT NULL AND email = ?)").get(googleSub, email);
+          if (!cust) {
+            const id = "CUST-G-" + crypto.randomUUID().slice(0, 8).toUpperCase();
+            db.prepare(`
+              INSERT INTO customers (id, name, phone, email, google_sub, avatar, role)
+              VALUES (?, ?, NULL, ?, ?, ?, 'customer')
+            `).run(id, name, email || null, googleSub, avatar);
+            cust = { id, name, phone: null, email, avatar, role: "customer" };
+          }
+          return sendJson(res, 200, {
+            success: true,
+            customer: { id: cust.id, name: cust.name, phone: cust.phone, email: cust.email, avatar: cust.avatar, role: cust.role }
+          });
+        }
+      } catch (e) {
+        return sendError(res, 400, "فشل فك تشفير رمز Google.");
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // STATIC ASSETS & FRONTEND SERVING
   // ---------------------------------------------------------------------------
   let safePath = path.normalize(decodeURIComponent(pathname)).replace(/^(\.\.[\/\\])+/, "");
@@ -765,9 +888,18 @@ const server = http.createServer(async (req, res) => {
 
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
-      // Fallback for clean URLs or 404
-      if (fs.existsSync(filePath + ".html")) {
-        return fs.createReadStream(filePath + ".html").pipe(res);
+      // Fallback for clean URLs (e.g. /admin -> admin.html) or 404
+      const htmlPath = filePath + ".html";
+      if (fs.existsSync(htmlPath)) {
+        try {
+          const fallbackStats = fs.statSync(htmlPath);
+          res.writeHead(200, {
+            "Content-Type": "text/html; charset=utf-8",
+            "Content-Length": fallbackStats.size,
+            "Cache-Control": "no-cache"
+          });
+          return fs.createReadStream(htmlPath).pipe(res);
+        } catch (e) {}
       }
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       return res.end("404 Not Found");

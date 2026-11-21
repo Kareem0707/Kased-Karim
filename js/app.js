@@ -2112,7 +2112,18 @@ async function handleCustomerRegister(e) {
   const password = passEl ? passEl.value : "";
 
   if (!name || !phone || !password) {
-    showToast("يرجى ملء جميع الحقول المطلوبة");
+    showToast("يرجى ملء جميع الحقول المطلوبة", "error");
+    return;
+  }
+
+  const cleanPhone = phone.replace(/[^0-9]/g, "");
+  if (!/^01[0125][0-9]{8}$/.test(cleanPhone)) {
+    showToast("يرجى إدخال رقم هاتف مصري صحيح (11 رقماً يبدأ بـ 01)", "error");
+    return;
+  }
+
+  if (password.length < 8) {
+    showToast("كلمة المرور يجب أن لا تقل عن 8 خانات لحماية حسابك", "error");
     return;
   }
 
@@ -2125,8 +2136,8 @@ async function handleCustomerRegister(e) {
   }
 
   try {
-    const res = await window.KK_DB.customerRegister(name, phone, password, email);
-    showToast(`أهلاً بك يا ${res.customer.name}! تم إنشاء حسابك بنجاح.`);
+    const res = await window.KK_DB.customerRegister(name, cleanPhone, email, password);
+    showToast(`أهلاً بك يا ${res.name || "عميلنا العزيز"}! تم إنشاء حسابك بنجاح.`);
     closeCustomerAuthModal();
     updateCustomerButtonUI();
 
