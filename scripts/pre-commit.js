@@ -52,6 +52,7 @@ for (const file of stagedFiles) {
   for (const pattern of FORBIDDEN_FILE_PATTERNS) {
     if (pattern.test(file)) {
       if (file === ".env.example") continue; // .env.example is permitted
+      if (file.startsWith("migrations/") || file.startsWith("migrations\\")) continue; // Schema migrations are permitted
       console.error(`  ❌ [BLOCKED] Staged forbidden sensitive file: ${file}`);
       violations++;
     }

@@ -574,10 +574,10 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
       for (const [dedupKey, aggItem] of aggregatedItemsMap.entries()) {
         const canonicalProduct = catalogMap.get(aggItem.id);
 
-        if (!canonicalProduct || canonicalProduct.active === false || canonicalProduct.deleted === true) {
+        if (!canonicalProduct || canonicalProduct.active === false || canonicalProduct.deleted === true || canonicalProduct.deleted_at) {
           return res.status(400).json({
             success: false,
-            error: `عفواً، المنتج '${aggItem.id}' غير متوفر حالياً أو تم إيقافه.`
+            error: `عفواً، المنتج '${canonicalProduct?.name || aggItem.id}' غير متوفر حالياً في الكتالوج (تم حذفه أو إيقافه).`
           });
         }
 

@@ -1,0 +1,107 @@
+# =============================================================================
+# KASED KARIM LUXURY LIGHTING - UNIFIED CONTAINER STACK
+# Compatible with Docker Compose & Podman Compose
+# Architecture: Frontend + Backend + Relational PostgreSQL + 4-Hour Automated Backup
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. Primary Relational SQL Database (PostgreSQL 16)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: kased_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-kased_karim_db}
+      POSTGRES_USER: ${DB_USER:-kased_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-kased_secure_2026}
+      TZ: Africa/Cairo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-kased_admin} -d ${DB_NAME:-kased_karim_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kased_internal_net
+
+  # ---------------------------------------------------------------------------
+  # 2. Web Application (Frontend + Backend Engine + APIs)
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kased_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://${DB_USER:-kased_admin}:${DB_PASSWORD:-kased_secure_2026}@postgres:5432/${DB_NAME:-kased_karim_db}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change_this_in_production_2026}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      FIREBASE_DB_URL: ${FIREBASE_DB_URL:-}
+      FIREBASE_DB_SECRET: ${FIREBASE_DB_SECRET:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+    ports:
+      - "3000:3000"
+    volumes:
+      - app_uploads:/app/assets/uploads
+    networks:
+      - kased_internal_net
+
+  # ---------------------------------------------------------------------------
+  # 3. Automated 4-Hour Database Backup Engine
+  # ---------------------------------------------------------------------------
+  backup-service:
+    image: alpine:3.20
+    container_name: kased_backup_cron
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-kased_karim_db}
+      DB_USER: ${DB_USER:-kased_admin}
+      DB_PASSWORD: ${DB_PASSWORD:-kased_secure_2026}
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: 14
+      TZ: Africa/Cairo
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup-db.sh:/usr/local/bin/backup-db.sh:ro
+    entrypoint: >
+      /bin/sh -c "
+      apk add --no-cache postgresql-client bash tzdata gzip curl &&
+      cp /usr/share/zoneinfo/Africa/Cairo /etc/localtime &&
+      chmod +x /usr/local/bin/backup-db.sh &&
+      echo '0 */4 * * * /usr/local/bin/backup-db.sh >> /backups/cron.log 2>&1' > /etc/crontabs/root &&
+      echo '▶ Starting Automated 4-Hour Database Backup Daemon...' &&
+      /usr/local/bin/backup-db.sh &&
+      crond -f -l 2
+      "
+    networks:
+      - kased_internal_net
+
+volumes:
+  postgres_data:
+    name: kased_postgres_data
+  app_uploads:
+    name: kased_app_uploads
+
+networks:
+  kased_internal_net:
+    name: kased_internal_net
+    driver: bridge

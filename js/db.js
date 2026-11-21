@@ -819,6 +819,9 @@ class KasedKarimDB {
         }
       } catch (e) {}
 
+      // Soft Delete Filter: Strictly exclude items flagged with deleted_at or deleted: true
+      list = list.filter(p => p && p.id && !p.deleted_at && p.deleted !== true);
+
       // Ensure stock attributes
       list.forEach(p => {
         if (p) {
@@ -1757,15 +1760,22 @@ class KasedKarimDB {
       data: safeBackupData
     };
 
-    points = [newPoint, ...points.filter(p => p && p.id !== newPoint.id)].slice(0, 10);
+    // Store up to 100 recent points in local cache, with permanent storage on the database server
+    points = [newPoint, ...points.filter(p => p && p.id !== newPoint.id)].slice(0, 100);
     try {
       localStorage.setItem(DB_KEYS.BACKUPS, JSON.stringify(points));
     } catch (e) {
       try {
-        points = [newPoint, ...points.slice(1, 4)];
+        points = [newPoint, ...points.slice(1, 15)];
         localStorage.setItem(DB_KEYS.BACKUPS, JSON.stringify(points));
       } catch (err) {}
     }
+
+    // Push snapshot to /api/restore-points server endpoint for permanent long-term archive (1+ years)
+    safeApiFetch("/api/restore-points", {
+      method: "POST",
+      body: JSON.stringify(newPoint)
+    }).catch(() => null);
 
     // Push snapshot to /api/backup serverless endpoint
     safeApiFetch("/api/backup", {

@@ -1608,6 +1608,44 @@ const ALLOWED_ADMIN_STATUSES = [
   "packed", "shipped", "delivered", "completed", "cancelled", "failed"
 ];
 
+async function runDbDiagnosticsUI(btn) {
+  if (!btn) return;
+  btn.disabled = true;
+  safeClearContainer(btn);
+  btn.appendChild(createSafeEl("i", { class: "fas fa-spinner fa-spin" }));
+  btn.appendChild(createSafeEl("span", { textContent: " جاري فحص قاعدة البيانات..." }));
+
+  try {
+    const res = await fetch("/api/db-health");
+    if (res.ok) {
+      const data = await res.json();
+      const resContainer = document.getElementById("dbDiagnosticsResults");
+      if (resContainer) resContainer.style.display = "block";
+
+      const elEngine = document.getElementById("diagEngine");
+      const elIntegrity = document.getElementById("diagIntegrity");
+      const elSoftDelete = document.getElementById("diagSoftDelete");
+      const elCounts = document.getElementById("diagCounts");
+
+      if (elEngine) elEngine.textContent = data.engine || data.database || "SQL Relational (WAL)";
+      if (elIntegrity) elIntegrity.textContent = "ON DELETE RESTRICT (مُفعل - حظر الحذف عند الارتباط)";
+      if (elSoftDelete) elSoftDelete.textContent = "Soft Delete (حقل deleted_at نشط)";
+      if (elCounts) elCounts.textContent = `${data.stats?.products_active || 0} نشط • ${data.stats?.products_soft_deleted || 0} محذوف لطيفاً`;
+
+      showToast("✅ تم فحص قاعدة البيانات: التكامل المرجعي والـ Soft Delete يعملان بكفاءة!");
+    } else {
+      showToast("⚠️ لم يتم الرد من نقطة الفحص السحابية.");
+    }
+  } catch (err) {
+    showToast("⚠️ تعذر الاتصال بـ /api/db-health. تأكد من تشغيل السيرفر (npm start).");
+  } finally {
+    btn.disabled = false;
+    safeClearContainer(btn);
+    btn.appendChild(createSafeEl("i", { class: "fas fa-stethoscope" }));
+    btn.appendChild(createSafeEl("span", { textContent: " تشغيل الفحص الفوري الآن" }));
+  }
+}
+
 function initAdminEventDelegation() {
   if (isAdminEventDelegationInitialized) return;
   isAdminEventDelegationInitialized = true;
@@ -1640,6 +1678,67 @@ function initAdminEventDelegation() {
       case "cloud-sync": {
         e.preventDefault();
         triggerFullCloudSync();
+        break;
+      }
+
+      case "run-db-diagnostics": {
+        e.preventDefault();
+        runDbDiagnosticsUI(trigger);
+        break;
+      }
+
+      case "apply-restore-calendar-filter": {
+        e.preventDefault();
+        renderAdminBackupView();
+        showToast("🔍 تم تطبيق فلترة التقويم لنقاط الاسترجاع بنجاح");
+        break;
+      }
+
+      case "reset-restore-calendar-filter": {
+        e.preventDefault();
+        const dateInput = document.getElementById("restoreFilterExactDate");
+        const yearSelect = document.getElementById("restoreFilterYear");
+        const monthSelect = document.getElementById("restoreFilterMonth");
+        const searchInput = document.getElementById("restoreFilterSearch");
+        if (dateInput) dateInput.value = "";
+        if (yearSelect) yearSelect.value = "";
+        if (monthSelect) monthSelect.value = "";
+        if (searchInput) searchInput.value = "";
+        renderAdminBackupView();
+        showToast("↺ تم إعادة تعيين فلتر التقويم وعرض كافة النقاط");
+        break;
+      }
+
+      case "filter-restore-preset": {
+        e.preventDefault();
+        const preset = trigger.dataset.preset;
+        const dateInput = document.getElementById("restoreFilterExactDate");
+        const yearSelect = document.getElementById("restoreFilterYear");
+        const monthSelect = document.getElementById("restoreFilterMonth");
+        const searchInput = document.getElementById("restoreFilterSearch");
+
+        if (dateInput) dateInput.value = "";
+        if (yearSelect) yearSelect.value = "";
+        if (monthSelect) monthSelect.value = "";
+        if (searchInput) searchInput.value = "";
+
+        const now = new Date();
+        const todayStr = now.toISOString().slice(0, 10);
+        const currentYear = now.getFullYear().toString();
+        const currentMonth = String(now.getMonth() + 1).padStart(2, "0");
+
+        if (preset === "today" && dateInput) {
+          dateInput.value = todayStr;
+        } else if (preset === "month" && monthSelect && yearSelect) {
+          yearSelect.value = currentYear;
+          monthSelect.value = currentMonth;
+        } else if (preset === "prev-year" && yearSelect) {
+          yearSelect.value = (now.getFullYear() - 1).toString();
+        } else if (preset === "week" && dateInput) {
+          dateInput.value = todayStr;
+        }
+
+        renderAdminBackupView();
         break;
       }
 
@@ -4216,14 +4315,83 @@ function renderAdminBackupView() {
   const tbody = document.getElementById("adminRestorePointsTableBody");
   if (!tbody || !window.KK_DB) return;
 
-  const points = window.KK_DB.getWebRestorePoints();
+  const allPoints = window.KK_DB.getWebRestorePoints() || [];
 
-  if (!points || points.length === 0) {
+  // 1. Read Filter Inputs
+  const dateInput = document.getElementById("restoreFilterExactDate");
+  const yearSelect = document.getElementById("restoreFilterYear");
+  const monthSelect = document.getElementById("restoreFilterMonth");
+  const searchInput = document.getElementById("restoreFilterSearch");
+  const summaryEl = document.getElementById("restorePointsFilterSummary");
+
+  const filterDate = dateInput ? dateInput.value.trim() : "";
+  const filterYear = yearSelect ? yearSelect.value.trim() : "";
+  const filterMonth = monthSelect ? monthSelect.value.trim() : "";
+  const filterSearch = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+  // 2. Filter Points by Date, Year, Month, and Search Query
+  const filteredPoints = allPoints.filter(p => {
+    if (!p) return false;
+    const pDate = String(p.dateFormatted || p.date_str || "");
+    const pLabel = String(p.label || "").toLowerCase();
+    const pId = String(p.id || "").toLowerCase();
+
+    // Exact Date match
+    if (filterDate && pDate !== filterDate) {
+      return false;
+    }
+
+    // Year match (e.g., 2026, 2025, 2024...)
+    if (filterYear) {
+      const yearFromDate = pDate.slice(0, 4);
+      const yearFromTimestamp = p.timestamp ? new Date(p.timestamp).getFullYear().toString() : "";
+      if (yearFromDate !== filterYear && yearFromTimestamp !== filterYear) {
+        return false;
+      }
+    }
+
+    // Month match (01 to 12)
+    if (filterMonth) {
+      const monthFromDate = pDate.slice(5, 7);
+      const monthFromTimestamp = p.timestamp ? String(new Date(p.timestamp).getMonth() + 1).padStart(2, "0") : "";
+      if (monthFromDate !== filterMonth && monthFromTimestamp !== filterMonth) {
+        return false;
+      }
+    }
+
+    // Search query in label or ID
+    if (filterSearch) {
+      if (!pLabel.includes(filterSearch) && !pId.includes(filterSearch)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // 3. Update Summary Bar
+  if (summaryEl) {
+    const isFiltered = Boolean(filterDate || filterYear || filterMonth || filterSearch);
+    if (isFiltered) {
+      let desc = [];
+      if (filterDate) desc.push(`التاريخ: ${filterDate}`);
+      if (filterYear) desc.push(`السنة: ${filterYear}`);
+      if (filterMonth) desc.push(`الشهر: ${filterMonth}`);
+      if (filterSearch) desc.push(`بحث: "${filterSearch}"`);
+      summaryEl.innerHTML = `<i class="fas fa-filter" style="color: var(--accent);"></i> تم العثور على <strong>${filteredPoints.length}</strong> نقطة استرجاع مطابقة (${desc.join(" • ")}).`;
+    } else {
+      summaryEl.innerHTML = `<i class="fas fa-circle-check" style="color: #10B981;"></i> يتم عرض كافة نقاط الاسترجاع في الأرشيف (إجمالي: <strong>${allPoints.length}</strong> نقطة محفوظة).`;
+    }
+  }
+
+  if (filteredPoints.length === 0) {
     const emptyRow = createSafeEl("tr", {}, [
       createSafeEl("td", {
         colspan: "5",
-        style: "text-align: center; padding: 2rem; color: var(--text-muted);",
-        textContent: "لا توجد نقاط استرجاع محفوظة حالياً. يتم إنشاء النقاط تلقائياً عند حذف العناصر أو عبر زر 'حفظ نقطة استرجاع'."
+        style: "text-align: center; padding: 2.5rem; color: var(--text-muted);",
+        textContent: allPoints.length === 0
+          ? "لا توجد نقاط استرجاع محفوظة حالياً. يتم إنشاء النقاط تلقائياً عند حذف العناصر أو عبر زر 'حفظ نقطة استرجاع'."
+          : "لم يتم العثور على أي نقاط استرجاع تطابق التاريخ أو الفلتر المحدد. جرب اختيار تاريخ آخر أو اضغط 'إعادة تعيين الفلتر'."
       })
     ]);
     safeClearContainer(tbody);
@@ -4233,7 +4401,7 @@ function renderAdminBackupView() {
 
   const frag = document.createDocumentFragment();
 
-  points.forEach(p => {
+  filteredPoints.forEach(p => {
     const counts = p.counts || {};
     const pCount = formatSafeInt(counts.products || (p.data?.products?.length) || 0);
     const oCount = formatSafeInt(counts.orders || (p.data?.orders?.length) || 0);

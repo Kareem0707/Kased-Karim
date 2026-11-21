@@ -1081,6 +1081,50 @@
       <section class="admin-tab-pane" id="adminPane_backup">
         <div style="max-width: 960px; margin: 0 auto;">
 
+          <!-- Relational Database & Soft Delete Live Diagnostic Card -->
+          <div style="background: linear-gradient(135deg, #1E1B4B, #0F172A); border: 1px solid rgba(99, 102, 241, 0.35); border-radius: var(--radius-md); padding: 1.75rem; color: #FFFFFF; box-shadow: var(--shadow-elevated); margin-bottom: 2rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+              <div>
+                <div style="display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(99, 102, 241, 0.2); color: #818CF8; padding: 0.35rem 0.85rem; border-radius: 999px; font-size: 0.8rem; font-weight: 800; margin-bottom: 0.5rem;">
+                  <i class="fas fa-database"></i>
+                  <span>مركز فحص قاعدة البيانات العلائقية والتكامل المرجعي</span>
+                </div>
+                <h3 style="font-size: 1.25rem; font-weight: 900; margin: 0 0 0.35rem 0; color: #FFFFFF;">
+                  فحص صحة الـ SQL والتكامل المرجعي والـ Soft Delete
+                </h3>
+                <p style="font-size: 0.85rem; color: #94A3B8; margin: 0; line-height: 1.5;">
+                  تحقق فورياً وبشكل عملي من حالة محرك قاعدة البيانات، قيود منع الحذف الفيزيائي للقطع المرتبطة بطلبات ومبيعات، وحالة الحذف اللطيف (Soft Delete).
+                </p>
+              </div>
+              <button type="button" class="btn-primary" id="btnRunDbDiagnostics" data-action="run-db-diagnostics" style="background: linear-gradient(135deg, #6366F1, #4F46E5); color: #FFFFFF; font-weight: 800; border: none; padding: 0.75rem 1.35rem;">
+                <i class="fas fa-stethoscope"></i>
+                <span>تشغيل الفحص الفوري الآن</span>
+              </button>
+            </div>
+
+            <div id="dbDiagnosticsResults" style="display: none; margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <div style="background: rgba(255, 255, 255, 0.05); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                  <div style="font-size: 0.75rem; color: #94A3B8;">محرك الـ Database</div>
+                  <div id="diagEngine" style="font-size: 0.95rem; font-weight: 800; color: #38BDF8; margin-top: 0.25rem;">-</div>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.05); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                  <div style="font-size: 0.75rem; color: #94A3B8;">التكامل المرجعي (Foreign Keys)</div>
+                  <div id="diagIntegrity" style="font-size: 0.95rem; font-weight: 800; color: #34D399; margin-top: 0.25rem;">-</div>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.05); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                  <div style="font-size: 0.75rem; color: #94A3B8;">نظام الـ Soft Delete</div>
+                  <div id="diagSoftDelete" style="font-size: 0.95rem; font-weight: 800; color: #FBBF24; margin-top: 0.25rem;">-</div>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.05); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                  <div style="font-size: 0.75rem; color: #94A3B8;">القطع النشطة / المحذوفة لطيفاً</div>
+                  <div id="diagCounts" style="font-size: 0.95rem; font-weight: 800; color: #FFFFFF; margin-top: 0.25rem;">-</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        <div style="max-width: 960px; margin: 0 auto;">
+
           
           <div style="background: linear-gradient(135deg, #0F172A, #1E293B); border-radius: var(--radius-md); padding: 2.25rem; color: #FFFFFF; box-shadow: var(--shadow-elevated); margin-bottom: 2rem;">
             <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem;">
@@ -1164,6 +1208,107 @@
                 </p>
               </div>
 
+              <button type="button" class="btn-secondary" style="font-size: 0.85rem; padding: 0.55rem 1.15rem;" data-action="create-restore-point">
+                <i class="fas fa-bookmark" style="color: var(--accent);"></i>
+                <span>حفظ نقطة استرجاع يدوية الآن</span>
+              </button>
+            </div>
+
+            <!-- Calendar & Long-Term History Filter Toolbar -->
+            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 1.25rem; margin-bottom: 1.25rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+                <div style="font-weight: 800; font-size: 0.95rem; color: #1E293B; display: flex; align-items: center; gap: 0.5rem;">
+                  <i class="fas fa-calendar-days" style="color: var(--accent);"></i>
+                  <span>جدول وتقويم فلترة نقاط الاسترجاع (أرشيف كامل لسنة وأكثر)</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <button type="button" class="btn-secondary" id="btnFilterPresetAll" style="font-size: 0.78rem; padding: 0.35rem 0.75rem;" data-action="filter-restore-preset" data-preset="all">
+                    <span>عرض الكل</span>
+                  </button>
+                  <button type="button" class="btn-secondary" id="btnFilterPresetToday" style="font-size: 0.78rem; padding: 0.35rem 0.75rem;" data-action="filter-restore-preset" data-preset="today">
+                    <span>اليوم</span>
+                  </button>
+                  <button type="button" class="btn-secondary" id="btnFilterPresetWeek" style="font-size: 0.78rem; padding: 0.35rem 0.75rem;" data-action="filter-restore-preset" data-preset="week">
+                    <span>هذا الأسبوع</span>
+                  </button>
+                  <button type="button" class="btn-secondary" id="btnFilterPresetMonth" style="font-size: 0.78rem; padding: 0.35rem 0.75rem;" data-action="filter-restore-preset" data-preset="month">
+                    <span>هذا الشهر</span>
+                  </button>
+                  <button type="button" class="btn-secondary" id="btnFilterPresetYear" style="font-size: 0.78rem; padding: 0.35rem 0.75rem;" data-action="filter-restore-preset" data-preset="prev-year">
+                    <span>أرشيف سنة سابقة (2025)</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Filter Controls: Date, Year, Month, Keyword -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; align-items: end;">
+                <div>
+                  <label for="restoreFilterExactDate" style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.35rem;">
+                    <i class="fas fa-calendar-day" style="color: var(--accent);"></i> التاريخ باليوم المحدد:
+                  </label>
+                  <input type="date" id="restoreFilterExactDate" class="admin-input" style="width: 100%; font-size: 0.85rem; padding: 0.5rem 0.75rem; border: 1px solid #CBD5E1; border-radius: 6px; background: #FFFFFF;">
+                </div>
+
+                <div>
+                  <label for="restoreFilterYear" style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.35rem;">
+                    <i class="fas fa-calendar" style="color: var(--accent);"></i> اختيار السنة:
+                  </label>
+                  <select id="restoreFilterYear" class="admin-input" style="width: 100%; font-size: 0.85rem; padding: 0.5rem 0.75rem; border: 1px solid #CBD5E1; border-radius: 6px; background: #FFFFFF;">
+                    <option value="">جميع السنوات</option>
+                    <option value="2026">2026 (العام الحالي)</option>
+                    <option value="2025">2025 (منذ سنة)</option>
+                    <option value="2024">2024 (منذ سنتين)</option>
+                    <option value="2023">2023</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="restoreFilterMonth" style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.35rem;">
+                    <i class="fas fa-calendar-week" style="color: var(--accent);"></i> اختيار الشهر:
+                  </label>
+                  <select id="restoreFilterMonth" class="admin-input" style="width: 100%; font-size: 0.85rem; padding: 0.5rem 0.75rem; border: 1px solid #CBD5E1; border-radius: 6px; background: #FFFFFF;">
+                    <option value="">جميع الشهور</option>
+                    <option value="01">يناير (01)</option>
+                    <option value="02">فبراير (02)</option>
+                    <option value="03">مارس (03)</option>
+                    <option value="04">أبريل (04)</option>
+                    <option value="05">مايو (05)</option>
+                    <option value="06">يونيو (06)</option>
+                    <option value="07">يوليو (07)</option>
+                    <option value="08">أغسطس (08)</option>
+                    <option value="09">سبتمبر (09)</option>
+                    <option value="10">أكتوبر (10)</option>
+                    <option value="11">نوفمبر (11)</option>
+                    <option value="12">ديسمبر (12)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="restoreFilterSearch" style="display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.35rem;">
+                    <i class="fas fa-magnifying-glass" style="color: var(--accent);"></i> بحث بالاسم أو السبب:
+                  </label>
+                  <input type="text" id="restoreFilterSearch" class="admin-input" placeholder="اسم القطعة المحذوفة..." style="width: 100%; font-size: 0.85rem; padding: 0.5rem 0.75rem; border: 1px solid #CBD5E1; border-radius: 6px; background: #FFFFFF;">
+                </div>
+
+                <div>
+                  <button type="button" class="btn-primary" id="btnApplyRestoreFilter" data-action="apply-restore-calendar-filter" style="width: 100%; font-size: 0.85rem; padding: 0.55rem 1rem; background: var(--accent); color: #0F172A; font-weight: 800; border: none; border-radius: 6px;">
+                    <i class="fas fa-filter"></i> تطبيق الفلترة
+                  </button>
+                </div>
+              </div>
+
+              <!-- Filter status bar & active date indicator -->
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.85rem; font-size: 0.8rem; color: #64748B;">
+                <div id="restorePointsFilterSummary">
+                  <i class="fas fa-info-circle"></i> يتم عرض كافة نقاط الاسترجاع المحفوظة.
+                </div>
+                <button type="button" id="btnResetRestoreFilter" data-action="reset-restore-calendar-filter" style="background: none; border: none; color: #EF4444; cursor: pointer; font-weight: 700; font-size: 0.8rem;">
+                  <i class="fas fa-rotate-left"></i> إعادة تعيين الفلتر
+                </button>
+              </div>
+            </div>
+
+            <div style="display: none;">
               <button type="button" class="btn-secondary" style="font-size: 0.85rem; padding: 0.55rem 1.15rem;" data-action="create-restore-point">
                 <i class="fas fa-bookmark" style="color: var(--accent);"></i>
                 <span>حفظ نقطة استرجاع يدوية الآن</span>

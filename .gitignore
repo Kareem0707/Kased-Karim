@@ -34,7 +34,11 @@ backups/
 *.bak
 *.old
 *.sql
+!migrations/*.sql
 *.sqlite
+*.db
+*.db-shm
+*.db-wal
 
 # Scratch & Local Development Scripts
 scratch/

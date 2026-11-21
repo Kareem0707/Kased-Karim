@@ -315,6 +315,14 @@ function validateAndSanitizeProduct(p, { isUpdate = false } = {}) {
   if (safeSupplier) safeProduct.supplier = safeSupplier;
   if (safeAdminNotes) safeProduct.adminNotes = safeAdminNotes;
 
+  // Soft Delete State Persistence (Relational Integrity)
+  if (p.deleted_at) {
+    safeProduct.deleted_at = String(p.deleted_at).slice(0, 60);
+  }
+  if (p.status) {
+    safeProduct.status = cleanString(String(p.status), 30);
+  }
+
   if (!isUpdate) {
     safeProduct.createdAt = p.createdAt && typeof p.createdAt === "number" ? p.createdAt : now;
   }
@@ -434,6 +442,96 @@ async function fetchProductsFromCloud(req) {
   return { products: [], provider: "none" };
 }
 
+// -----------------------------------------------------------------------------
+// REFERENTIAL INTEGRITY CHECKER (Axis: Relational Integrity & Safe Deletion)
+// Verifies whether product has associations in: Orders, Sales, Inventory, Pricelists
+// -----------------------------------------------------------------------------
+async function checkProductReferentialIntegrity(safeId) {
+  const relations = {
+    orders: 0,
+    sales: 0,
+    inventory: 0,
+    pricelists: 0,
+    hasRelations: false
+  };
+
+  try {
+    // 1. Scan Orders Collection
+    const ordersRes = await firebaseFetch(buildSafeRtdbPath("orders"), {
+      cache: "no-store",
+      headers: { "Accept": "application/json" }
+    });
+    if (ordersRes.ok) {
+      const ordersData = await ordersRes.json();
+      if (ordersData && typeof ordersData === "object") {
+        const orderList = Array.isArray(ordersData) ? ordersData : Object.values(ordersData);
+        for (const order of orderList) {
+          if (!order || !Array.isArray(order.items)) continue;
+          const match = order.items.some(it => it && (it.id === safeId || it.productId === safeId));
+          if (match) {
+            relations.orders++;
+            if (order.status === "completed" || order.status === "delivered" || order.status === "paid") {
+              relations.sales++;
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
+  try {
+    // 2. Scan Sales / Accounting Ledger
+    const salesRes = await firebaseFetch(buildSafeRtdbPath("sales"), {
+      cache: "no-store",
+      headers: { "Accept": "application/json" }
+    });
+    if (salesRes.ok) {
+      const salesData = await salesRes.json();
+      if (salesData && typeof salesData === "object") {
+        const salesList = Array.isArray(salesData) ? salesData : Object.values(salesData);
+        const matchCount = salesList.filter(s => s && (s.productId === safeId || s.product_id === safeId)).length;
+        relations.sales += matchCount;
+      }
+    }
+  } catch (e) {}
+
+  try {
+    // 3. Scan Custom Pricelists
+    const priceRes = await firebaseFetch(buildSafeRtdbPath("pricelists"), {
+      cache: "no-store",
+      headers: { "Accept": "application/json" }
+    });
+    if (priceRes.ok) {
+      const priceData = await priceRes.json();
+      if (priceData && typeof priceData === "object") {
+        const priceList = Array.isArray(priceData) ? priceData : Object.values(priceData);
+        for (const pl of priceList) {
+          if (pl && Array.isArray(pl.items) && pl.items.some(it => it && (it.productId === safeId || it.id === safeId))) {
+            relations.pricelists++;
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
+  try {
+    // 4. Scan Inventory Stock Ledger
+    const invRes = await firebaseFetch(buildSafeRtdbPath("inventory", safeId), {
+      cache: "no-store",
+      headers: { "Accept": "application/json" }
+    });
+    if (invRes.ok) {
+      const invData = await invRes.json();
+      if (invData && (invData.quantity_on_hand > 0 || invData.stock > 0 || invData.quantity_reserved > 0)) {
+        relations.inventory = 1;
+      }
+    }
+  } catch (e) {}
+
+  relations.hasRelations = (relations.orders > 0 || relations.sales > 0 || relations.inventory > 0 || relations.pricelists > 0);
+  return relations;
+}
+
 // =============================================================================
 // MAIN REQUEST ROUTER & CONTROLLER
 // =============================================================================
@@ -446,18 +544,19 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
     // 1. GET / HEAD: Fetch Products (Separated Public Storefront vs Admin Catalog)
     // -------------------------------------------------------------------------
     if (req.method === "GET" || req.method === "HEAD") {
-      const { all, includeInactive, id } = req.query || {};
+      const { all, includeInactive, include_deleted, includeDeleted, id } = req.query || {};
       const isAdminQuery = all === "1" || all === "true" || includeInactive === "1" || includeInactive === "true";
+      const shouldIncludeDeleted = include_deleted === "1" || include_deleted === "true" || includeDeleted === "1" || includeDeleted === "true";
 
       // Privilege Verification for Admin Reads (Axis 1 & 7)
       let isAdmin = false;
-      if (isAdminQuery) {
+      if (isAdminQuery || shouldIncludeDeleted) {
         const admin = verifyAdminRequest(req);
         if (!admin) {
           res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
           return res.status(401).json({
             success: false,
-            error: "غير مصرح بالوصول. استعراض المنتجات غير النشطة أو بيانات التكلفة يتطلب صلاحيات الإدارة العليا."
+            error: "غير مصرح بالوصول. استعراض المنتجات المحذوفة أو بيانات التكلفة يتطلب صلاحيات الإدارة العليا."
           });
         }
         isAdmin = true;
@@ -473,8 +572,14 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
           return res.status(404).json({ success: false, error: "لم يتم العثور على المنتج المطلوب." });
         }
 
+        // Soft-deleted product check
+        const isSoftDeleted = Boolean(found.deleted_at || found.deleted === true);
+        if (isSoftDeleted && !shouldIncludeDeleted) {
+          return res.status(404).json({ success: false, error: "عفواً، هذا المنتج غير متوفر حالياً (تمت أرشفته أو حذفه)." });
+        }
+
         // Public visitor looking at inactive product
-        if (!isAdmin && (found.active === false || found.hidden === true || found.status === "draft" || found.status === "archived")) {
+        if (!isAdmin && (found.active === false || found.hidden === true || found.status === "draft" || found.status === "archived" || isSoftDeleted)) {
           return res.status(404).json({ success: false, error: "عفواً، هذا المنتج غير متوفر حالياً." });
         }
 
@@ -488,8 +593,12 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
         return res.status(200).json({ success: true, product: outProduct, provider });
       }
 
-      // Catalog List Response
+      // Catalog List Response for Admin
       if (isAdmin) {
+        const filteredProducts = shouldIncludeDeleted
+          ? products
+          : products.filter(p => p && !p.deleted_at && p.deleted !== true);
+
         // Enforce anti-caching so CDNs never store admin catalogs (Axis 7: Cache Poisoning Defense)
         res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
         res.setHeader("Pragma", "no-cache");
@@ -497,15 +606,15 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
         return res.status(200).json({
           success: true,
           adminView: true,
-          count: products.length,
+          count: filteredProducts.length,
           provider,
-          products
+          products: filteredProducts
         });
       }
 
-      // Public Storefront: Filter out hidden/draft items & strip internal fields (Axis 7)
+      // Public Storefront: Strict Soft Delete Exemption & Active Products Only (Axis 7)
       const publicProducts = products
-        .filter(p => p && p.active !== false && p.hidden !== true && p.status !== "draft" && p.status !== "archived")
+        .filter(p => p && p.active !== false && p.hidden !== true && p.status !== "draft" && p.status !== "archived" && !p.deleted_at && p.deleted !== true)
         .map(sanitizePublicProduct)
         .filter(Boolean);
 
@@ -804,7 +913,8 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
       assertSafeRtdbPayload(patchData, {
         allowedKeys: [
           "name", "price", "stock", "active", "featured", "image", "secondaryImage",
-          "description", "shortDescription", "category", "adminNotes", "costPrice", "updatedAt"
+          "description", "shortDescription", "category", "adminNotes", "costPrice", "updatedAt",
+          "deleted_at", "status"
         ]
       });
 
@@ -824,12 +934,13 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
     }
 
     // -------------------------------------------------------------------------
-    // 5. DELETE: Remove Single Product (ADMIN ONLY & Root-Wipe Protected) (Axis 6)
+    // 5. DELETE: Safe Deletion Engine (Relational Integrity Check + Soft Delete)
     // -------------------------------------------------------------------------
     if (req.method === "DELETE") {
       const rawId = req.query?.id || (req.body && typeof req.body === "object" ? req.body.id : null);
+      const isForceHard = req.query?.force_hard === "1" || req.query?.force_hard === "true" || (req.body && req.body.forceHard === true);
 
-      // Strict Type & Non-Empty Check (Prevents HPP array attacks and missing ID wipe)
+      // Strict Type & Non-Empty Check
       if (typeof rawId !== "string" || !rawId.trim()) {
         return res.status(400).json({
           success: false,
@@ -842,21 +953,106 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
         return res.status(400).json({ success: false, error: "معرف المنتج غير صالح أمنياً." });
       }
 
-      // Secure Delete - strictly targeting the single child key
-      const delRes = await firebaseFetch(buildSafeRtdbPath("products", safeId), {
-        method: "DELETE",
-        cache: "no-store"
-      });
-
-      if (!delRes.ok) {
-        return res.status(502).json({ success: false, error: "تعذر حذف المنتج من السحابة المركزية." });
+      // 1. Fetch current product to verify existence
+      const targetRes = await firebaseFetch(buildSafeRtdbPath("products", safeId), { cache: "no-store" });
+      if (!targetRes.ok) {
+        return res.status(404).json({ success: false, error: "المنتج المطلوب حذفه غير موجود في الكتالوج." });
+      }
+      const existingProduct = await targetRes.json();
+      if (!existingProduct) {
+        return res.status(404).json({ success: false, error: "المنتج المطلوب حذفه غير موجود." });
       }
 
-      await bumpSyncMetadata("product_delete");
+      // 2. Strict Referential Integrity Check across Orders, Sales, Inventory, and Pricelists
+      const integrity = await checkProductReferentialIntegrity(safeId);
+      const nowIso = new Date().toISOString();
+
+      // Rule: If associations exist, HARD DELETE is strictly forbidden (Referential Protection)
+      if (integrity.hasRelations) {
+        if (isForceHard) {
+          return res.status(409).json({
+            success: false,
+            error: "لا يمكن الحذف النهائي (Hard Delete) لهذا المنتج نظراً لوجود سجلات مرتبطة به في (الطلبات، المبيعات، المخزون، أو قوائم الأسعار). تم الحفاظ على البيانات لتفادي كسر التكامل المرجعي.",
+            relations: integrity
+          });
+        }
+
+        // Apply Soft Delete (حفظ المنتج وتسجيل تاريخ الحذف وحجبه من المتجر)
+        const softDeletePayload = {
+          deleted_at: nowIso,
+          active: false,
+          status: "archived",
+          updatedAt: Date.now()
+        };
+
+        const patchRes = await firebaseFetch(buildSafeRtdbPath("products", safeId), {
+          method: "PATCH",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(softDeletePayload)
+        });
+
+        if (!patchRes.ok) {
+          return res.status(502).json({ success: false, error: "تعذر تحديث حالة الحذف اللطيف للمنتج على السحابة." });
+        }
+
+        await bumpSyncMetadata("product_soft_delete");
+        return res.status(200).json({
+          success: true,
+          softDeleted: true,
+          id: safeId,
+          deleted_at: nowIso,
+          message: "تم تنفيذ الحذف اللطيف (Soft Delete) بنجاح. المنتج محفوظ تاريخياً ومحاسبياً وتم استثناؤه من المتجر.",
+          relations: integrity
+        });
+      }
+
+      // 3. No Relations Found: Allow hard delete only if explicitly requested, otherwise Soft Delete
+      if (isForceHard) {
+        const delRes = await firebaseFetch(buildSafeRtdbPath("products", safeId), {
+          method: "DELETE",
+          cache: "no-store"
+        });
+
+        if (!delRes.ok) {
+          return res.status(502).json({ success: false, error: "تعذر حذف المنتج من السحابة المركزية." });
+        }
+
+        await bumpSyncMetadata("product_hard_delete");
+        return res.status(200).json({
+          success: true,
+          hardDeleted: true,
+          id: safeId,
+          message: "تم حذف المنتج نهائياً من الكتالوج (Hard Delete) لعدم وجود أي ارتباطات له."
+        });
+      }
+
+      // Standard Default Action: Soft Delete
+      const softDeletePayload = {
+        deleted_at: nowIso,
+        active: false,
+        status: "archived",
+        updatedAt: Date.now()
+      };
+
+      const patchRes = await firebaseFetch(buildSafeRtdbPath("products", safeId), {
+        method: "PATCH",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(softDeletePayload)
+      });
+
+      if (!patchRes.ok) {
+        return res.status(502).json({ success: false, error: "تعذر تحديث حالة الحذف اللطيف للمنتج على السحابة." });
+      }
+
+      await bumpSyncMetadata("product_soft_delete");
       return res.status(200).json({
         success: true,
+        softDeleted: true,
         id: safeId,
-        message: "تم حذف المنتج نهائياً من الكتالوج بنجاح."
+        deleted_at: nowIso,
+        message: "تم تنفيذ الحذف اللطيف (Soft Delete) بنجاح. تم حفظ المنتج وأرشفته مع إخفائه من المتجر."
       });
     }
 
