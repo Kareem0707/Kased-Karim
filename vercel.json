@@ -4,7 +4,32 @@
   "trailingSlash": false,
   "redirects": [
     {
-      "source": "/(database\\.rules\\.json|package(-lock)?\\.json|vercel\\.json|README\\.md|scratch/(.*)|.*\\.pdf)",
+      "source": "/database.rules.json",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/package.json",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/package-lock.json",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/vercel.json",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/README.md",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/scratch/:match*",
       "destination": "/",
       "permanent": false
     }
