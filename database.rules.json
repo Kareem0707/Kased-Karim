@@ -4,7 +4,11 @@
     ".write": false,
 
     "orders": {
+      ".read": "auth != null && auth.token.email_verified === true",
+      ".write": "auth != null && auth.token.email_verified === true",
       "$orderId": {
+        ".read": "auth != null && auth.token.email_verified === true",
+        ".write": "auth != null && auth.token.email_verified === true",
         ".validate": "newData.hasChildren(['id', 'customer', 'items', 'total', 'timestamp'])",
         "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
         "total": { ".validate": "newData.isNumber() && newData.val() >= 0" },
@@ -19,6 +23,8 @@
     },
 
     "products": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
       "$productId": {
         ".validate": "newData.hasChildren(['id', 'name', 'price'])",
         "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
@@ -30,7 +36,10 @@
     },
 
     "customers": {
+      ".read": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
       "$customerId": {
+        ".read": "auth != null && auth.token.email_verified === true && (auth.uid === $customerId || auth.token.role === 'admin')",
+        ".write": "auth != null && auth.token.email_verified === true && (auth.uid === $customerId || auth.token.role === 'admin')",
         ".validate": "newData.hasChildren(['id', 'name', 'createdAt'])",
         "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
         "name": { ".validate": "newData.isString() && newData.val().length <= 100" },
@@ -40,6 +49,8 @@
     },
 
     "reviews": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified === true",
       "$reviewId": {
         ".validate": "newData.hasChildren(['id', 'productId', 'author', 'rating', 'status', 'timestamp'])",
         "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
@@ -50,14 +61,20 @@
     },
 
     "settings": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
       ".validate": "newData.exists()"
     },
 
     "categories": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
       ".validate": "newData.exists()"
     },
 
     "sync_meta": {
+      ".read": true,
+      ".write": "auth != null && auth.token.email_verified === true",
       ".validate": "newData.hasChildren(['version', 'timestamp'])"
     },
 

@@ -3,12 +3,12 @@
 // Compliant with OWASP API Security Top 10 (API1: BOLA, API3: BOPLA, API4: Resource Consumption), OWASP ASVS (Level 3), & NIST Privacy Framework
 
 import crypto from "crypto";
+import { enforceRateLimit, getClientIp } from "../lib/rateLimit.js";
 import {
   verifyCustomerRequest,
   sanitizePathId,
   firebaseFetch,
   buildSafeRtdbPath,
-  getClientIp,
   normalizeIpForRateLimit,
   checkDistributedRateLimit,
   recordFailedRateLimitAttempt,
@@ -53,15 +53,9 @@ async function trackHandler(req, res, { requestId, safeBody } = {}) {
   const clientIp = getClientIp(req);
   const normalizedIp = normalizeIpForRateLimit(clientIp);
 
-  // 3. Layer 1: IP-Level Distributed Rate Limiting (15 requests per 15-minute window) (Axis 6)
-  const ipCheck = await checkDistributedRateLimit(clientIp, "track_ip", 15, 15 * 60 * 1000);
-  if (!ipCheck.allowed) {
-    res.setHeader("Retry-After", String(ipCheck.remainingSec));
-    return res.status(429).json({
-      success: false,
-      error: `تم تجاوز حد استعلامات التتبع المسموح به لهذا العنوان. يرجى الانتظار ${ipCheck.remainingSec} ثانية والمحاولة مجدداً.`
-    });
-  }
+  // 3. Sliding Window Rate Limiting (60 requests per minute)
+  const allowed = await enforceRateLimit(req, res, "read");
+  if (!allowed) return;
 
   try {
     // 4. Request Body Extraction & Safe Input Validation

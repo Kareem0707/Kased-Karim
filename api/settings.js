@@ -13,6 +13,7 @@ import {
   withApiHardening,
   safeLogError
 } from "./_auth.js";
+import { enforceRateLimit } from "../lib/rateLimit.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -54,6 +55,10 @@ async function settingsHandler(req, res, { requestId, safeBody } = {}) {
     // 1. GET / HEAD: Fetch Categories and/or Showroom Settings
     // -------------------------------------------------------------------------
     if (req.method === "GET" || req.method === "HEAD") {
+      // Sliding Window Rate Limiting for Public Storefront Settings (60 requests per minute)
+      const allowed = await enforceRateLimit(req, res, "read");
+      if (!allowed) return;
+
       const t = Date.now();
       const admin = verifyAdminRequest(req);
       let categories = null;

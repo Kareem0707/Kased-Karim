@@ -17,5 +17,10 @@
     "kased-karim"
   ],
   "author": "KarimoDesign",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "@upstash/ratelimit": "^2.2.1",
+    "@upstash/redis": "^1.41.0",
+    "disposable-email-domains": "^1.0.62"
+  }
 }

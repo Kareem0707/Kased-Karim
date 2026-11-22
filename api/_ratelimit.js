@@ -3,6 +3,7 @@
 // Native Node.js Crypto (Zero External Dependencies) + Hybrid Redis KV / Firebase RTDB CAS
 
 import crypto from "crypto";
+import { getClientIp as getVercelClientIp } from "../lib/rateLimit.js";
 
 // Server Secret for HMAC Key Hashing (Strict Zero Static Secrets)
 const EPHEMERAL_SECRET = crypto.randomBytes(32).toString("hex");
@@ -13,46 +14,13 @@ const RATE_LIMIT_SECRET = (
   EPHEMERAL_SECRET
 ).trim();
 
-// In-Memory Fallback Cache per Serverless Instance (Secondary Resiliency Layer)
-const memoryRateLimitStore = new Map();
+// Zero In-Memory Map/Object Rate Limiting (Serverless Safe)
 
 // -----------------------------------------------------------------------------
 // 1. TRUSTED CLIENT IP EXTRACTION & IPV6 /64 SUBNET NORMALIZATION (ASVS 13.1.5)
 // -----------------------------------------------------------------------------
 export function getClientIp(req) {
-  if (!req || !req.headers) return "127.0.0.1";
-
-  // 1. Vercel Platform Edge Injected Header (Strictly trustworthy, set by edge balancer)
-  const vercelIp = req.headers["x-vercel-forwarded-for"];
-  if (vercelIp && typeof vercelIp === "string") {
-    const candidate = vercelIp.split(",")[0].trim();
-    if (/^[a-fA-F0-9:.]+$/.test(candidate) && candidate.length <= 64) {
-      return candidate;
-    }
-  }
-
-  // 2. Edge Real-IP
-  const realIp = req.headers["x-real-ip"];
-  if (realIp && typeof realIp === "string") {
-    const candidate = realIp.trim();
-    if (/^[a-fA-F0-9:.]+$/.test(candidate) && candidate.length <= 64) {
-      return candidate;
-    }
-  }
-
-  // 3. Multi-hop X-Forwarded-For: Take the last proxy hop to avoid client-injected spoofed headers
-  const xForwardedFor = req.headers["x-forwarded-for"];
-  if (xForwardedFor && typeof xForwardedFor === "string") {
-    const parts = xForwardedFor.split(",").map(p => p.trim()).filter(Boolean);
-    if (parts.length > 0) {
-      const lastHop = parts[parts.length - 1];
-      if (/^[a-fA-F0-9:.]+$/.test(lastHop) && lastHop.length <= 64) {
-        return lastHop;
-      }
-    }
-  }
-
-  return req.socket?.remoteAddress || "127.0.0.1";
+  return getVercelClientIp(req);
 }
 
 // Normalize IP addresses (IPv4 as-is, IPv6 normalized to /64 subnet prefix to mitigate subnet rotation)
@@ -221,22 +189,7 @@ export async function checkRateLimitDistributed(scope, identifier, maxAttempts =
     console.warn(`Distributed rate limit check note on '${scope}':`, err.message);
   }
 
-  // 3. Resilient In-Memory Fallback
-  const memRecord = memoryRateLimitStore.get(key);
-  if (memRecord) {
-    if (memRecord.lockedUntil && memRecord.lockedUntil > now) {
-      return { allowed: false, remainingSec: Math.ceil((memRecord.lockedUntil - now) / 1000), count: memRecord.count, key };
-    }
-    if (now - memRecord.firstAttempt > windowMs) {
-      memoryRateLimitStore.delete(key);
-      return { allowed: true, count: 0, remainingSec: 0, key };
-    }
-    if (memRecord.count >= maxAttempts) {
-      memRecord.lockedUntil = now + windowMs;
-      return { allowed: false, remainingSec: Math.ceil(windowMs / 1000), count: memRecord.count, key };
-    }
-  }
-
+  // Fallback if Redis/DB is unavailable (Fail-Open without In-Memory Map)
   return { allowed: true, count: 0, remainingSec: 0, key };
 }
 
@@ -247,19 +200,6 @@ export async function recordFailedAttemptDistributed(scope, identifier, maxAttem
   const key = getRateLimitKey(scope, identifier);
   const now = Date.now();
   const windowSec = Math.ceil(windowMs / 1000);
-
-  // Update In-Memory cache immediately
-  const memRecord = memoryRateLimitStore.get(key) || { count: 0, firstAttempt: now };
-  if (now - memRecord.firstAttempt > windowMs) {
-    memRecord.count = 0;
-    memRecord.firstAttempt = now;
-  }
-  memRecord.count += 1;
-  memRecord.lastAttempt = now;
-  if (memRecord.count >= maxAttempts) {
-    memRecord.lockedUntil = now + windowMs;
-  }
-  memoryRateLimitStore.set(key, memRecord);
 
   // 1. Redis / KV Atomic INCR + EXPIRE (O(1))
   const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
@@ -345,7 +285,6 @@ export async function recordFailedAttemptDistributed(scope, identifier, maxAttem
 // -----------------------------------------------------------------------------
 export async function resetRateLimitDistributed(scope, identifier) {
   const key = getRateLimitKey(scope, identifier);
-  memoryRateLimitStore.delete(key);
 
   const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
   const kvToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;

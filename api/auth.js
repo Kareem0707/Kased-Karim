@@ -17,7 +17,6 @@ import {
   checkRateLimitDistributed,
   recordFailedAttemptDistributed,
   resetRateLimitDistributed,
-  getClientIp,
   normalizeIpForRateLimit,
   ADMIN_2FA_EMAILS,
   maskEmail,
@@ -25,48 +24,10 @@ import {
   withApiHardening,
   safeLogError
 } from "./_auth.js";
+import { enforceRateLimit, getClientIp } from "../lib/rateLimit.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-// In-Memory Brute-Force Rate Limiter (per serverless instance secondary fallback) (F-18)
-const loginAttempts = new Map();
-const MAX_ATTEMPTS = 5;
-const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
-
-function checkRateLimit(ip) {
-  const now = Date.now();
-  const record = loginAttempts.get(ip);
-  if (!record) return { allowed: true };
-
-  if (record.lockedUntil && record.lockedUntil > now) {
-    const remainingSec = Math.ceil((record.lockedUntil - now) / 1000);
-    return { allowed: false, remainingSec };
-  }
-
-  if (now - record.firstAttempt > LOCKOUT_MS) {
-    loginAttempts.delete(ip);
-    return { allowed: true };
-  }
-
-  if (record.count >= MAX_ATTEMPTS) {
-    record.lockedUntil = now + LOCKOUT_MS;
-    return { allowed: false, remainingSec: Math.ceil(LOCKOUT_MS / 1000) };
-  }
-
-  return { allowed: true };
-}
-
-function recordFailedAttempt(ip) {
-  const now = Date.now();
-  const record = loginAttempts.get(ip) || { count: 0, firstAttempt: now };
-  record.count += 1;
-  loginAttempts.set(ip, record);
-}
-
-function resetAttempts(ip) {
-  loginAttempts.delete(ip);
-}
 
 async function authHandler(req, res, { requestId, safeBody } = {}) {
   // 1. Mandatory CORS & HTTP Security Headers Gate (Axis 4: ASVS V14.5)
@@ -126,51 +87,10 @@ async function authHandler(req, res, { requestId, safeBody } = {}) {
       }
 
       // -----------------------------------------------------------------------
-      // DUAL-LAYER DISTRIBUTED RATE LIMITING (IP + GLOBAL FAIL-CLOSED)
+      // UPSTASH SLIDING WINDOW RATE LIMITING (5 attempts per 15 minutes per IP)
       // -----------------------------------------------------------------------
-      // Layer 1: IP-level Rate Limit (5 attempts per 15 minutes) with Fail-Closed
-      const distCheck = await checkDistributedRateLimit(clientIp, "admin_login_ip", 5, 15 * 60 * 1000, { failClosed: true });
-      if (distCheck.failClosedError) {
-        res.setHeader("Retry-After", "60");
-        return res.status(503).json({
-          success: false,
-          error: "خدمة المصادقة الإدارية غير متاحة مؤقتاً لعدم تمكن نظام الحماية من التحقق من سلامة الطلبات (Fail-Closed Enforcement)."
-        });
-      }
-      if (!distCheck.allowed) {
-        res.setHeader("Retry-After", String(distCheck.remainingSec));
-        return res.status(429).json({
-          success: false,
-          error: `تم تجاوز الحد الأقصى للمحاولات الخاطئة. يرجى الانتظار ${distCheck.remainingSec} ثانية قبل إعادة المحاولة.`
-        });
-      }
-
-      // Layer 2: Global Distributed Rate Limit across all IPs (Prevents distributed botnet brute-force)
-      const globalCheck = await checkRateLimitDistributed("admin_login_global", "global_slot", 15, 15 * 60 * 1000, { failClosed: true });
-      if (globalCheck.failClosedError) {
-        res.setHeader("Retry-After", "60");
-        return res.status(503).json({
-          success: false,
-          error: "خدمة المصادقة الإدارية غير متاحة مؤقتاً لعدم تمكن نظام الحماية من التحقق من سلامة الطلبات (Fail-Closed Enforcement)."
-        });
-      }
-      if (!globalCheck.allowed) {
-        res.setHeader("Retry-After", String(globalCheck.remainingSec));
-        return res.status(429).json({
-          success: false,
-          error: `تم رصد نشاط مكثف غير معتاد على بوابة الإدارة. يرجى الانتظار ${globalCheck.remainingSec} ثانية قبل إعادة المحاولة.`
-        });
-      }
-
-      // In-Memory Rate Limiter Fallback
-      const rateCheck = checkRateLimit(clientIp);
-      if (!rateCheck.allowed) {
-        res.setHeader("Retry-After", String(rateCheck.remainingSec));
-        return res.status(429).json({
-          success: false,
-          error: `تم تجاوز الحد الأقصى للمحاولات الخاطئة. يرجى الانتظار ${rateCheck.remainingSec} ثانية قبل إعادة المحاولة.`
-        });
-      }
+      const allowed = await enforceRateLimit(req, res, "auth");
+      if (!allowed) return;
 
       // =======================================================================
       // STEP 2: VERIFY 6-DIGIT EMAIL OTP (MANDATORY MFA WITH CHALLENGE BINDING)
@@ -241,9 +161,8 @@ async function authHandler(req, res, { requestId, safeBody } = {}) {
           });
         }
 
-        // OTP Verified & Atomically Burned via ETag: Reset limits and issue short-lived JWT (2 hours) (F-10)
+        // OTP Verified & Atomically Burned via ETag: Issue short-lived JWT (2 hours) (F-10)
         await resetDistributedRateLimit(clientIp, "admin_login_ip");
-        resetAttempts(clientIp);
         const token = createAdminToken({ sub: "executive-admin", ip: clientIp, verified2FA: true }, 2 * 60 * 60 * 1000);
 
         // Strict Secure HttpOnly Cookie (Zero Client Token Leakage)
@@ -273,7 +192,6 @@ async function authHandler(req, res, { requestId, safeBody } = {}) {
       if (!isValid) {
         await recordFailedRateLimitAttempt(clientIp, "admin_login_ip", 5, 15 * 60 * 1000);
         await recordFailedAttemptDistributed("admin_login_global", "global_slot", 15, 15 * 60 * 1000);
-        recordFailedAttempt(clientIp);
         await new Promise(r => setTimeout(r, 600)); // Constant delay against timing attacks
         return res.status(401).json({
           success: false,

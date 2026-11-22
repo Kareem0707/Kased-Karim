@@ -4371,6 +4371,7 @@ function renderAdminBackupView() {
 
   // 3. Update Summary Bar
   if (summaryEl) {
+    safeClearContainer(summaryEl);
     const isFiltered = Boolean(filterDate || filterYear || filterMonth || filterSearch);
     if (isFiltered) {
       let desc = [];
@@ -4378,9 +4379,23 @@ function renderAdminBackupView() {
       if (filterYear) desc.push(`السنة: ${filterYear}`);
       if (filterMonth) desc.push(`الشهر: ${filterMonth}`);
       if (filterSearch) desc.push(`بحث: "${filterSearch}"`);
-      summaryEl.innerHTML = `<i class="fas fa-filter" style="color: var(--accent);"></i> تم العثور على <strong>${filteredPoints.length}</strong> نقطة استرجاع مطابقة (${desc.join(" • ")}).`;
+      const icon = createSafeEl("i", { className: "fas fa-filter", style: "color: var(--accent); margin-left: 6px;" });
+      const text1 = document.createTextNode(" تم العثور على ");
+      const strongCount = createSafeEl("strong", { textContent: String(filteredPoints.length) });
+      const text2 = document.createTextNode(` نقطة استرجاع مطابقة (${desc.join(" • ")}).`);
+      summaryEl.appendChild(icon);
+      summaryEl.appendChild(text1);
+      summaryEl.appendChild(strongCount);
+      summaryEl.appendChild(text2);
     } else {
-      summaryEl.innerHTML = `<i class="fas fa-circle-check" style="color: #10B981;"></i> يتم عرض كافة نقاط الاسترجاع في الأرشيف (إجمالي: <strong>${allPoints.length}</strong> نقطة محفوظة).`;
+      const icon = createSafeEl("i", { className: "fas fa-circle-check", style: "color: #10B981; margin-left: 6px;" });
+      const text1 = document.createTextNode(" يتم عرض كافة نقاط الاسترجاع في الأرشيف (إجمالي: ");
+      const strongCount = createSafeEl("strong", { textContent: String(allPoints.length) });
+      const text2 = document.createTextNode(" نقطة محفوظة).");
+      summaryEl.appendChild(icon);
+      summaryEl.appendChild(text1);
+      summaryEl.appendChild(strongCount);
+      summaryEl.appendChild(text2);
     }
   }
 

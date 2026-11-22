@@ -274,6 +274,14 @@
     if (modal) {
       modal.classList.add("active");
       document.body.style.overflow = "hidden";
+
+      // Render Cloudflare Turnstile Challenge for Checkout
+      if (typeof window.renderTurnstileWidget === "function") {
+        setTimeout(() => {
+          window.turnstileCheckoutWidgetId = window.renderTurnstileWidget("turnstileCheckoutContainer");
+        }, 150);
+      }
+
       setTimeout(() => {
         if (nameInput && nameInput.value.trim().length >= 3) {
           if (phoneInput && !phoneInput.value.trim()) {
@@ -568,6 +576,16 @@
       ? window.KK_DB.getCustomer() 
       : null;
 
+    // Extract Cloudflare Turnstile Verification Token
+    let turnstileToken = "";
+    if (window.turnstile && window.turnstileCheckoutWidgetId !== undefined) {
+      try { turnstileToken = window.turnstile.getResponse(window.turnstileCheckoutWidgetId); } catch(e) {}
+    }
+    if (!turnstileToken) {
+      const hiddenInput = document.querySelector("#turnstileCheckoutContainer input[name='cf-turnstile-response']");
+      if (hiddenInput) turnstileToken = hiddenInput.value;
+    }
+
     // Zero-Trust Payload: Notice that prices and totals sent are advisory only.
     // The server recalculates everything from the authoritative database.
     const customerData = {
@@ -581,6 +599,7 @@
       coupon: rawCoupon || undefined,
       customerId: currentCustomer ? currentCustomer.id : null,
       customerEmail: currentCustomer ? currentCustomer.email : null,
+      turnstileToken: turnstileToken || undefined,
       paymentMethod: "cod"
     };
 
@@ -623,8 +642,16 @@
         throw new Error("لم نتمكن من الحصول على تأكيد رقم الطلب من الخادم");
       }
     } catch (err) {
+      if (window.turnstile && window.turnstileCheckoutWidgetId !== undefined) {
+        try { window.turnstile.reset(window.turnstileCheckoutWidgetId); } catch(e) {}
+      }
       // On failure: DO NOT clear cart! Keep user's selections safe.
-      showToast(`❌ تعذر إرسال الطلب: ${err.message || "يرجى التحقق من الاتصال بالإنترنت"}`);
+      const msg = err.message || "يرجى التحقق من الاتصال بالإنترنت";
+      if (msg.includes("403") || msg.includes("مفعّل") || msg.includes("تفعيل")) {
+        showToast(`⚠️ ${msg}`, "error", 9000);
+      } else {
+        showToast(`❌ تعذر إرسال الطلب: ${msg}`);
+      }
     } finally {
       // Release submission lock
       isSubmittingOrder = false;

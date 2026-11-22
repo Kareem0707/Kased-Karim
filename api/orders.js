@@ -3,10 +3,12 @@
 // Compliant with OWASP API Security Top 10 (API1: BOLA, API3: BOPLA, API4: Resource Consumption, API5: BFLA, API6: Sensitive Business Flows) & ASVS Level 3
 
 import crypto from "crypto";
+import { validateEmail } from "../lib/emailValidator.js";
+import { verifyTurnstile, extractTurnstileToken } from "../lib/turnstile.js";
+import { enforceRateLimit, getClientIp } from "../lib/rateLimit.js";
 import {
   verifyAdminRequest,
   verifyCustomerRequest,
-  getClientIp,
   normalizeIpForRateLimit,
   checkDistributedRateLimit,
   sanitizePathId,
@@ -272,11 +274,11 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
   try {
     // 2. Payload Size Limit Guard (DoS Mitigation - CWE-400 / OWASP API4)
     const contentLength = parseInt(req.headers["content-length"] || "0", 10);
-    const maxAllowedBytes = req.method === "PUT" ? (512 * 1024) : (25 * 1024); // 25 KB for single order, 512 KB for admin bulk
+    const maxAllowedBytes = req.method === "PUT" ? (512 * 1024) : (50 * 1024); // 50 KB for single order, 512 KB for admin bulk
     if (contentLength > maxAllowedBytes) {
       return res.status(413).json({
         success: false,
-        error: `حجم بيانات الطلب يتجاوز الحد الأقصى المسموح به (${Math.round(maxAllowedBytes / 1024)} كيلوبايت).`
+        error: `حجم بيانات الطلب يتجاوز الحد الأقصى المسموح به (${Math.round(maxAllowedBytes / 1024)} كيلوبايت) - 413 Payload Too Large.`
       });
     }
 
@@ -284,6 +286,10 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
     // 1. GET: Fetch Orders (Admin Full View OR Customer Personal View with ?mine=1)
     // -------------------------------------------------------------------------
     if (req.method === "GET" || req.method === "HEAD") {
+      // Sliding Window Rate Limit for Public/Authenticated Orders Read (60 requests per minute)
+      const allowed = await enforceRateLimit(req, res, "read");
+      if (!allowed) return;
+
       const isMine = req.query?.mine === "1" || req.query?.mine === "true";
 
       // SUB-CASE A: AUTHENTICATED CUSTOMER ORDERS HISTORY (Axis 4: BOLA Prevention)
@@ -345,11 +351,24 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
       }
 
       orders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      const rawPage = parseInt(req.query?.page || "1", 10);
+      const rawLimit = parseInt(req.query?.limit || "50", 10);
+      const page = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1;
+      const limit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 50) : 50;
+      const total = orders.length;
+      const totalPages = Math.ceil(total / limit) || 1;
+      const startIndex = (page - 1) * limit;
+      const paginatedOrders = orders.slice(startIndex, startIndex + limit);
+
       return res.status(200).json({
         success: true,
-        count: orders.length,
+        count: paginatedOrders.length,
+        total,
+        page,
+        limit,
+        totalPages,
         provider,
-        orders
+        orders: paginatedOrders
       });
     }
 
@@ -360,15 +379,10 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
       const clientIp = getClientIp(req);
       const normalizedIp = normalizeIpForRateLimit(clientIp);
 
-      // Layer 1: IP-Level Distributed Rate Limiting (5 orders per 15 minutes) (Axis 7)
-      const ipLimit = await checkDistributedRateLimit(clientIp, "create_order_ip", 5, 15 * 60 * 1000);
-      if (!ipLimit.allowed) {
-        res.setHeader("Retry-After", String(ipLimit.remainingSec));
-        return res.status(429).json({
-          success: false,
-          error: `تم تجاوز حد إنشاء الطلبات من عنوانك. يرجى الانتظار ${ipLimit.remainingSec} ثانية والمحاولة مجدداً.`
-        });
-      }
+      // Sliding Window Rate Limiting (3 orders per 10 minutes per IP or User ID)
+      const customerAuthEarly = verifyCustomerRequest(req);
+      const allowed = await enforceRateLimit(req, res, "orders", customerAuthEarly?.sub || null);
+      if (!allowed) return;
 
       let orderPayload = req.body;
       if (typeof orderPayload === "string") {
@@ -381,6 +395,40 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
 
       if (!orderPayload || typeof orderPayload !== "object" || Array.isArray(orderPayload) || !orderPayload.customer) {
         return res.status(400).json({ success: false, error: "بيانات العميل وسلة الطلب مفقودة أو غير مكتملة." });
+      }
+
+      // 1. Mandatory Cloudflare Turnstile Bot Gate (Anti-Automation & Fraud Defense)
+      const turnstileToken = extractTurnstileToken(req, orderPayload);
+      const turnstileRes = await verifyTurnstile(turnstileToken, clientIp);
+      if (!turnstileRes.success) {
+        return res.status(400).json({
+          success: false,
+          error: turnstileRes.error || "فشل التحقق الأمني من اختبار مكافحة الروبوتات (Turnstile)."
+        });
+      }
+
+      // 2. Verified Account Enforcement (SENSITIVE OPERATION: 403 Forbidden for Unverified Accounts)
+      const customerAuth = verifyCustomerRequest(req);
+      if (customerAuth && customerAuth.sub) {
+        const isVerified = customerAuth.email_verified === true || customerAuth.emailVerified === true;
+        if (!isVerified) {
+          let liveVerified = false;
+          try {
+            const custRes = await firebaseFetch(buildSafeRtdbPath("customers", sanitizePathId(customerAuth.sub)), { cache: "no-store" });
+            if (custRes.ok) {
+              const liveCust = await custRes.json();
+              liveVerified = Boolean(liveCust && (liveCust.emailVerified === true || liveCust.email_verified === true));
+            }
+          } catch (e) {}
+
+          if (!liveVerified) {
+            return res.status(403).json({
+              success: false,
+              forbidden: true,
+              error: "تم رفض إنشاء الطلب: حساب العميل غير مفعّل. يرجى تفعيل البريد الإلكتروني للمتابعة (403 Forbidden)."
+            });
+          }
+        }
       }
 
       // Check Idempotency-Key (Axis 3: Duplicate Submission & Race Condition Defense)
@@ -462,6 +510,21 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
           success: false,
           error: `تم تجاوز الحد المسموح للطلبات المسجلة بهذا الرقم. يرجى الانتظار ${phoneLimit.remainingSec} ثانية قبل إعادة المحاولة.`
         });
+      }
+
+      // Customer Email Deep Validation (Disposable Domain & DNS MX Records Defense)
+      const rawCustomerEmail = (rawCustomer.email || orderPayload.email || (customerAuth && customerAuth.email) || "").trim();
+      let cleanOrderEmail = null;
+      if (rawCustomerEmail) {
+        const emailValidation = await validateEmail(rawCustomerEmail, { checkMx: true, timeoutMs: 3000 });
+        if (!emailValidation.valid) {
+          return res.status(400).json({
+            success: false,
+            reason: emailValidation.reason,
+            error: emailValidation.error || "البريد الإلكتروني للطلب غير صالح أو مؤقت أو غير مسجل في خوادم البريد (MX Records)."
+          });
+        }
+        cleanOrderEmail = emailValidation.normalizedEmail;
       }
 
       // Address Sanitization
@@ -749,7 +812,6 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
       });
 
       // 8. Verified Customer Account Binding (Axis 4: IDOR Prevention)
-      const customerAuth = verifyCustomerRequest(req);
       const verifiedCustomerId = customerAuth && customerAuth.sub ? sanitizePathId(customerAuth.sub) : null;
       const verifiedCustomerEmail = customerAuth && customerAuth.email ? String(customerAuth.email).trim().toLowerCase().slice(0, 100) : null;
 
@@ -779,7 +841,7 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
       if (verifiedCustomerId) {
         customerObj.id = verifiedCustomerId;
       }
-      const rawEmail = verifiedCustomerEmail || (rawCustomer.email ? String(rawCustomer.email).trim().toLowerCase().slice(0, 100) : "");
+      const rawEmail = cleanOrderEmail || verifiedCustomerEmail || (rawCustomer.email ? String(rawCustomer.email).trim().toLowerCase().slice(0, 100) : "");
       if (rawEmail) {
         customerObj.email = rawEmail;
       }

@@ -3,6 +3,7 @@
 // Enforces Strict Input Validation, Moderation Before Display & Zero-PII (OWASP API3, API5 & ASVS Level 3)
 
 import crypto from "crypto";
+import { enforceRateLimit, getClientIp } from "../lib/rateLimit.js";
 import {
   verifyAdminRequest,
   verifyCustomerRequest,
@@ -10,7 +11,6 @@ import {
   firebaseFetch,
   buildSafeRtdbPath,
   assertSafeRtdbPayload,
-  getClientIp,
   checkDistributedRateLimit,
   sanitizeReview,
   redactSecretUrl,
@@ -68,6 +68,10 @@ async function reviewsHandler(req, res, { requestId, safeBody } = {}) {
     // 1. GET / HEAD: Fetch Product Reviews (Public Approved vs Admin Moderation)
     // -------------------------------------------------------------------------
     if (req.method === "GET" || req.method === "HEAD") {
+      // Sliding Window Rate Limiting for Reviews Read (60 requests per minute)
+      const allowed = await enforceRateLimit(req, res, "read");
+      if (!allowed) return;
+
       const { productId, all, status } = req.query || {};
 
       // SUB-CASE A: ADMIN-ONLY REVIEWS MODERATION ACCESS (Axis 1: BFLA)
@@ -116,10 +120,24 @@ async function reviewsHandler(req, res, { requestId, safeBody } = {}) {
       approved.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
       const publicSanitized = approved.map(r => sanitizeReview(r, { forAdmin: false })).filter(Boolean);
 
+      // Enforce pagination bound (max 50 items)
+      const rawPage = parseInt(req.query?.page || "1", 10);
+      const rawLimit = parseInt(req.query?.limit || "50", 10);
+      const page = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1;
+      const limit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 50) : 50;
+      const total = publicSanitized.length;
+      const totalPages = Math.ceil(total / limit) || 1;
+      const startIndex = (page - 1) * limit;
+      const paginatedReviews = publicSanitized.slice(startIndex, startIndex + limit);
+
       return res.status(200).json({
         success: true,
-        count: publicSanitized.length,
-        reviews: publicSanitized
+        count: paginatedReviews.length,
+        total,
+        page,
+        limit,
+        totalPages,
+        reviews: paginatedReviews
       });
     }
 
@@ -127,16 +145,9 @@ async function reviewsHandler(req, res, { requestId, safeBody } = {}) {
     // 2. POST: Submit New Product Review (Public Submission with Moderation Enforcement)
     // -------------------------------------------------------------------------
     if (req.method === "POST") {
-      // Distributed Rate Limiting (Anti-Spam / Anti-Flooding) (Axis 6)
-      const clientIp = getClientIp(req);
-      const rateLimit = await checkDistributedRateLimit(clientIp, "submit_review", 3, 15 * 60 * 1000);
-      if (!rateLimit.allowed) {
-        res.setHeader("Retry-After", String(rateLimit.remainingSec || 900));
-        return res.status(429).json({
-          success: false,
-          error: `تم تجاوز الحد المسموح لإرسال التقييمات. يرجى الانتظار ${rateLimit.remainingSec || 900} ثانية والمحاولة مجدداً.`
-        });
-      }
+      // Sliding Window Rate Limiting (3 submissions per 10 minutes)
+      const allowed = await enforceRateLimit(req, res, "orders");
+      if (!allowed) return;
 
       let body = req.body;
       if (typeof body === "string") {

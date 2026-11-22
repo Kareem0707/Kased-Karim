@@ -1012,6 +1012,7 @@ class KasedKarimDB {
     const payload = {
       customerId: custId,
       email: custEmail || undefined,
+      turnstileToken: (customerData && customerData.turnstileToken) || options.turnstileToken || undefined,
       deliveryArea: customerData ? (customerData.deliveryArea || customerData.city) : undefined,
       coupon: customerData ? (customerData.coupon || customerData.couponCode) : (options.coupon || undefined),
       customer: {
@@ -2026,11 +2027,13 @@ class KasedKarimDB {
     return null;
   }
 
-  async customerRegister(name, phone, param3, param4) {
+  async customerRegister(name, phone, param3, param4, options = {}) {
     let email = "";
     let password = "";
-    // Robustly handle both signatures: (name, phone, email, password) and (name, phone, password, email)
-    if (param4 !== undefined) {
+    let turnstileToken = "";
+
+    // Robustly handle signatures:
+    if (param4 !== undefined && typeof param4 !== "object") {
       if (typeof param3 === "string" && param3.includes("@")) {
         email = param3;
         password = param4;
@@ -2040,11 +2043,18 @@ class KasedKarimDB {
       }
     } else {
       password = param3;
+      if (typeof param4 === "object") options = param4;
+    }
+
+    if (options && typeof options === "object") {
+      turnstileToken = options.turnstileToken || "";
+    } else if (typeof options === "string") {
+      turnstileToken = options;
     }
 
     const res = await safeApiFetch("/api/customer?action=register", {
       method: "POST",
-      body: JSON.stringify({ name, phone, email, password })
+      body: JSON.stringify({ name, phone, email, password, turnstileToken })
     });
 
     if (!res.ok || !res.data || !res.data.success) {
@@ -2054,7 +2064,27 @@ class KasedKarimDB {
     if (res.data.customer) {
       this.saveCustomer(res.data.customer);
     }
-    return res.data.customer;
+    return res.data.customer || res.data;
+  }
+
+  async customerVerifyEmail(tokenOrCode, email = null) {
+    const payload = typeof tokenOrCode === "string" && tokenOrCode.length > 20
+      ? { token: tokenOrCode }
+      : { code: tokenOrCode, email };
+
+    const res = await safeApiFetch("/api/customer?action=verify_email", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok || !res.data || !res.data.success) {
+      throw new Error((res.data && res.data.error) || "فشل تفعيل البريد الإلكتروني");
+    }
+
+    if (res.data.customer) {
+      this.saveCustomer(res.data.customer);
+    }
+    return res.data;
   }
 
   async customerGoogleAuth(credential) {

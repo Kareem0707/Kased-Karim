@@ -204,7 +204,30 @@ function initApp() {
   setupCategoryTabsScroll();
   updateCartUI();
   handleHeaderScroll();
+  checkEmailVerificationParam();
 }
+
+async function checkEmailVerificationParam() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("verify_email");
+    const email = params.get("email");
+    if (token) {
+      showToast("⏳ جارٍ التحقق من بريدك الإلكتروني وتفعيله سحابياً...", "info", 4000);
+      const res = await window.KK_DB.customerVerifyEmail(token, email);
+      showToast("🎉 تم تفعيل بريدك الإلكتروني بنجاح ومصادقة حسابك رسمياً!", "success", 8000);
+      if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
+      params.delete("verify_email");
+      params.delete("email");
+      const newQuery = params.toString();
+      const newUrl = window.location.pathname + (newQuery ? `?${newQuery}` : "") + window.location.hash;
+      window.history.replaceState({}, document.title, newUrl);
+    }
+  } catch (err) {
+    showToast(`❌ ${err.message || "فشل تفعيل البريد الإلكتروني"}`, "error", 8000);
+  }
+}
+window.checkEmailVerificationParam = checkEmailVerificationParam;
 
 // 1. Load Products from Database Engine with Prototype Pollution Defense
 function loadProducts() {
@@ -1849,6 +1872,44 @@ function closeCustomerAuthModal() {
 }
 window.closeCustomerAuthModal = closeCustomerAuthModal;
 
+// -----------------------------------------------------------------------------
+// Cloudflare Turnstile Integration Helpers
+// -----------------------------------------------------------------------------
+window.TURNSTILE_SITE_KEY = window.TURNSTILE_SITE_KEY || "1x00000000000000000000AA";
+
+function renderTurnstileWidget(containerId, options = {}) {
+  const container = document.getElementById(containerId);
+  if (!container) return null;
+  if (!window.turnstile) {
+    setTimeout(() => renderTurnstileWidget(containerId, options), 300);
+    return null;
+  }
+
+  const siteKey = (window.STATE && window.STATE.settings && window.STATE.settings.turnstileSiteKey) || window.TURNSTILE_SITE_KEY;
+  if (!siteKey) return null;
+
+  try {
+    container.innerHTML = "";
+    return window.turnstile.render(`#${containerId}`, {
+      sitekey: siteKey,
+      theme: "auto",
+      language: "ar",
+      ...(options || {})
+    });
+  } catch (err) {
+    console.warn("[Turnstile] Render warning:", err.message);
+    return null;
+  }
+}
+window.renderTurnstileWidget = renderTurnstileWidget;
+
+function renderRegisterTurnstile() {
+  setTimeout(() => {
+    window.turnstileRegisterWidgetId = renderTurnstileWidget("turnstileRegisterContainer");
+  }, 100);
+}
+window.renderRegisterTurnstile = renderRegisterTurnstile;
+
 function switchCustomerAuthTab(tab) {
   const signinForm = document.getElementById("customerSignInForm");
   const regForm = document.getElementById("customerRegisterForm");
@@ -1881,6 +1942,7 @@ function switchCustomerAuthTab(tab) {
       signinBtn.style.borderBottom = "2px solid transparent";
       signinBtn.style.fontWeight = "700";
     }
+    renderRegisterTurnstile();
   }
 }
 window.switchCustomerAuthTab = switchCustomerAuthTab;
@@ -2127,6 +2189,16 @@ async function handleCustomerRegister(e) {
     return;
   }
 
+  // Extract Turnstile Verification Token
+  let turnstileToken = "";
+  if (window.turnstile && window.turnstileRegisterWidgetId !== undefined) {
+    try { turnstileToken = window.turnstile.getResponse(window.turnstileRegisterWidgetId); } catch(e) {}
+  }
+  if (!turnstileToken) {
+    const hiddenInput = document.querySelector("#turnstileRegisterContainer input[name='cf-turnstile-response']");
+    if (hiddenInput) turnstileToken = hiddenInput.value;
+  }
+
   const origDisabled = submitBtn ? submitBtn.disabled : false;
   if (submitBtn) {
     submitBtn.disabled = true;
@@ -2136,8 +2208,12 @@ async function handleCustomerRegister(e) {
   }
 
   try {
-    const res = await window.KK_DB.customerRegister(name, cleanPhone, email, password);
-    showToast(`أهلاً بك يا ${res.name || "عميلنا العزيز"}! تم إنشاء حسابك بنجاح.`);
+    const res = await window.KK_DB.customerRegister(name, cleanPhone, email, password, { turnstileToken });
+    if (email) {
+      showToast(`أهلاً بك يا ${res.name || "عميلنا العزيز"}! تم إنشاء الحساب وإرسال رابط التفعيل إلى بريدك الإلكتروني (صالح 24 ساعة).`, "success", 8000);
+    } else {
+      showToast(`أهلاً بك يا ${res.name || "عميلنا العزيز"}! تم إنشاء حسابك بنجاح.`);
+    }
     closeCustomerAuthModal();
     updateCustomerButtonUI();
 
@@ -2147,6 +2223,9 @@ async function handleCustomerRegister(e) {
       cb();
     }
   } catch (err) {
+    if (window.turnstile && window.turnstileRegisterWidgetId !== undefined) {
+      try { window.turnstile.reset(window.turnstileRegisterWidgetId); } catch(e) {}
+    }
     showToast(`❌ ${err.message || "تعذر إنشاء الحساب"}`);
   } finally {
     if (submitBtn) {

@@ -17,6 +17,18 @@ README.md
 *.md
 docs/
 
+# Relational Database, Standalone Server & Deployment Stack
+kased_karim.db*
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+server.js
+Dockerfile
+docker-compose.yml
+scripts/
+migrations/
+
 # Scratch, Testing & Temporary Directories
 scratch/
 tests/

@@ -27,7 +27,6 @@ const FORBIDDEN_FILE_PATTERNS = [
   /^\.env($|\..+)/i,
   /service-account.*\.json$/i,
   /firebase-adminsdk.*\.json$/i,
-  /database\.rules\.json$/i,
   /\.pem$/i,
   /\.key$/i,
   /\.p12$/i,

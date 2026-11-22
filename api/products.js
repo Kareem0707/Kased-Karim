@@ -28,6 +28,7 @@ import {
   withApiHardening,
   safeLogError
 } from "./_auth.js";
+import { enforceRateLimit } from "../lib/rateLimit.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -544,6 +545,9 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
     // 1. GET / HEAD: Fetch Products (Separated Public Storefront vs Admin Catalog)
     // -------------------------------------------------------------------------
     if (req.method === "GET" || req.method === "HEAD") {
+      // Sliding Window Rate Limiting for Public Catalog (60 requests per minute per IP)
+      const allowed = await enforceRateLimit(req, res, "read");
+      if (!allowed) return;
       const { all, includeInactive, include_deleted, includeDeleted, id } = req.query || {};
       const isAdminQuery = all === "1" || all === "true" || includeInactive === "1" || includeInactive === "true";
       const shouldIncludeDeleted = include_deleted === "1" || include_deleted === "true" || includeDeleted === "1" || includeDeleted === "true";
@@ -585,9 +589,13 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
 
         const outProduct = isAdmin ? found : sanitizePublicProduct(found);
         if (isAdmin) {
-          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0");
+          res.setHeader("CDN-Cache-Control", "no-store");
+          res.setHeader("Vercel-CDN-Cache-Control", "no-store");
         } else {
-          res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=600");
+          res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+          res.setHeader("CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+          res.setHeader("Vercel-CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
           res.setHeader("Vary", "Origin, Accept-Encoding");
         }
         return res.status(200).json({ success: true, product: outProduct, provider });
@@ -599,16 +607,33 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
           ? products
           : products.filter(p => p && !p.deleted_at && p.deleted !== true);
 
+        // Enforce pagination bound (max 50 items)
+        const rawPage = parseInt(req.query?.page || "1", 10);
+        const rawLimit = parseInt(req.query?.limit || "50", 10);
+        const page = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1;
+        const limit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 50) : 50;
+        const total = filteredProducts.length;
+        const totalPages = Math.ceil(total / limit) || 1;
+        const startIndex = (page - 1) * limit;
+        const paginatedProducts = filteredProducts.slice(startIndex, startIndex + limit);
+
         // Enforce anti-caching so CDNs never store admin catalogs (Axis 7: Cache Poisoning Defense)
-        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+        res.setHeader("CDN-Cache-Control", "no-store");
+        res.setHeader("Vercel-CDN-Cache-Control", "no-store");
         res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
         res.setHeader("Vary", "Cookie, Authorization");
         return res.status(200).json({
           success: true,
           adminView: true,
-          count: filteredProducts.length,
+          count: paginatedProducts.length,
+          total,
+          page,
+          limit,
+          totalPages,
           provider,
-          products: filteredProducts
+          products: paginatedProducts
         });
       }
 
@@ -618,14 +643,31 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
         .map(sanitizePublicProduct)
         .filter(Boolean);
 
-      res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=600");
+      // Enforce pagination bound (max 50 items)
+      const rawPage = parseInt(req.query?.page || "1", 10);
+      const rawLimit = parseInt(req.query?.limit || "50", 10);
+      const page = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1;
+      const limit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 50) : 50;
+      const total = publicProducts.length;
+      const totalPages = Math.ceil(total / limit) || 1;
+      const startIndex = (page - 1) * limit;
+      const paginatedProducts = publicProducts.slice(startIndex, startIndex + limit);
+
+      // Edge Caching: 5 minutes cache, 10 minutes stale-while-revalidate
+      res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+      res.setHeader("CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+      res.setHeader("Vercel-CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
       res.setHeader("Vary", "Origin, Accept-Encoding");
 
       return res.status(200).json({
         success: true,
-        count: publicProducts.length,
+        count: paginatedProducts.length,
+        total,
+        page,
+        limit,
+        totalPages,
         provider,
-        products: publicProducts
+        products: paginatedProducts
       });
     }
 

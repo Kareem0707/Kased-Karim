@@ -4,6 +4,9 @@
 // Strict Zero Cross-Account Access Guarantee & NIST SP 800-63B Compliance
 
 import crypto from "crypto";
+import { validateEmail } from "../lib/emailValidator.js";
+import { verifyTurnstile, extractTurnstileToken } from "../lib/turnstile.js";
+import { enforceRateLimit, getClientIp } from "../lib/rateLimit.js";
 import {
   hashCustomerPassword,
   verifyCustomerPassword,
@@ -12,6 +15,8 @@ import {
   DUMMY_PASSWORD_SALT,
   createCustomerToken,
   verifyCustomerRequest,
+  requireVerifiedCustomer,
+  sendCustomerVerificationEmail,
   verifyAdminRequest,
   verifyGoogleIdToken,
   sanitizeCustomer,
@@ -26,7 +31,6 @@ import {
   checkRateLimitDistributed,
   recordFailedAttemptDistributed,
   resetRateLimitDistributed,
-  getClientIp,
   normalizeIpForRateLimit,
   setSecurityHeaders,
   withApiHardening,
@@ -47,7 +51,9 @@ const ALLOWED_ACTIONS = Object.freeze(new Set([
   "orders",
   "update",
   "update_profile",
-  "list"
+  "list",
+  "verify_email",
+  "resend_verification"
 ]));
 
 /**
@@ -145,14 +151,20 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
 
   const clientIp = getClientIp(req);
 
+  // Rate Limiting for Public / Customer Read Operations (60 requests per minute)
+  if (req.method === "GET" || req.method === "HEAD") {
+    const allowed = await enforceRateLimit(req, res, "read");
+    if (!allowed) return;
+  }
+
   try {
     // Payload Size Limit Check (DoS Mitigation - CWE-400)
-    const MAX_CUSTOMER_PAYLOAD = 100 * 1024; // 100 KB
+    const MAX_CUSTOMER_PAYLOAD = 50 * 1024; // 50 KB
     const contentLength = parseInt(req.headers["content-length"] || "0", 10);
     if (contentLength > MAX_CUSTOMER_PAYLOAD) {
       return res.status(413).json({
         success: false,
-        error: "حجم بيانات الطلب يتجاوز الحد المسموح به (100 كيلوبايت)"
+        error: "حجم بيانات الطلب يتجاوز الحد الأقصى المسموح به (50 كيلوبايت) - 413 Payload Too Large"
       });
     }
 
@@ -175,12 +187,17 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         return res.status(405).json({ success: false, error: "طريقة الطلب غير مسموح بها. استخدم POST لإنشاء الحساب." });
       }
 
-      const regLimit = await checkDistributedRateLimit(clientIp, "customer_register", 5, 15 * 60 * 1000);
-      if (!regLimit.allowed) {
-        res.setHeader("Retry-After", String(regLimit.remainingSec));
-        return res.status(429).json({
+      // Sliding Window Rate Limit: 3 attempts per 1 hour per IP
+      const allowed = await enforceRateLimit(req, res, "register");
+      if (!allowed) return;
+
+      // Mandatory Cloudflare Turnstile Bot Gate (Anti-Automation & Flooding)
+      const turnstileToken = extractTurnstileToken(req, body);
+      const turnstileRes = await verifyTurnstile(turnstileToken, clientIp);
+      if (!turnstileRes.success) {
+        return res.status(400).json({
           success: false,
-          error: `تم تجاوز الحد الأقصى لمحاولات التسجيل. يرجى الانتظار ${regLimit.remainingSec} ثانية.`
+          error: turnstileRes.error || "فشل التحقق الأمني من اختبار مكافحة الروبوتات (Turnstile)."
         });
       }
 
@@ -203,9 +220,16 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         return res.status(400).json({ success: false, error: "يرجى إدخال رقم هاتف مصري صحيح مكون من 11 رقماً يبدأ بـ 01" });
       }
 
-      // Validate RFC-compliant email if provided
-      if (email && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-        return res.status(400).json({ success: false, error: "صيغة البريد الإلكتروني غير صحيحة" });
+      // Deep Email Validation: Syntax, Disposable/Temp Domains & DNS MX Records
+      if (email) {
+        const emailValidation = await validateEmail(email, { checkMx: true, timeoutMs: 3000 });
+        if (!emailValidation.valid) {
+          return res.status(400).json({
+            success: false,
+            reason: emailValidation.reason,
+            error: emailValidation.error
+          });
+        }
       }
 
       if (!cleanPassword) {
@@ -233,6 +257,21 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
       const customerId = "CUST-" + crypto.randomBytes(8).toString("hex").toUpperCase();
       const pwdData = await hashCustomerPassword(cleanPassword);
 
+      // Generate 24-hour Email Verification Token & 6-digit Code (if email provided)
+      let verificationToken = null;
+      let verificationCode = null;
+      let verificationTokenHash = null;
+      let verificationCodeHash = null;
+      let verificationExpiresAt = null;
+
+      if (email) {
+        verificationToken = crypto.randomBytes(32).toString("hex");
+        verificationCode = String(crypto.randomInt(100000, 999999));
+        verificationTokenHash = crypto.createHash("sha256").update(verificationToken).digest("hex");
+        verificationCodeHash = crypto.createHash("sha256").update(verificationCode).digest("hex");
+        verificationExpiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours TTL
+      }
+
       // Mass Assignment Protection: Whitelist only safe attributes, enforce customer role
       const newCustomer = {
         id: customerId,
@@ -242,6 +281,10 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         role: "customer",
         authProvider: "local",
         emailVerified: false,
+        email_verified: false,
+        verificationTokenHash,
+        verificationCodeHash,
+        verificationExpiresAt,
         passwordHash: pwdData.hash,
         passwordSalt: pwdData.salt,
         passwordAlg: pwdData.alg || "scrypt",
@@ -251,11 +294,20 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
 
       await saveCustomer(newCustomer);
 
+      // Dispatch Email Verification Message asynchronously
+      if (email && verificationToken) {
+        sendCustomerVerificationEmail(email, name, verificationToken, verificationCode).catch(e => {
+          console.warn("[CustomerRegister] Error sending verification email:", e.message);
+        });
+      }
+
       const token = createCustomerToken({
         sub: customerId,
         phone,
         name,
-        email: newCustomer.email
+        email: newCustomer.email,
+        email_verified: false,
+        emailVerified: false
       });
 
       // Secure HttpOnly Cookie for customer session (Zero Client-Side Token Storage)
@@ -263,7 +315,10 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
 
       return res.status(201).json({
         success: true,
-        message: "تم إنشاء حساب العميل بنجاح",
+        message: email
+          ? "تم إنشاء حساب العميل بنجاح. تم إرسال رابط تأكيد وتفعيل الحساب إلى بريدك الإلكتروني (صالح لمدة 24 ساعة)."
+          : "تم إنشاء حساب العميل بنجاح.",
+        emailVerificationRequired: Boolean(email),
         customer: sanitizeCustomer(newCustomer)
       });
     }
@@ -276,11 +331,9 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         return res.status(405).json({ success: false, error: "Method not allowed. Use POST for Google authentication." });
       }
 
-      const gLimit = await checkDistributedRateLimit(clientIp, "customer_google", 10, 15 * 60 * 1000);
-      if (!gLimit.allowed) {
-        res.setHeader("Retry-After", String(gLimit.remainingSec));
-        return res.status(429).json({ success: false, error: "تم تجاوز عدد محاولات الدخول عبر Google. يرجى المحاولة لاحقاً." });
-      }
+      // Sliding Window Rate Limit: 5 attempts per 15 minutes per IP
+      const allowed = await enforceRateLimit(req, res, "auth");
+      if (!allowed) return;
 
       const rawCredential = body.credential || body.idToken || body.token;
       if (!rawCredential || typeof rawCredential !== "string") {
@@ -420,25 +473,9 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         return res.status(400).json({ success: false, error: "يرجى إدخال كلمة المرور" });
       }
 
-      // Dual-Layer Rate Limiting:
-      const ipLimit = await checkDistributedRateLimit(clientIp, "customer_login_ip", 10, 15 * 60 * 1000);
-      if (!ipLimit.allowed) {
-        res.setHeader("Retry-After", String(ipLimit.remainingSec));
-        return res.status(429).json({
-          success: false,
-          error: `تم تجاوز الحد الأقصى للمحاولات من هذا الجهاز. يرجى الانتظار ${ipLimit.remainingSec} ثانية.`
-        });
-      }
-
-      const pairKey = `${normalizeIpForRateLimit(clientIp)}:${identifier}`;
-      const pairLimit = await checkRateLimitDistributed("customer_login_pair", pairKey, 5, 15 * 60 * 1000);
-      if (!pairLimit.allowed) {
-        res.setHeader("Retry-After", String(pairLimit.remainingSec));
-        return res.status(429).json({
-          success: false,
-          error: `تم تجاوز الحد الأقصى للمحاولات لهذا الحساب. يرجى الانتظار ${pairLimit.remainingSec} ثانية قبل إعادة المحاولة.`
-        });
-      }
+      // Sliding Window Rate Limiting (5 attempts per 15 minutes per IP)
+      const allowed = await enforceRateLimit(req, res, "auth");
+      if (!allowed) return;
 
       const cleanPhone = identifier.replace(/[^0-9]/g, "");
       const allCustomers = await fetchCustomers();
@@ -466,11 +503,14 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
 
       await resetRateLimitDistributed("customer_login_pair", pairKey);
 
+      const isVerified = Boolean(customer.emailVerified || customer.email_verified);
       const token = createCustomerToken({
         sub: customer.id,
         phone: customer.phone,
         name: customer.name,
-        email: customer.email
+        email: customer.email,
+        email_verified: isVerified,
+        emailVerified: isVerified
       });
 
       res.setHeader("Set-Cookie", `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
@@ -533,16 +573,15 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
 
     // -------------------------------------------------------------------------
     // 4. GET CUSTOMER ORDERS HISTORY (STRICT ZERO-LEAKAGE: ONLY USER'S OWN ORDERS)
+    // SENSITIVE OPERATION: Enforces email_verified === true (403 Forbidden for unverified)
     // -------------------------------------------------------------------------
     if (effectiveAction === "orders") {
       if (req.method !== "GET") {
         return res.status(405).json({ success: false, error: "طريقة الطلب غير مسموح بها. استخدم GET لعرض الطلبات." });
       }
 
-      const auth = verifyCustomerRequest(req);
-      if (!auth || !auth.sub) {
-        return res.status(401).json({ success: false, error: "يجب تسجيل الدخول لعرض سجل طلباتك" });
-      }
+      const auth = await requireVerifiedCustomer(req, res);
+      if (!auth || !auth.sub) return;
 
       const customerId = sanitizePathId(auth.sub);
       if (!customerId) {
@@ -601,10 +640,23 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         };
       });
 
+      const rawPage = parseInt(req.query?.page || "1", 10);
+      const rawLimit = parseInt(req.query?.limit || "50", 10);
+      const page = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1;
+      const limit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 50) : 50;
+      const total = localizedOrders.length;
+      const totalPages = Math.ceil(total / limit) || 1;
+      const startIndex = (page - 1) * limit;
+      const paginatedOrders = localizedOrders.slice(startIndex, startIndex + limit);
+
       return res.status(200).json({
         success: true,
-        count: localizedOrders.length,
-        orders: localizedOrders
+        count: paginatedOrders.length,
+        total,
+        page,
+        limit,
+        totalPages,
+        orders: paginatedOrders
       });
     }
 
@@ -629,10 +681,9 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         });
       }
 
-      const auth = verifyCustomerRequest(req);
-      if (!auth || !auth.sub) {
-        return res.status(401).json({ success: false, error: "غير مصرح. يرجى تسجيل الدخول أولاً." });
-      }
+      // SENSITIVE OPERATION: Enforces email_verified === true (403 Forbidden for unverified)
+      const auth = await requireVerifiedCustomer(req, res);
+      if (!auth || !auth.sub) return;
 
       const customerId = sanitizePathId(auth.sub);
       if (!customerId) {
@@ -727,10 +778,17 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
       // 3. Email
       if (typeof body.email === "string") {
         const cleanEmail = body.email.trim().toLowerCase().slice(0, 100);
-        if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(cleanEmail)) {
-          return res.status(400).json({ success: false, error: "صيغة البريد الإلكتروني غير صحيحة" });
-        }
         if (cleanEmail !== (existingCustomer.email || "").toLowerCase()) {
+          // Deep Email Validation: Syntax, Disposable Domains & DNS MX Records
+          const emailValidation = await validateEmail(cleanEmail, { checkMx: true, timeoutMs: 3000 });
+          if (!emailValidation.valid) {
+            return res.status(400).json({
+              success: false,
+              reason: emailValidation.reason,
+              error: emailValidation.error
+            });
+          }
+
           // Reject changing email on Google-authenticated accounts
           if (existingCustomer.authProvider === "google") {
             return res.status(400).json({
@@ -743,8 +801,20 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
           if (emailConflict) {
             return res.status(409).json({ success: false, error: "البريد الإلكتروني مسجل بالفعل لحساب آخر" });
           }
+
+          const newVerToken = crypto.randomBytes(32).toString("hex");
+          const newVerCode = String(crypto.randomInt(100000, 999999));
+
           patchData.email = cleanEmail;
-          patchData.emailVerified = false; // Require re-verification if email changes
+          patchData.emailVerified = false;
+          patchData.email_verified = false;
+          patchData.verificationTokenHash = crypto.createHash("sha256").update(newVerToken).digest("hex");
+          patchData.verificationCodeHash = crypto.createHash("sha256").update(newVerCode).digest("hex");
+          patchData.verificationExpiresAt = Date.now() + (24 * 60 * 60 * 1000);
+
+          sendCustomerVerificationEmail(cleanEmail, existingCustomer.name, newVerToken, newVerCode).catch(e => {
+            console.warn("[CustomerUpdate] Error sending verification email:", e.message);
+          });
         }
       }
 
@@ -852,20 +922,173 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         });
       }
 
-      // Safe pagination limit (min 1, max 500, default 200)
-      const limitParam = parseInt(req.query?.limit, 10);
-      const maxLimit = (!isNaN(limitParam) && limitParam > 0) ? Math.min(limitParam, 500) : 200;
+      // Safe pagination limit (min 1, max 50, default 50)
+      const rawPage = parseInt(req.query?.page || "1", 10);
+      const rawLimit = parseInt(req.query?.limit || "50", 10);
+      const page = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1;
+      const limit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 50) : 50;
 
       const allCustomers = await fetchCustomers();
       allCustomers.sort((a, b) => (Number(b.createdAt) || Number(b.updatedAt) || 0) - (Number(a.createdAt) || Number(a.updatedAt) || 0));
 
-      const pagedCustomers = allCustomers.slice(0, maxLimit);
+      const total = allCustomers.length;
+      const totalPages = Math.ceil(total / limit) || 1;
+      const startIndex = (page - 1) * limit;
+      const pagedCustomers = allCustomers.slice(startIndex, startIndex + limit);
 
       return res.status(200).json({
         success: true,
         count: pagedCustomers.length,
-        total: allCustomers.length,
+        total,
+        page,
+        limit,
+        totalPages,
         customers: pagedCustomers.map(c => sanitizeCustomer(c, { forAdmin: true }))
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // 7. VERIFY CUSTOMER EMAIL (AUTHENTICATE CODE OR TOKEN)
+    // -------------------------------------------------------------------------
+    if (effectiveAction === "verify_email") {
+      if (req.method !== "POST" && req.method !== "GET") {
+        return res.status(405).json({ success: false, error: "Method not allowed. Use GET or POST for verification." });
+      }
+
+      const rawToken = body?.token || req.query?.token || "";
+      const rawCode = body?.code || req.query?.code || "";
+      const rawEmail = body?.email || req.query?.email || "";
+
+      const inputToken = typeof rawToken === "string" ? rawToken.trim() : "";
+      const inputCode = typeof rawCode === "string" ? rawCode.trim() : "";
+      const cleanEmail = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
+
+      if (!inputToken && (!inputCode || !cleanEmail)) {
+        return res.status(400).json({
+          success: false,
+          error: "يرجى إرسال رابط التفعيل أو كود التحقق والبريد الإلكتروني المرتبط به."
+        });
+      }
+
+      const allCustomers = await fetchCustomers();
+      let targetCustomer = null;
+
+      if (inputToken) {
+        const tokenHash = crypto.createHash("sha256").update(inputToken).digest("hex");
+        targetCustomer = allCustomers.find(c => c && c.verificationTokenHash === tokenHash);
+      } else if (inputCode && cleanEmail) {
+        const codeHash = crypto.createHash("sha256").update(inputCode).digest("hex");
+        targetCustomer = allCustomers.find(c => c && c.email && c.email.toLowerCase() === cleanEmail && c.verificationCodeHash === codeHash);
+      }
+
+      if (!targetCustomer) {
+        return res.status(400).json({
+          success: false,
+          error: "رمز أو رابط تفعيل البريد الإلكتروني غير صحيح أو انتهت صلاحيته."
+        });
+      }
+
+      if (targetCustomer.verificationExpiresAt && Date.now() > Number(targetCustomer.verificationExpiresAt)) {
+        return res.status(400).json({
+          success: false,
+          error: "انتهت صلاحية رمز التفعيل (صلاحية الرمز 24 ساعة فقط). يرجى طلب رمز تفعيل جديد."
+        });
+      }
+
+      // Mark customer verified atomically
+      const patchData = {
+        emailVerified: true,
+        email_verified: true,
+        verifiedAt: Date.now(),
+        verificationTokenHash: null,
+        verificationCodeHash: null,
+        verificationExpiresAt: null,
+        updatedAt: Date.now()
+      };
+
+      await patchCustomer(targetCustomer.id, patchData);
+
+      const verifiedCust = { ...targetCustomer, ...patchData };
+
+      const token = createCustomerToken({
+        sub: targetCustomer.id,
+        phone: targetCustomer.phone,
+        name: targetCustomer.name,
+        email: targetCustomer.email,
+        email_verified: true,
+        emailVerified: true
+      });
+
+      res.setHeader("Set-Cookie", `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
+
+      return res.status(200).json({
+        success: true,
+        message: "تم تفعيل البريد الإلكتروني بنجاح ومصادقة حسابك رسمياً.",
+        customer: sanitizeCustomer(verifiedCust)
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // 8. RESEND EMAIL VERIFICATION MESSAGE
+    // -------------------------------------------------------------------------
+    if (effectiveAction === "resend_verification") {
+      if (req.method !== "POST") {
+        return res.status(405).json({ success: false, error: "Method not allowed. Use POST to resend verification." });
+      }
+
+      // Sliding Window Rate Limit: 3 requests per 10 minutes per IP or Email
+      const allowed = await enforceRateLimit(req, res, "emails", body.email || null);
+      if (!allowed) return;
+
+      // Cloudflare Turnstile Verification
+      const turnstileToken = extractTurnstileToken(req, body);
+      const turnstileRes = await verifyTurnstile(turnstileToken, clientIp);
+      if (!turnstileRes.success) {
+        return res.status(400).json({
+          success: false,
+          error: turnstileRes.error || "فشل التحقق الأمني من اختبار مكافحة الروبوتات."
+        });
+      }
+
+      const rawEmail = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      if (!rawEmail) {
+        return res.status(400).json({ success: false, error: "يرجى تحديد البريد الإلكتروني المطلوب تفعيله." });
+      }
+
+      const allCustomers = await fetchCustomers();
+      const targetCustomer = allCustomers.find(c => c && c.email && c.email.toLowerCase() === rawEmail);
+
+      // Generic success response even if not found to prevent user enumeration
+      if (!targetCustomer) {
+        return res.status(200).json({
+          success: true,
+          message: "إذا كان هذا البريد مسجلاً لدينا، فقد تم إرسال رابط التفعيل إليه."
+        });
+      }
+
+      if (targetCustomer.emailVerified || targetCustomer.email_verified) {
+        return res.status(200).json({
+          success: true,
+          message: "هذا الحساب مفعّل بالفعل مسبقاً."
+        });
+      }
+
+      const newVerToken = crypto.randomBytes(32).toString("hex");
+      const newVerCode = String(crypto.randomInt(100000, 999999));
+
+      const patchData = {
+        verificationTokenHash: crypto.createHash("sha256").update(newVerToken).digest("hex"),
+        verificationCodeHash: crypto.createHash("sha256").update(newVerCode).digest("hex"),
+        verificationExpiresAt: Date.now() + (24 * 60 * 60 * 1000),
+        updatedAt: Date.now()
+      };
+
+      await patchCustomer(targetCustomer.id, patchData);
+      await sendCustomerVerificationEmail(targetCustomer.email, targetCustomer.name, newVerToken, newVerCode);
+
+      return res.status(200).json({
+        success: true,
+        message: "تم إرسال رابط وكود تفعيل جديد إلى بريدك الإلكتروني بنجاح (صالح لمدة 24 ساعة)."
       });
     }
 

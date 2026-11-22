@@ -9,6 +9,7 @@ import {
   withApiHardening,
   safeLogError
 } from "./_auth.js";
+import { enforceRateLimit } from "../lib/rateLimit.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -26,6 +27,10 @@ async function dbHealthHandler(req, res, { requestId } = {}) {
     res.setHeader("Allow", "GET, HEAD, OPTIONS");
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
+
+  // 2. Sliding Window Rate Limiting (60 requests per minute)
+  const allowed = await enforceRateLimit(req, res, "read");
+  if (!allowed) return;
 
   // 3. Role & Access Control Gate (Dual-Mode: Public vs. Verified Admin)
   const admin = verifyAdminRequest(req);

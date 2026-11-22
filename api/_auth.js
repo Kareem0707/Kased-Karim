@@ -8,12 +8,18 @@ const scryptAsync = promisify(crypto.scrypt);
 // -----------------------------------------------------------------------------
 // SECRETS MANAGEMENT & CRYPTOGRAPHIC KEY SEPARATION (RFC 8725 §3.2 & ASVS 2.10.3)
 // -----------------------------------------------------------------------------
+export function getMasterJwtSecrets() {
+  const raw = (process.env.ADMIN_JWT_SECRET || process.env.ADMIN_SECRET || "").trim();
+  if (!raw) return [];
+  return raw.split(",").map(s => s.trim()).filter(s => s.length >= 32);
+}
+
 export function getMasterJwtSecret() {
-  const secret = (process.env.ADMIN_JWT_SECRET || process.env.ADMIN_SECRET || "").trim();
-  if (!secret || secret.length < 32) {
+  const secrets = getMasterJwtSecrets();
+  if (secrets.length === 0) {
     return null; // Strict Fail-Closed: Never fallback to weak or static secrets
   }
-  return secret;
+  return secrets[0];
 }
 
 export function getAdminSigningKey() {
@@ -22,14 +28,28 @@ export function getAdminSigningKey() {
   return crypto.createHmac("sha256", master).update("kased_karim_admin_jwt_domain_v2").digest();
 }
 
+export function getAdminSigningKeys() {
+  const secrets = getMasterJwtSecrets();
+  return secrets.map(sec => crypto.createHmac("sha256", sec).update("kased_karim_admin_jwt_domain_v2").digest());
+}
+
 export function getCustomerSigningKey() {
-  const customCustSecret = (process.env.CUSTOMER_JWT_SECRET || "").trim();
-  if (customCustSecret && customCustSecret.length >= 32) {
-    return crypto.createHmac("sha256", customCustSecret).update("kased_karim_customer_jwt_domain_v2").digest();
+  const customCustSecrets = (process.env.CUSTOMER_JWT_SECRET || "").split(",").map(s => s.trim()).filter(s => s.length >= 32);
+  if (customCustSecrets.length > 0) {
+    return crypto.createHmac("sha256", customCustSecrets[0]).update("kased_karim_customer_jwt_domain_v2").digest();
   }
   const master = getMasterJwtSecret();
   if (!master) return null;
   return crypto.createHmac("sha256", master).update("kased_karim_customer_jwt_domain_v2").digest();
+}
+
+export function getCustomerSigningKeys() {
+  const customCustSecrets = (process.env.CUSTOMER_JWT_SECRET || "").split(",").map(s => s.trim()).filter(s => s.length >= 32);
+  if (customCustSecrets.length > 0) {
+    return customCustSecrets.map(sec => crypto.createHmac("sha256", sec).update("kased_karim_customer_jwt_domain_v2").digest());
+  }
+  const secrets = getMasterJwtSecrets();
+  return secrets.map(sec => crypto.createHmac("sha256", sec).update("kased_karim_customer_jwt_domain_v2").digest());
 }
 
 // Constant for backward-compatible internal reference
@@ -1094,7 +1114,7 @@ export function signJwt({ payload = {}, key, role, aud, maxTtlSec }) {
 }
 
 // Low-level Strict JWT Verifier
-export function verifyJwt({ token, key, expectedRole, expectedAud, maxTtlSec }) {
+export function verifyJwt({ token, key, keys, expectedRole, expectedAud, maxTtlSec }) {
   // 1. Structural & DoS Validation (CWE-400)
   if (!token || typeof token !== "string") return null;
   const cleanToken = token.trim();
@@ -1113,21 +1133,31 @@ export function verifyJwt({ token, key, expectedRole, expectedAud, maxTtlSec }) 
     return null;
   }
 
-  // 2. Secret Fail-Closed Check (RFC 8725 §3.2)
-  if (!key || !Buffer.isBuffer(key) || key.length !== 32) {
+  // 2. Secret Fail-Closed Check (RFC 8725 §3.2) with Key Rotation Support
+  const candidateKeys = Array.isArray(keys) ? keys : (key ? [key] : []);
+  const validKeys = candidateKeys.filter(k => Buffer.isBuffer(k) && k.length === 32);
+  if (validKeys.length === 0) {
     return null;
   }
 
   // 3. Cryptographic Signature Verification (Verify BEFORE trusting payload)
-  const expectedSig = crypto
-    .createHmac("sha256", key)
-    .update(`${encodedHeader}.${encodedPayload}`)
-    .digest("base64url");
-
   const sigBuf = Buffer.from(encodedSignature, "utf-8");
-  const expBuf = Buffer.from(expectedSig, "utf-8");
+  let validSig = false;
 
-  if (sigBuf.length !== 43 || expBuf.length !== 43 || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+  for (const k of validKeys) {
+    const expectedSig = crypto
+      .createHmac("sha256", k)
+      .update(`${encodedHeader}.${encodedPayload}`)
+      .digest("base64url");
+
+    const expBuf = Buffer.from(expectedSig, "utf-8");
+    if (sigBuf.length === 43 && expBuf.length === 43 && crypto.timingSafeEqual(sigBuf, expBuf)) {
+      validSig = true;
+      break;
+    }
+  }
+
+  if (!validSig) {
     return null;
   }
 
@@ -1219,8 +1249,8 @@ export function createAdminToken(payload = {}, expiresInMs = 2 * 60 * 60 * 1000)
 }
 
 export function verifyAdminToken(token) {
-  const key = getAdminSigningKey();
-  return verifyJwt({ token, key, expectedRole: "admin", expectedAud: "admin", maxTtlSec: 7200 });
+  const keys = getAdminSigningKeys();
+  return verifyJwt({ token, keys, expectedRole: "admin", expectedAud: "admin", maxTtlSec: 7200 });
 }
 
 // Backward-compatible legacy aliases
@@ -1773,7 +1803,13 @@ export async function verifyCustomerPassword(inputPassword, storedHash, storedSa
 // -----------------------------------------------------------------------------
 export function signCustomerToken(payload = {}, expiresInMs = 24 * 60 * 60 * 1000) {
   const key = getCustomerSigningKey();
-  return signJwt({ payload, key, role: "customer", aud: "customer", maxTtlSec: 86400 });
+  const isVerified = Boolean(payload.email_verified || payload.emailVerified);
+  const normalizedPayload = {
+    ...payload,
+    email_verified: isVerified,
+    emailVerified: isVerified
+  };
+  return signJwt({ payload: normalizedPayload, key, role: "customer", aud: "customer", maxTtlSec: 86400 });
 }
 
 export function createCustomerToken(payload = {}, expiresInMs = 24 * 60 * 60 * 1000) {
@@ -1781,8 +1817,8 @@ export function createCustomerToken(payload = {}, expiresInMs = 24 * 60 * 60 * 1
 }
 
 export function verifyCustomerToken(token) {
-  const key = getCustomerSigningKey();
-  return verifyJwt({ token, key, expectedRole: "customer", expectedAud: "customer", maxTtlSec: 86400 });
+  const keys = getCustomerSigningKeys();
+  return verifyJwt({ token, keys, expectedRole: "customer", expectedAud: "customer", maxTtlSec: 86400 });
 }
 
 export function verifyCustomerRequest(req) {
@@ -1821,6 +1857,135 @@ export function verifyCustomerRequest(req) {
   }
 
   return null;
+}
+
+/**
+ * Server Middleware Guard: Enforces that customer is authenticated AND has verified email.
+ * Returns 403 Forbidden if email is not verified (email_verified === false).
+ * Returns customerAuth payload if verified, or sends response and returns null if rejected.
+ */
+export async function requireVerifiedCustomer(req, res) {
+  const customerAuth = verifyCustomerRequest(req);
+  if (!customerAuth || !customerAuth.sub) {
+    res.status(401).json({
+      success: false,
+      error: "يجب تسجيل الدخول أولاً للمتابعة (401 Unauthorized)."
+    });
+    return null;
+  }
+
+  // 1. Direct JWT Claim Check
+  if (customerAuth.email_verified === true || customerAuth.emailVerified === true) {
+    return customerAuth;
+  }
+
+  // 2. Fail-Safe Live Database Lookup (in case user just verified their email)
+  try {
+    const safeSub = sanitizePathId(customerAuth.sub);
+    const custRes = await firebaseFetch(buildSafeRtdbPath("customers", safeSub), { cache: "no-store" });
+    if (custRes.ok) {
+      const liveCust = await custRes.json();
+      if (liveCust && (liveCust.emailVerified === true || liveCust.email_verified === true)) {
+        return {
+          ...customerAuth,
+          email_verified: true,
+          emailVerified: true
+        };
+      }
+    }
+  } catch (err) {}
+
+  res.status(403).json({
+    success: false,
+    forbidden: true,
+    error: "تم رفض الوصول: يتطلب إتمام هذه العملية تفعيل البريد الإلكتروني للحساب (403 Forbidden)."
+  });
+  return null;
+}
+
+/**
+ * Dispatches a customer email verification message via Resend, Brevo, or Transactional Webhook.
+ */
+export async function sendCustomerVerificationEmail(email, name, verificationToken, verificationCode = null) {
+  if (!email || typeof email !== "string") return false;
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanName = typeof name === "string" ? name.trim() : "عميلنا العزيز";
+
+  const appUrl = (process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://kasedkarim.com")).replace(/\/+$/, "");
+  const verifyLink = `${appUrl}/?verify_email=${verificationToken}&email=${encodeURIComponent(cleanEmail)}`;
+
+  const emailHtml = `
+    <!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head><meta charset="UTF-8"><title>تفعيل حسابك - معرض قاصد كريم</title></head>
+    <body style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px; direction: rtl; text-align: right;">
+      <div style="max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 30px; border: 1px solid #e2e8f0;">
+        <h2 style="color: #0F172A; margin-top: 0;">مرحباً ${cleanName}،</h2>
+        <p style="color: #334155; font-size: 15px; line-height: 1.6;">
+          شكراً لتسجيلك في معرض قاصد كريم لوحدات الإضاءة الفاخرة بالشيخ زايد.<br>
+          لتأكيد بريدك الإلكتروني وتفعيل حسابك بشكل كامل، يرجى الضغط على زر التفعيل أدناه:
+        </p>
+        <div style="text-align: center; margin: 25px 0;">
+          <a href="${verifyLink}" style="background-color: #D97706; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+            تفعيل الحساب الآن
+          </a>
+        </div>
+        ${verificationCode ? `<p style="text-align: center; font-size: 14px; color: #64748B;">أو استخدم رمز التحقق التالي: <strong style="font-size: 18px; color: #0F172A; letter-spacing: 3px;">${verificationCode}</strong></p>` : ""}
+        <p style="color: #64748B; font-size: 13px; line-height: 1.5; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+          ملاحظة: هذا الرابط صالح لمدة 24 ساعة فقط. في حال لم تقم بإنشاء هذا الحساب، يمكنك تجاهل هذه الرسالة بأمان وسيتم حذف الحساب تلقائياً.
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  // Option A: Resend
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (resendApiKey) {
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from: process.env.RESEND_FROM || "Kased Karim Security <security@kasedkarim.com>",
+          to: [cleanEmail],
+          subject: "✉️ تفعيل بريدك الإلكتروني - معرض قاصد كريم للإضاءة الفاخرة",
+          html: emailHtml
+        })
+      });
+      if (res.ok) return true;
+    } catch (e) {
+      console.warn("[EmailDispatch] Resend error:", e.message);
+    }
+  }
+
+  // Option B: Brevo
+  const brevoApiKey = process.env.BREVO_API_KEY;
+  if (brevoApiKey) {
+    try {
+      const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "api-key": brevoApiKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          sender: { name: "Kased Karim Lighting", email: process.env.BREVO_SENDER || "security@kasedkarim.com" },
+          to: [{ email: cleanEmail, name: cleanName }],
+          subject: "✉️ تفعيل بريدك الإلكتروني - معرض قاصد كريم للإضاءة الفاخرة",
+          htmlContent: emailHtml
+        })
+      });
+      if (res.ok) return true;
+    } catch (e) {
+      console.warn("[EmailDispatch] Brevo error:", e.message);
+    }
+  }
+
+  return false;
 }
 
 // -----------------------------------------------------------------------------
