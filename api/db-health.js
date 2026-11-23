@@ -68,7 +68,7 @@ async function dbHealthHandler(req, res, { requestId } = {}) {
   // 5. Dual-Mode Response Generation
   if (!admin) {
     // PUBLIC RESPONSE: Zero Metadata / Zero Info-Disclosure (ASVS 7.1.1)
-    const publicPayload = { ok: isConnected };
+    const publicPayload = { status: isConnected ? "healthy" : "unhealthy", ok: isConnected };
     cachedPublicResponse = publicPayload;
     lastPublicProbeTime = now;
 

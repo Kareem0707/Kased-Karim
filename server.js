@@ -22,8 +22,11 @@ import {
   send2FAEmail,
   sendCustomerVerificationEmail,
   verifyCustomerToken,
+  verifyAdminPassword,
   ADMIN_2FA_EMAILS,
-  setSecurityHeaders
+  setSecurityHeaders,
+  safeLogError,
+  redactSecrets
 } from "./api/_auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -61,14 +64,32 @@ const DB_FILE = process.env.SQLITE_DB_PATH || path.join(__dirname, "kased_karim.
 const EPHEMERAL_SECRET = crypto.randomBytes(32).toString("hex");
 const ADMIN_JWT_SECRETS = (process.env.ADMIN_JWT_SECRET || process.env.ADMIN_SECRET || EPHEMERAL_SECRET).split(",").map(s => s.trim()).filter(Boolean);
 const ADMIN_JWT_SECRET = ADMIN_JWT_SECRETS[0];
-const CUSTOMER_JWT_SECRETS = (process.env.CUSTOMER_JWT_SECRET || ADMIN_JWT_SECRET).split(",").map(s => s.trim()).filter(Boolean);
-const CUSTOMER_JWT_SECRET = CUSTOMER_JWT_SECRETS[0];
-const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || "KasedKarim_AdminSecure_2026!$#Showroom").trim();
+const CUSTOMER_JWT_SECRETS = (process.env.CUSTOMER_JWT_SECRET || "").split(",").map(s => s.trim()).filter(Boolean);
+// Strict Cryptographic Domain Separation: If CUSTOMER_JWT_SECRET is unset, derive an isolated domain-separated key
+const CUSTOMER_JWT_SECRET = CUSTOMER_JWT_SECRETS.length > 0 
+  ? CUSTOMER_JWT_SECRETS[0] 
+  : crypto.createHmac("sha256", ADMIN_JWT_SECRET).update("kased_karim_customer_jwt_domain_v2").digest("hex");
+const EFFECTIVE_CUSTOMER_JWT_SECRETS = CUSTOMER_JWT_SECRETS.length > 0 ? CUSTOMER_JWT_SECRETS : [CUSTOMER_JWT_SECRET];
+
+// Fail-Closed: Strictly from environment variables (Zero hardcoded fallback passwords - CWE-259 / CWE-798)
+const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || "").trim();
+const ADMIN_PASSWORD_HASH = (process.env.ADMIN_PASSWORD_HASH || "").trim();
+const ADMIN_PASSWORD_SALT = (process.env.ADMIN_PASSWORD_SALT || "").trim();
 const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || "").trim();
 
 // =============================================================================
 // 1. RELATIONAL DATABASE INITIALIZATION & MIGRATIONS
 // =============================================================================
+// Fail-Closed Architecture Guard for Vercel Serverless & Production (ASVS Level 3)
+const isVercel = process.env.VERCEL === "1" || Boolean(process.env.VERCEL);
+if (isVercel) {
+  const errMsg = "CRITICAL FAIL-CLOSED: server.js execution blocked on Vercel Serverless. " +
+    "Vercel filesystem is stateless & ephemeral; local SQLite files (kased_karim.db) will be erased on lambda teardown, causing permanent loss of customer orders. " +
+    "Vercel production deployments strictly route traffic to /api serverless endpoints backed by managed Firebase RTDB or PostgreSQL.";
+  console.error(errMsg);
+  throw new Error(errMsg);
+}
+
 console.log(`[Database] Initializing Relational SQL Database at: ${DB_FILE}`);
 const db = new DatabaseSync(DB_FILE);
 
@@ -216,6 +237,11 @@ db.exec(`
     google_sub TEXT UNIQUE,
     avatar TEXT,
     role TEXT DEFAULT 'customer',
+    email_verified INTEGER DEFAULT 0,
+    verification_token_hash TEXT,
+    verification_code_hash TEXT,
+    verification_expires_at INTEGER,
+    verification_attempts INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
@@ -226,6 +252,35 @@ db.exec(`
     updated_at TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS revoked_tokens (
+    jti TEXT PRIMARY KEY,
+    expires_at INTEGER NOT NULL,
+    revoked_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS coupons (
+    code TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    value REAL NOT NULL,
+    min_order_amount REAL DEFAULT 0,
+    max_discount_amount REAL,
+    usage_limit INTEGER,
+    used_count INTEGER DEFAULT 0,
+    active INTEGER DEFAULT 1,
+    expires_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS idempotency_locks (
+    key TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    order_id TEXT,
+    response_body TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_revoked_tokens_exp ON revoked_tokens(expires_at);
+  CREATE INDEX IF NOT EXISTS idx_idempotency_created ON idempotency_locks(created_at);
   CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
   CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
   CREATE INDEX IF NOT EXISTS idx_restore_points_date ON restore_points(date_str);
@@ -253,6 +308,9 @@ try {
 } catch (e) {}
 try {
   db.exec("ALTER TABLE customers ADD COLUMN verification_expires_at INTEGER;");
+} catch (e) {}
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN verification_attempts INTEGER DEFAULT 0;");
 } catch (e) {}
 
 // Seed initial showroom categories if table is empty
@@ -337,7 +395,8 @@ function checkProductRelations(productId) {
 function signHmacJwt(payload, secretKey, maxAgeSec = 7200) {
   const header = { alg: "HS256", typ: "JWT" };
   const exp = Math.floor(Date.now() / 1000) + maxAgeSec;
-  const fullPayload = { ...payload, exp, iat: Math.floor(Date.now() / 1000) };
+  const jti = crypto.randomUUID();
+  const fullPayload = { ...payload, jti, exp, iat: Math.floor(Date.now() / 1000) };
 
   const b64Header = Buffer.from(JSON.stringify(header)).toString("base64url");
   const b64Payload = Buffer.from(JSON.stringify(fullPayload)).toString("base64url");
@@ -379,6 +438,15 @@ function verifyHmacJwt(token, secretKeyOrKeys) {
     if (typeof payload.exp === "number" && payload.exp < Math.floor(Date.now() / 1000)) {
       return null; // Expired
     }
+
+    // Active Server-Side Token Revocation Check (RFC 7009 / ASVS 3.3.1)
+    if (payload.jti) {
+      try {
+        const revoked = db.prepare("SELECT 1 FROM revoked_tokens WHERE jti = ? AND expires_at > ?").get(payload.jti, Math.floor(Date.now() / 1000));
+        if (revoked) return null;
+      } catch (e) {}
+    }
+
     return payload;
   } catch (e) {
     return null;
@@ -409,8 +477,8 @@ function assertAdminAuthorized(req) {
 
   const verified = verifyHmacJwt(token, ADMIN_JWT_SECRETS);
   if (verified && verified.role === "admin") {
-    // In production, enforce verified2FA flag on admin session tokens
-    if (process.env.ADMIN_DISABLE_2FA !== "true" && !verified.verified2FA) {
+    // Zero-Trust NIST SP 800-63B (AAL2): verified2FA must strictly be true for admin sessions
+    if (verified.verified2FA !== true) {
       return null;
     }
     return verified;
@@ -430,8 +498,14 @@ function extractCustomerSession(req) {
   }
   if (!token) return null;
 
-  const verified = verifyHmacJwt(token, CUSTOMER_JWT_SECRETS) || verifyCustomerToken(token);
+  const verified = verifyHmacJwt(token, EFFECTIVE_CUSTOMER_JWT_SECRETS) || verifyCustomerToken(token);
   if (verified && (verified.role === "customer" || verified.sub)) {
+    if (verified.jti) {
+      try {
+        const revoked = db.prepare("SELECT 1 FROM revoked_tokens WHERE jti = ? AND expires_at > ?").get(verified.jti, Math.floor(Date.now() / 1000));
+        if (revoked) return null;
+      } catch (e) {}
+    }
     return verified;
   }
   return null;
@@ -464,19 +538,29 @@ function verifyPasswordAsync(password, storedHash, storedSalt) {
   });
 }
 
-// Verified Google ID Token Check via Google OAuth API
+// Verified Google ID Token Check via Google OAuth API (Strict Fail-Closed)
 async function verifyGoogleToken(idToken) {
   if (!idToken || typeof idToken !== "string" || idToken.length < 50 || idToken.length > 4096) {
     return null;
   }
+  if (!GOOGLE_CLIENT_ID) {
+    console.error("[CRITICAL SECURITY ALERT] GOOGLE_CLIENT_ID is not configured in server environment. Blocking OAuth authentication (Fail-Closed).");
+    return null;
+  }
   try {
     const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken.trim())}`, {
-      headers: { "Accept": "application/json" }
+      headers: { "Accept": "application/json" },
+      signal: AbortSignal.timeout(5000)
     });
     if (!res.ok) return null;
     const data = await res.json();
-    if (GOOGLE_CLIENT_ID && data.aud !== GOOGLE_CLIENT_ID) {
-      console.warn("[Security Alert] Google token audience mismatch:", data.aud);
+    if (!data || typeof data !== "object") return null;
+    if (data.aud !== GOOGLE_CLIENT_ID) {
+      console.warn("[Security Alert] Google token audience mismatch. Expected:", GOOGLE_CLIENT_ID, "Received:", data.aud);
+      return null;
+    }
+    if (data.iss !== "accounts.google.com" && data.iss !== "https://accounts.google.com") {
+      console.warn("[Security Alert] Google token issuer mismatch:", data.iss);
       return null;
     }
     if (data.email_verified !== "true" && data.email_verified !== true) {
@@ -515,24 +599,43 @@ const MIME_TYPES = {
   ".webmanifest": "application/manifest+json"
 };
 
-function applySecurityHeaders(res, isPathAdmin = false) {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Referrer-Policy", isPathAdmin ? "no-referrer" : "strict-origin-when-cross-origin");
-  res.setHeader("Cross-Origin-Opener-Policy", isPathAdmin ? "same-origin" : "same-origin-allow-popups");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
-  res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+function isHttpsRequest(req) {
+  if (!req) return process.env.NODE_ENV === "production";
+  if (req.socket && req.socket.encrypted) return true;
+  const proto = (req.headers && (req.headers["x-forwarded-proto"] || req.headers["X-Forwarded-Proto"])) || "";
+  if (typeof proto === "string" && proto.toLowerCase().includes("https")) return true;
+  return process.env.NODE_ENV === "production";
+}
 
-  if (isPathAdmin) {
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://lh3.googleusercontent.com; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; worker-src 'none'; upgrade-insecure-requests;"
-    );
-  } else {
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'none'; script-src 'self' https://accounts.google.com/gsi/client https://www.googletagmanager.com https://challenges.cloudflare.com; script-src-attr 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://accounts.google.com/gsi/style; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://lh3.googleusercontent.com https://*.google-analytics.com https://*.googletagmanager.com; connect-src 'self' https://accounts.google.com/gsi/ https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://challenges.cloudflare.com; frame-src https://accounts.google.com/gsi/ https://maps.google.com https://www.google.com https://challenges.cloudflare.com; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; worker-src 'none'; upgrade-insecure-requests;"
-    );
+function applySecurityHeaders(res, isPathAdmin = false) {
+  if (!res.getHeader("X-Content-Type-Options")) res.setHeader("X-Content-Type-Options", "nosniff");
+  if (!res.getHeader("X-Frame-Options")) res.setHeader("X-Frame-Options", "DENY");
+  if (!res.getHeader("Referrer-Policy")) {
+    res.setHeader("Referrer-Policy", isPathAdmin ? "no-referrer" : "strict-origin-when-cross-origin");
+  }
+  if (!res.getHeader("Cross-Origin-Opener-Policy")) {
+    res.setHeader("Cross-Origin-Opener-Policy", isPathAdmin ? "same-origin" : "same-origin-allow-popups");
+  }
+  if (!res.getHeader("Permissions-Policy")) {
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  }
+  if (!res.getHeader("Strict-Transport-Security")) {
+    res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  }
+
+  // Preserve existing API Content-Security-Policy (e.g. from setSecurityHeaders in api/_auth.js)
+  if (!res.getHeader("Content-Security-Policy")) {
+    if (isPathAdmin) {
+      res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://lh3.googleusercontent.com; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; worker-src 'none'; upgrade-insecure-requests;"
+      );
+    } else {
+      res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'none'; script-src 'self' https://accounts.google.com/gsi/client https://www.googletagmanager.com https://challenges.cloudflare.com; script-src-attr 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://accounts.google.com/gsi/style; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://lh3.googleusercontent.com https://*.google-analytics.com https://*.googletagmanager.com; connect-src 'self' https://accounts.google.com/gsi/ https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://challenges.cloudflare.com; frame-src https://accounts.google.com/gsi/ https://maps.google.com https://www.google.com https://challenges.cloudflare.com; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; worker-src 'none'; upgrade-insecure-requests;"
+      );
+    }
   }
 }
 
@@ -575,8 +678,28 @@ function parseBody(req, maxLimit = 50 * 1024) {
     });
     req.on("end", () => {
       try {
-        resolve(body ? JSON.parse(body) : {});
+        const parsed = body ? JSON.parse(body) : {};
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          if (parsed.__proto__ !== Object.prototype && parsed.__proto__ !== null) {
+            const err = new Error("تم رصد محاولة تلاعب بالنموذج الأولي (Prototype Pollution).");
+            err.statusCode = 400;
+            return reject(err);
+          }
+          if (Object.prototype.hasOwnProperty.call(parsed, "__proto__") ||
+              Object.prototype.hasOwnProperty.call(parsed, "constructor") ||
+              Object.prototype.hasOwnProperty.call(parsed, "prototype")) {
+            const err = new Error("كائن البيانات يحتوي على حقول محظورة أمنياً (__proto__, constructor, prototype).");
+            err.statusCode = 400;
+            return reject(err);
+          }
+        }
+        resolve(parsed);
       } catch (e) {
+        if (body && body.trim().length > 0) {
+          const err = new Error("حزمة البيانات المرسلة غير صالحة (Invalid JSON Body).");
+          err.statusCode = 400;
+          return reject(err);
+        }
         resolve({});
       }
     });
@@ -605,6 +728,22 @@ const server = http.createServer(async (req, res) => {
   // API: Database Health Check (/api/db-health)
   // ---------------------------------------------------------------------------
   if (pathname === "/api/db-health") {
+    // Basic liveness probe to verify SQLite engine availability
+    try {
+      db.prepare("SELECT 1").get();
+    } catch (err) {
+      console.error("[Health Check] Database probe failed:", err.message);
+      return sendJson(res, 503, { status: "unhealthy", error: "Database engine unavailable" });
+    }
+
+    const admin = assertAdminAuthorized(req);
+
+    // Public / Container Health Check Response (Zero Information Disclosure)
+    if (!admin) {
+      return sendJson(res, 200, { status: "healthy" });
+    }
+
+    // Privileged Diagnostics & Statistics (Admin Only)
     const activeProducts = db.prepare("SELECT COUNT(*) as c FROM products WHERE deleted_at IS NULL").get().c;
     const softDeletedProducts = db.prepare("SELECT COUNT(*) as c FROM products WHERE deleted_at IS NOT NULL").get().c;
     const ordersCount = db.prepare("SELECT COUNT(*) as c FROM orders").get().c;
@@ -650,12 +789,26 @@ const server = http.createServer(async (req, res) => {
 
       // Admin Logout
       if (body.action === "logout" || parsedUrl.searchParams.get("action") === "logout") {
+        const token = extractCookie(req.headers["cookie"], "kk_admin_token") ||
+                      (req.headers["authorization"]?.startsWith("Bearer ") ? req.headers["authorization"].slice(7).trim() : null) ||
+                      req.headers["x-admin-token"];
+        if (token) {
+          try {
+            const verified = verifyHmacJwt(token, ADMIN_JWT_SECRETS);
+            if (verified && verified.jti) {
+              db.prepare("INSERT OR REPLACE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)").run(
+                verified.jti,
+                verified.exp || (Math.floor(Date.now() / 1000) + 7200)
+              );
+            }
+          } catch (e) {}
+        }
         applySecurityHeaders(res);
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
-          "Set-Cookie": `kk_admin_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; ${process.env.NODE_ENV === "production" ? "Secure" : ""}`
+          "Set-Cookie": `kk_admin_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; ${isHttpsRequest(req) ? "Secure" : ""}`.trim()
         });
-        return res.end(JSON.stringify({ success: true, message: "تم تسجيل خروج الإدارة بنجاح." }));
+        return res.end(JSON.stringify({ success: true, message: "تم تسجيل خروج الإدارة بنجاح وإلغاء صلاحية الجلسة فورياً." }));
       }
 
       // Sliding Window Rate Limit: Admin login (5 attempts per 15 minutes)
@@ -695,7 +848,7 @@ const server = http.createServer(async (req, res) => {
         applySecurityHeaders(res);
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
-          "Set-Cookie": `kk_admin_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=7200; ${process.env.NODE_ENV === "production" ? "Secure" : ""}`
+          "Set-Cookie": `kk_admin_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=7200; ${isHttpsRequest(req) ? "Secure" : ""}`.trim()
         });
         return res.end(JSON.stringify({
           success: true,
@@ -712,34 +865,11 @@ const server = http.createServer(async (req, res) => {
         return sendError(res, 400, "كلمة المرور مطلوبة.");
       }
 
-      const masterPassword = ADMIN_PASSWORD;
-      if (!masterPassword || masterPassword.length < 8) {
-        return sendError(res, 503, "بوابة المصادقة الإدارية غير مهيأة على الخادم (ADMIN_PASSWORD مفقود).");
-      }
-
-      // Constant-time verification over SHA-256 digests
-      const hashInput = crypto.createHash("sha256").update(inputPassword).digest();
-      const hashTarget = crypto.createHash("sha256").update(masterPassword).digest();
-      const isMatch = crypto.timingSafeEqual(hashInput, hashTarget);
-
-      if (!isMatch) {
+      // Memory-Hard scrypt + constant-time password verification (ASVS Level 3)
+      const isValid = await verifyAdminPassword(inputPassword);
+      if (!isValid) {
         await new Promise(r => setTimeout(r, 600)); // Constant delay
         return sendError(res, 401, "بيانات الدخول الإدارية غير صحيحة.");
-      }
-
-      // If explicit test bypass is active (e.g. for unit test suites)
-      if (process.env.ADMIN_DISABLE_2FA === "true" || body.bypass2FA === true) {
-        const token = signHmacJwt({ sub: "executive-admin", role: "admin", ip: clientIp, verified2FA: true }, ADMIN_JWT_SECRET, 7200);
-        applySecurityHeaders(res);
-        res.writeHead(200, {
-          "Content-Type": "application/json; charset=utf-8",
-          "Set-Cookie": `kk_admin_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=7200; ${process.env.NODE_ENV === "production" ? "Secure" : ""}`
-        });
-        return res.end(JSON.stringify({
-          success: true,
-          user: { role: "admin", name: "Kased Karim Admin" },
-          message: "تم التحقق الأمني بنجاح ومصادقة جهاز الإدارة."
-        }));
       }
 
       // Create Mandatory 2FA Challenge (NIST AAL2)
@@ -750,7 +880,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const { challengeId, otpCode } = challengeResult;
-      console.log(`[Admin 2FA] Verification code dispatched for challenge ${challengeId}: ${otpCode}`);
+      console.log(`[Admin 2FA] Verification challenge ${challengeId} created and dispatched.`);
 
       // Dispatch 2FA email in background
       send2FAEmail(otpCode, ADMIN_2FA_EMAILS).catch(err => {
@@ -776,21 +906,51 @@ const server = http.createServer(async (req, res) => {
       const includeDeleted = parsedUrl.searchParams.get("include_deleted") === "1";
       const isAdminView = parsedUrl.searchParams.get("all") === "1";
 
+      const rawCookie = req.headers?.cookie || req.headers?.Cookie || "";
+      const rawAuth = req.headers?.authorization || req.headers?.Authorization || "";
+      const rawAdminToken = req.headers?.["x-admin-token"] || req.headers?.["X-Admin-Token"] || "";
+      const rawCustomerToken = req.headers?.["x-customer-token"] || req.headers?.["X-Customer-Token"] || "";
+      const hasAuth = Boolean(rawCookie || rawAuth || rawAdminToken || rawCustomerToken);
+
       // Viewing soft-deleted products or admin all view requires verified admin token
       if (includeDeleted || isAdminView) {
         const admin = assertAdminAuthorized(req);
         if (!admin) {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+          res.setHeader("CDN-Cache-Control", "no-store");
+          res.setHeader("Vercel-CDN-Cache-Control", "no-store");
           return sendError(res, 401, "غير مصرح بالوصول. استعراض المنتجات المحذوفة يتطلب صلاحيات الإدارة العليا.");
         }
       }
 
+      const isPublicCacheable = !includeDeleted && !isAdminView && !hasAuth;
+
       if (id) {
         const prod = db.prepare("SELECT * FROM products WHERE id = ?").get(id);
         if (!prod) {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+          res.setHeader("CDN-Cache-Control", "no-store");
+          res.setHeader("Vercel-CDN-Cache-Control", "no-store");
           return sendError(res, 404, "المنتج غير موجود.");
         }
         if (prod.deleted_at && !includeDeleted) {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+          res.setHeader("CDN-Cache-Control", "no-store");
+          res.setHeader("Vercel-CDN-Cache-Control", "no-store");
           return sendError(res, 404, "عفواً، هذا المنتج غير متوفر حالياً (تمت أرشفته أو حذفه).");
+        }
+        if (isPublicCacheable) {
+          res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+          res.setHeader("CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+          res.setHeader("Vercel-CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+          res.setHeader("Vary", "Origin, Accept-Encoding, Cookie, Authorization");
+        } else {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+          res.setHeader("CDN-Cache-Control", "no-store");
+          res.setHeader("Vercel-CDN-Cache-Control", "no-store");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+          res.setHeader("Vary", "Cookie, Authorization");
         }
         return sendJson(res, 200, { success: true, product: prod });
       }
@@ -804,11 +964,18 @@ const server = http.createServer(async (req, res) => {
 
       const products = db.prepare(query).all();
 
-      if (!includeDeleted && !isAdminView) {
+      if (isPublicCacheable) {
         res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
-        res.setHeader("Vary", "Origin, Accept-Encoding");
+        res.setHeader("CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+        res.setHeader("Vercel-CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+        res.setHeader("Vary", "Origin, Accept-Encoding, Cookie, Authorization");
       } else {
-        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+        res.setHeader("CDN-Cache-Control", "no-store");
+        res.setHeader("Vercel-CDN-Cache-Control", "no-store");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+        res.setHeader("Vary", "Cookie, Authorization");
       }
 
       // Enforce pagination bound (max 50 items)
@@ -916,12 +1083,41 @@ const server = http.createServer(async (req, res) => {
     // 3. POST: Create Product (ADMIN ONLY)
     if (method === "POST") {
       const body = await parseBody(req);
-      if (!body.name || !body.price) {
+      if (!body.name || body.price === undefined || body.price === null || body.price === "") {
         return sendError(res, 400, "اسم المنتج وسعره حقول إلزامية.");
       }
 
       const pPrice = parseFloat(body.price);
-      if (isNaN(pPrice) || pPrice < 0) return sendError(res, 400, "سعر المنتج غير صالح.");
+      if (isNaN(pPrice) || pPrice < 0) return sendError(res, 400, "سعر المنتج غير صالح. يجب أن يكون رقماً موجباً أكبر من أو يساوي 0.");
+
+      // Validate stock >= 0
+      const rawStock = body.stock !== undefined && body.stock !== null && body.stock !== "" ? parseInt(body.stock, 10) : 10;
+      if (isNaN(rawStock) || rawStock < 0) {
+        return sendError(res, 400, "كمية المخزون (stock) غير صالحة. يجب أن تكون رقماً صحيحاً أكبر من أو يساوي 0.");
+      }
+
+      // Validate sale_price (if present) >= 0 and < price
+      let pSalePrice = null;
+      if (body.salePrice !== undefined || body.sale_price !== undefined) {
+        const rawSale = body.salePrice !== undefined ? body.salePrice : body.sale_price;
+        if (rawSale !== null && rawSale !== "") {
+          pSalePrice = parseFloat(rawSale);
+          if (isNaN(pSalePrice) || pSalePrice < 0) {
+            return sendError(res, 400, "سعر التخفيض (sale_price) يجب أن يكون رقماً موجباً أكبر من أو يساوي 0.");
+          }
+          if (pSalePrice >= pPrice) {
+            return sendError(res, 400, "سعر التخفيض (sale_price) يجب أن يكون أقل من السعر الأساسي للمنتج.");
+          }
+        }
+      }
+
+      // Validate category_id exists in database before insertion
+      const targetCatId = String(body.category_id || body.category || body.categoryId || "cat_chandeliers").trim();
+      const existingCat = db.prepare("SELECT id, name FROM categories WHERE id = ?").get(targetCatId);
+      if (!existingCat) {
+        return sendError(res, 400, `معرف القسم (category_id) '${targetCatId}' غير موجود في قاعدة البيانات.`);
+      }
+      const categoryName = existingCat.name || body.category_name || body.categoryName || "نجف وثريات فاخرة";
 
       let safeProductImage = "";
       if (body.image) {
@@ -948,12 +1144,12 @@ const server = http.createServer(async (req, res) => {
         body.sku || `KK-${Date.now().toString().slice(-4)}`,
         String(body.name).slice(0, 150),
         String(body.enName || body.en_name || "").slice(0, 150),
-        body.category_id || body.category || "cat_chandeliers",
-        body.category_name || body.categoryName || "نجف وثريات فاخرة",
+        targetCatId,
+        categoryName,
         pPrice,
-        body.salePrice || body.sale_price ? parseFloat(body.salePrice || body.sale_price) : null,
+        pSalePrice,
         body.costPrice || body.cost_price ? parseFloat(body.costPrice || body.cost_price) : null,
-        parseInt(body.stock || "10", 10),
+        rawStock,
         safeProductImage,
         String(body.description || "").slice(0, 500),
         body.featured ? 1 : 0
@@ -961,7 +1157,7 @@ const server = http.createServer(async (req, res) => {
 
       // Create linked inventory
       db.prepare("INSERT OR REPLACE INTO inventory (id, product_id, warehouse_name, quantity_on_hand) VALUES (?, ?, ?, ?)")
-        .run(`inv_${id}`, id, "المستودع الرئيسي - الشيخ زايد", parseInt(body.stock || "10", 10));
+        .run(`inv_${id}`, id, "المستودع الرئيسي - الشيخ زايد", rawStock);
 
       return sendJson(res, 201, { success: true, message: "تم إنشاء المنتج بنجاح في قاعدة البيانات العلائقية.", id });
     }
@@ -1040,27 +1236,31 @@ const server = http.createServer(async (req, res) => {
     if (method === "GET") {
       const isMine = parsedUrl.searchParams.get("mine") === "1";
 
-      // SUB-CASE A: Authenticated Customer Order History (Strict Zero-Leakage)
+      // SUB-CASE A: Authenticated Customer Order History (Strict Zero-Leakage & IDOR Defense)
       if (isMine) {
         const customer = extractCustomerSession(req);
         if (!customer || !customer.sub) {
           return sendError(res, 401, "يجب تسجيل الدخول لعرض سجل طلباتك.");
         }
 
-        const custPhone = customer.phone ? customer.phone.replace(/[^0-9]/g, "") : "";
-        const custEmail = (customer.email || "").toLowerCase();
+        // Query database directly to confirm customer existence and verified status (Zero-Trust DB Authority)
+        const custRecord = db.prepare("SELECT id, email, email_verified FROM customers WHERE id = ?").get(customer.sub);
+        if (!custRecord) {
+          return sendError(res, 401, "حساب العميل غير موجود أو تم إلغاؤه.");
+        }
 
-        let query = "SELECT id, order_number, subtotal, delivery_fee, total, status, created_at FROM orders WHERE 1=0";
-        const params = [];
-        if (custPhone && custEmail) {
-          query = "SELECT id, order_number, subtotal, delivery_fee, total, status, created_at FROM orders WHERE customer_phone = ? OR LOWER(customer_email) = ? ORDER BY created_at DESC";
-          params.push(custPhone, custEmail);
-        } else if (custPhone) {
-          query = "SELECT id, order_number, subtotal, delivery_fee, total, status, created_at FROM orders WHERE customer_phone = ? ORDER BY created_at DESC";
-          params.push(custPhone);
-        } else if (custEmail) {
-          query = "SELECT id, order_number, subtotal, delivery_fee, total, status, created_at FROM orders WHERE LOWER(customer_email) = ? ORDER BY created_at DESC";
-          params.push(custEmail);
+        const isEmailVerified = Boolean(custRecord.email_verified === 1 || custRecord.email_verified === "1" || custRecord.email_verified === true);
+        const custEmail = (custRecord.email || "").trim().toLowerCase();
+
+        // Bind strictly to customer_id; only permit matching email if verified in DB; NEVER match unverified phone
+        let query;
+        let params;
+        if (isEmailVerified && custEmail) {
+          query = "SELECT id, order_number, subtotal, delivery_fee, total, status, created_at FROM orders WHERE customer_id = ? OR (LOWER(customer_email) = ? AND customer_email IS NOT NULL) ORDER BY created_at DESC";
+          params = [custRecord.id, custEmail];
+        } else {
+          query = "SELECT id, order_number, subtotal, delivery_fee, total, status, created_at FROM orders WHERE customer_id = ? ORDER BY created_at DESC";
+          params = [custRecord.id];
         }
 
         const myOrders = db.prepare(query).all(...params);
@@ -1114,32 +1314,92 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
+      // Check Idempotency-Key & Race Condition Defense
+      const rawIdempKey = req.headers["idempotency-key"] || body.idempotencyKey || "";
+      let cleanIdempKey = typeof rawIdempKey === "string" ? rawIdempKey.trim().slice(0, 100) : "";
+      if (!cleanIdempKey) {
+        const candidatePhone = (body.customerPhone || body.phone || "").replace(/[^0-9]/g, "");
+        const itemsSig = Array.isArray(body.items)
+          ? body.items.map(i => `${i.id || i.productId}:${i.qty || i.quantity}`).sort().join(",")
+          : "";
+        cleanIdempKey = `synth_${crypto.createHash("sha256").update(`${clientIp}:${candidatePhone}:${itemsSig}`).digest("hex")}`;
+      }
+
+      const existingLock = db.prepare("SELECT status, response_body, created_at FROM idempotency_locks WHERE key = ?").get(cleanIdempKey);
+      if (existingLock) {
+        const ageMs = Date.now() - existingLock.created_at;
+        if (existingLock.status === "completed" && ageMs < 3600 * 1000 && existingLock.response_body) {
+          try {
+            const cachedRes = JSON.parse(existingLock.response_body);
+            return sendJson(res, 200, {
+              ...cachedRes,
+              idempotentReplay: true,
+              message: "تم استلام هذا الطلب وتأكيده مسبقاً بنجاح."
+            });
+          } catch (_) {}
+        }
+        if (existingLock.status === "processing" && ageMs < 15 * 1000) {
+          return sendError(res, 409, "جارٍ معالجة هذا الطلب بالفعل حالياً على الخادم. يرجى الانتظار لحين اكتمال المعالجة.");
+        }
+      }
+
+      // Claim processing lock
+      db.prepare("INSERT OR REPLACE INTO idempotency_locks (key, status, created_at) VALUES (?, 'processing', ?)").run(cleanIdempKey, Date.now());
+
       const items = Array.isArray(body.items) ? body.items : [];
 
       if (items.length === 0) {
+        db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
         return sendError(res, 400, "السلة فارغة، يجب إرسال منتجات صالحة.");
       }
 
       if (items.length > 50) {
+        db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
         return sendError(res, 400, "عدد بنود الطلب يتجاوز الحد الأقصى المسموح به (50 صنف).");
       }
 
-      // STRICT ZERO-TRUST FINANCIAL PRICING: Calculate purely from DB
+      // STRICT ZERO-TRUST FINANCIAL PRICING: Deduplicate items & enforce integer positive quantity bounds
+      const aggregatedMap = new Map();
+      for (const item of items) {
+        if (!item || typeof item !== "object") {
+          db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
+          return sendError(res, 400, "بيانات أحد المنتجات في السلة غير صالحة.");
+        }
+        const prodId = item.id || item.productId;
+        if (!prodId || typeof prodId !== "string" || prodId.length > 100 || prodId.includes("..") || prodId.includes("/") || prodId.includes("\\")) {
+          db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
+          return sendError(res, 400, "معرف أحد المنتجات في السلة غير صالح.");
+        }
+        const rawQty = item.qty !== undefined ? item.qty : item.quantity;
+        if (typeof rawQty !== "number" || !Number.isInteger(rawQty) || rawQty < 1 || rawQty > 50) {
+          db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
+          return sendError(res, 400, "كمية المنتج غير صالحة. يجب أن تكون عدداً صحيحاً موجباً بين 1 و 50 حصراً.");
+        }
+        const existingQty = aggregatedMap.get(prodId) || 0;
+        const combinedQty = existingQty + rawQty;
+        if (combinedQty > 50) {
+          db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
+          return sendError(res, 400, `الكمية الإجمالية المطلوبة للمنتج '${prodId}' تتجاوز السقف المسموح به (50 قطعة).`);
+        }
+        aggregatedMap.set(prodId, combinedQty);
+      }
+
       let calculatedSubtotal = 0;
       const verifiedLineItems = [];
 
-      for (const item of items) {
-        const prodId = item.id || item.productId;
-        if (!prodId || typeof prodId !== "string") {
-          return sendError(res, 400, "معرف المنتج غير صالح.");
-        }
-
+      for (const [prodId, qty] of aggregatedMap.entries()) {
         const prod = db.prepare("SELECT * FROM products WHERE id = ?").get(prodId);
         if (!prod || prod.active === 0 || prod.deleted_at !== null) {
+          db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
           return sendError(res, 400, `عفواً، المنتج '${prod ? prod.name : prodId}' لم يعد متاحاً في المتجر (تم حذفه أو إيقافه).`);
         }
 
-        const qty = Math.max(1, Math.min(100, parseInt(item.qty || 1, 10)));
+        // Preliminary stock availability check before transaction
+        if (prod.stock < qty) {
+          db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
+          return sendError(res, 400, `عفواً، الكمية المطلوبة للمنتج '${prod.name}' غير متوفرة في المخزون (المتبقي: ${prod.stock}).`);
+        }
+
         // Authoritative Price from DB (Honor sale_price if active)
         const authoritativeUnitPrice = (prod.sale_price !== null && prod.sale_price !== undefined && prod.sale_price > 0 && prod.sale_price < prod.price)
           ? prod.sale_price
@@ -1157,14 +1417,23 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      // Calculate delivery fee
-      const deliveryFee = calculatedSubtotal >= 5000 ? 0 : 150;
-      const calculatedGrandTotal = calculatedSubtotal + deliveryFee;
-
-      // Extract customer session if present (already extracted and verified above)
-      const customerId = customerSession ? customerSession.sub : null;
-      const customerName = (body.customerName || body.name || customerSession?.name || "عميل").trim().slice(0, 100);
+      // Mandatory Customer Name and Phone Validation (Zero-Trust Customer Profile)
       const customerPhone = (body.customerPhone || body.phone || customerSession?.phone || "").replace(/[^0-9]/g, "").slice(0, 20);
+      const customerName = (body.customerName || body.name || customerSession?.name || "").trim().slice(0, 100);
+
+      if (!customerName || customerName.length < 2) {
+        db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
+        return sendError(res, 400, "يرجى كتابة اسم العميل بشكل صحيح (حرفين على الأقل).");
+      }
+
+      // Egyptian Mobile Phone Validation (010, 011, 012, 015 - exactly 11 digits)
+      if (!customerPhone || !/^01[0125][0-9]{8}$/.test(customerPhone)) {
+        db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
+        return sendError(res, 400, "يرجى إدخال رقم هاتف مصري صحيح مكون من 11 رقماً يبدأ بـ 01 (لا يمكن إتمام الطلب برقم هاتف فارغ أو غير صالح).");
+      }
+
+      // Extract remaining customer attributes
+      const customerId = customerSession ? customerSession.sub : null;
       const customerEmail = (body.customerEmail || body.email || customerSession?.email || "").trim().toLowerCase().slice(0, 100);
       const shippingAddress = (body.address || body.shippingAddress || "الشيخ زايد").trim().slice(0, 250);
       const deliveryCity = (body.city || body.deliveryCity || "الشيخ زايد").trim().slice(0, 100);
@@ -1172,13 +1441,89 @@ const server = http.createServer(async (req, res) => {
       const orderId = `ORD-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
       const orderNumber = `KK-${Date.now().toString().slice(-6)}`;
 
+      let finalDiscount = 0;
+      let finalDeliveryFee = 150;
+      let finalGrandTotal = calculatedSubtotal + 150;
+
+      // ATOMIC TRANSACTION: Stock Deduction, Coupon Enforcement & Order Placement
       db.exec("BEGIN IMMEDIATE;");
       try {
+        // 1. Atomic Stock Verification and Deduction on every item
+        for (const line of verifiedLineItems) {
+          const deductRes = db.prepare(`
+            UPDATE products 
+            SET stock = stock - ?, updated_at = datetime('now')
+            WHERE id = ? AND stock >= ?
+          `).run(line.quantity, line.productId, line.quantity);
+
+          if (deductRes.changes === 0) {
+            throw new Error(`INSUFFICIENT_STOCK:${line.productName}`);
+          }
+
+          // Update inventory warehouse records
+          db.prepare(`
+            UPDATE inventory 
+            SET quantity_on_hand = MAX(0, quantity_on_hand - ?), updated_at = datetime('now')
+            WHERE product_id = ?
+          `).run(line.quantity, line.productId);
+        }
+
+        // 2. Atomic Coupon Verification & Usage Limit Increment
+        let calculatedDiscount = 0;
+        let appliedCouponCode = null;
+        const rawCoupon = (body.couponCode || body.coupon || "").trim().toUpperCase();
+        if (rawCoupon) {
+          const coupon = db.prepare("SELECT * FROM coupons WHERE code = ? AND active = 1").get(rawCoupon);
+          if (!coupon) {
+            throw new Error("COUPON_ERROR:كوبون الخصم غير صالح أو تم إيقافه.");
+          }
+          if (coupon.expires_at && new Date(coupon.expires_at).getTime() < Date.now()) {
+            throw new Error("COUPON_ERROR:كوبون الخصم منتهي الصلاحية.");
+          }
+          if (coupon.usage_limit && coupon.used_count >= coupon.usage_limit) {
+            throw new Error("COUPON_ERROR:تم الوصول للحد الأقصى لاستخدام هذا الكوبون.");
+          }
+          if (calculatedSubtotal < (coupon.min_order_amount || 0)) {
+            throw new Error(`COUPON_ERROR:الحد الأدنى لتفعيل هذا الكوبون هو ${coupon.min_order_amount} ج.م.`);
+          }
+
+          if (coupon.type === "percentage") {
+            calculatedDiscount = (calculatedSubtotal * coupon.value) / 100;
+            if (coupon.max_discount_amount) {
+              calculatedDiscount = Math.min(calculatedDiscount, coupon.max_discount_amount);
+            }
+          } else {
+            calculatedDiscount = coupon.value;
+          }
+          calculatedDiscount = Math.min(calculatedDiscount, calculatedSubtotal);
+
+          // Atomic Condition Increment: Prevents race conditions exceeding usage_limit
+          const couponUpdateRes = db.prepare(`
+            UPDATE coupons 
+            SET used_count = used_count + 1 
+            WHERE code = ? AND active = 1 AND (usage_limit IS NULL OR used_count < usage_limit)
+          `).run(coupon.code);
+
+          if (couponUpdateRes.changes === 0) {
+            throw new Error("COUPON_ERROR:تم الوصول للحد الأقصى لاستخدام هذا الكوبون بالتزامن.");
+          }
+          appliedCouponCode = coupon.code;
+        }
+
+        // Calculate authoritative delivery fee & grand total
+        const deliveryFee = (calculatedSubtotal - calculatedDiscount) >= 5000 ? 0 : 150;
+        const calculatedGrandTotal = Math.max(0, calculatedSubtotal - calculatedDiscount) + deliveryFee;
+
+        finalDiscount = calculatedDiscount;
+        finalDeliveryFee = deliveryFee;
+        finalGrandTotal = calculatedGrandTotal;
+
+        // 3. Insert Order Record
         db.prepare(`
           INSERT INTO orders (
             id, order_number, customer_id, customer_name, customer_phone, customer_email,
-            shipping_address, delivery_city, subtotal, delivery_fee, total, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+            shipping_address, delivery_city, subtotal, discount, delivery_fee, total, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
         `).run(
           orderId,
           orderNumber,
@@ -1189,10 +1534,12 @@ const server = http.createServer(async (req, res) => {
           shippingAddress,
           deliveryCity,
           calculatedSubtotal,
+          calculatedDiscount,
           deliveryFee,
           calculatedGrandTotal
         );
 
+        // 4. Insert Order Items & Sales
         const insertItem = db.prepare(`
           INSERT INTO order_items (id, order_id, product_id, product_name, unit_price, quantity, total_price)
           VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -1212,18 +1559,36 @@ const server = http.createServer(async (req, res) => {
         db.exec("COMMIT;");
       } catch (txErr) {
         try { db.exec("ROLLBACK;"); } catch (_) {}
+        db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
+        if (txErr.message.startsWith("INSUFFICIENT_STOCK:")) {
+          const pName = txErr.message.replace("INSUFFICIENT_STOCK:", "");
+          return sendError(res, 400, `عفواً، نفاد المخزون: الكمية المطلوبة للمنتج '${pName}' غير متوفرة حالياً في المخزون.`);
+        }
+        if (txErr.message.startsWith("COUPON_ERROR:")) {
+          return sendError(res, 400, txErr.message.replace("COUPON_ERROR:", ""));
+        }
         throw txErr;
       }
 
-      return sendJson(res, 201, {
+      const responsePayload = {
         success: true,
         orderId,
         orderNumber,
         subtotal: calculatedSubtotal,
-        deliveryFee,
-        total: calculatedGrandTotal,
+        discount: finalDiscount,
+        deliveryFee: finalDeliveryFee,
+        total: finalGrandTotal,
         message: "تم تسجيل الطلب وتوثيقه بنجاح بالأسعار الرسمية المعتمدة."
-      });
+      };
+
+      // Mark Idempotency Lock Completed with Cached Response Body
+      db.prepare("UPDATE idempotency_locks SET status = 'completed', order_id = ?, response_body = ? WHERE key = ?").run(
+        orderId,
+        JSON.stringify(responsePayload),
+        cleanIdempKey
+      );
+
+      return sendJson(res, 201, responsePayload);
     }
 
     // 3. PATCH / DELETE / PUT: Admin Order Management (ADMIN ONLY)
@@ -1331,8 +1696,8 @@ const server = http.createServer(async (req, res) => {
         settings: {
           storeNameAr: "معرض قاصد كريم",
           storeNameEn: "Kased Karim Showroom",
-          phone: "01099990599",
-          whatsapp: "01099990599",
+          phone: "01006367690",
+          whatsapp: "201006367690",
           freeShippingThreshold: 5000,
           shippingFee: 150
         }
@@ -1462,6 +1827,14 @@ const server = http.createServer(async (req, res) => {
             if (existing) {
               db.prepare("UPDATE products SET deleted_at = NULL, active = 1, status = 'published', updated_at = datetime('now') WHERE id = ?").run(p.id);
             } else {
+              let safeRestoreImage = "";
+              if (p.image) {
+                const imgCheck = validateSafeImageUrl(String(p.image).trim());
+                if (imgCheck.valid) {
+                  safeRestoreImage = imgCheck.sanitizedUrl;
+                }
+              }
+
               db.prepare(`
                 INSERT INTO products (
                   id, sku, name, en_name, category_id, category_name, price, stock, image, description, active, deleted_at
@@ -1475,7 +1848,7 @@ const server = http.createServer(async (req, res) => {
                 p.category_name || p.categoryName || "نجف وثريات فاخرة",
                 parseFloat(p.price || 0),
                 parseInt(p.stock || 10, 10),
-                p.image || "",
+                safeRestoreImage,
                 p.description || ""
               );
             }
@@ -1584,8 +1957,8 @@ const server = http.createServer(async (req, res) => {
       }
 
       db.prepare(`
-        INSERT INTO customers (id, name, phone, email, password_hash, password_salt, email_verified, verification_token_hash, verification_code_hash, verification_expires_at, role)
-        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'customer')
+        INSERT INTO customers (id, name, phone, email, password_hash, password_salt, email_verified, verification_token_hash, verification_code_hash, verification_expires_at, verification_attempts, role)
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 0, 'customer')
       `).run(id, name, phone, email || null, pwdData.hash, pwdData.salt, verificationTokenHash, verificationCodeHash, verificationExpiresAt);
 
       if (email && verificationToken) {
@@ -1600,7 +1973,7 @@ const server = http.createServer(async (req, res) => {
       applySecurityHeaders(res);
       res.writeHead(201, {
         "Content-Type": "application/json; charset=utf-8",
-        "Set-Cookie": `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; ${process.env.NODE_ENV === "production" ? "Secure" : ""}`
+        "Set-Cookie": `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; ${isHttpsRequest(req) ? "Secure" : ""}`.trim()
       });
       return res.end(JSON.stringify({
         success: true,
@@ -1648,7 +2021,7 @@ const server = http.createServer(async (req, res) => {
       applySecurityHeaders(res);
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
-        "Set-Cookie": `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; ${process.env.NODE_ENV === "production" ? "Secure" : ""}`
+        "Set-Cookie": `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; ${isHttpsRequest(req) ? "Secure" : ""}`.trim()
       });
       return res.end(JSON.stringify({
         success: true,
@@ -1657,14 +2030,28 @@ const server = http.createServer(async (req, res) => {
       }));
     }
 
-    // 3. LOGOUT
+    // 3. LOGOUT (REVOKE TOKEN SERVER-SIDE & CLEAR COOKIE)
     if (action === "logout") {
+      const token = extractCookie(req.headers["cookie"], "kk_customer_token") ||
+                    (req.headers["authorization"]?.startsWith("Bearer ") ? req.headers["authorization"].slice(7).trim() : null) ||
+                    req.headers["x-customer-token"];
+      if (token) {
+        try {
+          const verified = verifyHmacJwt(token, EFFECTIVE_CUSTOMER_JWT_SECRETS) || verifyCustomerToken(token);
+          if (verified && verified.jti) {
+            db.prepare("INSERT OR REPLACE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)").run(
+              verified.jti,
+              verified.exp || (Math.floor(Date.now() / 1000) + 86400)
+            );
+          }
+        } catch (e) {}
+      }
       applySecurityHeaders(res);
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
-        "Set-Cookie": `kk_customer_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; ${process.env.NODE_ENV === "production" ? "Secure" : ""}`
+        "Set-Cookie": `kk_customer_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; ${isHttpsRequest(req) ? "Secure" : ""}`.trim()
       });
-      return res.end(JSON.stringify({ success: true, message: "تم تسجيل الخروج بنجاح." }));
+      return res.end(JSON.stringify({ success: true, message: "تم تسجيل الخروج بنجاح وإلغاء صلاحية الجلسة فورياً." }));
     }
 
     // 4. GOOGLE AUTHENTICATION (Verified via Google Tokeninfo API)
@@ -1706,7 +2093,7 @@ const server = http.createServer(async (req, res) => {
       applySecurityHeaders(res);
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
-        "Set-Cookie": `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; ${process.env.NODE_ENV === "production" ? "Secure" : ""}`
+        "Set-Cookie": `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; ${isHttpsRequest(req) ? "Secure" : ""}`.trim()
       });
       return res.end(JSON.stringify({
         success: true,
@@ -1730,32 +2117,138 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { success: true, customer: cust });
     }
 
-    // 6. VERIFY EMAIL
+    // 6. VERIFY EMAIL (BRUTE FORCE & CSRF PROTECTED)
     if (action === "verify_email") {
-      const rawToken = body?.token || parsedUrl.searchParams.get("token") || "";
-      const rawCode = body?.code || parsedUrl.searchParams.get("code") || "";
-      const rawEmail = (body?.email || parsedUrl.searchParams.get("email") || "").trim().toLowerCase();
+      // Prevent email verification and session cookie issuance via GET; strictly require POST to prevent CSRF
+      if (method !== "POST") {
+        return sendError(res, 405, "طريقة الطلب غير مسموح بها. التحقق وتفعيل الحساب مقصور على طلبات POST فقط لمنع ثغرات CSRF.");
+      }
+
+      // Sliding Window Rate Limit: Auth (5 attempts per 15 minutes)
+      const allowed = await enforceRateLimit(req, res, "auth");
+      if (!allowed) return;
+
+      const rawToken = typeof body?.token === "string" ? body.token.trim() : "";
+      const rawCode = typeof body?.code === "string" ? body.code.trim() : "";
+      const rawEmail = (typeof body?.email === "string" ? body.email : "").trim().toLowerCase();
+
+      if (!rawToken && (!rawCode || !rawEmail)) {
+        return sendError(res, 400, "يرجى تقديم رابط التفعيل أو كود التحقق والبريد الإلكتروني المرتبط به.");
+      }
 
       let targetCust = null;
-      if (rawToken) {
-        const tokenHash = crypto.createHash("sha256").update(rawToken.trim()).digest("hex");
+
+      // CASE A: 6-Digit Code Verification with Email (Target for Brute Force)
+      if (rawCode && rawEmail) {
+        const cust = db.prepare("SELECT * FROM customers WHERE LOWER(email) = ?").get(rawEmail);
+        if (!cust) {
+          return sendError(res, 400, "رمز أو كود تفعيل البريد الإلكتروني غير صحيح أو انتهت صلاحيته.");
+        }
+
+        if (cust.email_verified === 1 || cust.email_verified === true) {
+          return sendJson(res, 200, {
+            success: true,
+            message: "هذا الحساب مفعّل بالفعل مسبقاً.",
+            customer: { id: cust.id, name: cust.name, phone: cust.phone, email: cust.email, role: cust.role, email_verified: true }
+          });
+        }
+
+        const currentAttempts = Number(cust.verification_attempts || 0);
+
+        // Fail-Closed: If already 5 or more failed attempts, or token already nullified
+        if (currentAttempts >= 5 || !cust.verification_code_hash) {
+          db.prepare(`
+            UPDATE customers 
+            SET verification_token_hash = NULL, verification_code_hash = NULL, verification_expires_at = NULL, updated_at = datetime('now')
+            WHERE id = ?
+          `).run(cust.id);
+          return sendError(res, 429, "تم تجاوز الحد الأقصى للمحاولات الخاطئة (5 محاولات). تم إتلاف رمز التفعيل لأسباب أمنية، يرجى طلب إعادة إرسال كود جديد.");
+        }
+
+        if (cust.verification_expires_at && Date.now() > Number(cust.verification_expires_at)) {
+          return sendError(res, 400, "انتهت صلاحية رمز التفعيل (صلاحيته 24 ساعة فقط). يرجى طلب رمز جديد.");
+        }
+
+        // Timing-Safe Verification of 6-Digit Code Hash
+        const codeHash = crypto.createHash("sha256").update(rawCode).digest("hex");
+        const expectedBuf = Buffer.from(cust.verification_code_hash, "hex");
+        const actualBuf = Buffer.from(codeHash, "hex");
+        const isMatch = (expectedBuf.length === actualBuf.length) && crypto.timingSafeEqual(expectedBuf, actualBuf);
+
+        if (!isMatch) {
+          const newAttempts = currentAttempts + 1;
+          if (newAttempts >= 5) {
+            // Incinerate verification tokens immediately on 5th failed attempt
+            db.prepare(`
+              UPDATE customers 
+              SET verification_attempts = ?, verification_token_hash = NULL, verification_code_hash = NULL, verification_expires_at = NULL, updated_at = datetime('now')
+              WHERE id = ?
+            `).run(newAttempts, cust.id);
+            return sendError(res, 429, "تم تجاوز الحد الأقصى للمحاولات الخاطئة (5 محاولات). تم إتلاف رمز التفعيل لأسباب أمنية، يرجى طلب إعادة إرسال كود جديد.");
+          } else {
+            db.prepare(`
+              UPDATE customers 
+              SET verification_attempts = ?, updated_at = datetime('now')
+              WHERE id = ?
+            `).run(newAttempts, cust.id);
+            const remaining = 5 - newAttempts;
+            return sendError(res, 400, `كود التفعيل غير صحيح. متبقي لديك ${remaining} محاولات قبل إتلاف الرمز نهائياً.`);
+          }
+        }
+
+        targetCust = cust;
+      } 
+      // CASE B: 32-Byte Secret Token Verification
+      else if (rawToken) {
+        const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
         targetCust = db.prepare("SELECT * FROM customers WHERE verification_token_hash = ?").get(tokenHash);
-      } else if (rawCode && rawEmail) {
-        const codeHash = crypto.createHash("sha256").update(rawCode.trim()).digest("hex");
-        targetCust = db.prepare("SELECT * FROM customers WHERE LOWER(email) = ? AND verification_code_hash = ?").get(rawEmail, codeHash);
+
+        if (!targetCust) {
+          if (rawEmail) {
+            const cust = db.prepare("SELECT * FROM customers WHERE LOWER(email) = ?").get(rawEmail);
+            if (cust && cust.verification_token_hash) {
+              const newAttempts = Number(cust.verification_attempts || 0) + 1;
+              if (newAttempts >= 5) {
+                db.prepare(`
+                  UPDATE customers 
+                  SET verification_attempts = ?, verification_token_hash = NULL, verification_code_hash = NULL, verification_expires_at = NULL, updated_at = datetime('now')
+                  WHERE id = ?
+                `).run(newAttempts, cust.id);
+                return sendError(res, 429, "تم تجاوز الحد الأقصى للمحاولات الخاطئة (5 محاولات). تم إتلاف رمز التفعيل لأسباب أمنية، يرجى طلب إعادة إرسال رمز جديد.");
+              } else {
+                db.prepare(`
+                  UPDATE customers 
+                  SET verification_attempts = ?, updated_at = datetime('now')
+                  WHERE id = ?
+                `).run(newAttempts, cust.id);
+              }
+            }
+          }
+          return sendError(res, 400, "رمز أو رابط تفعيل البريد الإلكتروني غير صحيح أو انتهت صلاحيته.");
+        }
+
+        if (Number(targetCust.verification_attempts || 0) >= 5) {
+          db.prepare(`
+            UPDATE customers 
+            SET verification_token_hash = NULL, verification_code_hash = NULL, verification_expires_at = NULL, updated_at = datetime('now')
+            WHERE id = ?
+          `).run(targetCust.id);
+          return sendError(res, 429, "تم تجاوز الحد الأقصى للمحاولات الخاطئة (5 محاولات). تم إتلاف رمز التفعيل لأسباب أمنية، يرجى طلب إعادة إرسال رمز جديد.");
+        }
+
+        if (targetCust.verification_expires_at && Date.now() > Number(targetCust.verification_expires_at)) {
+          return sendError(res, 400, "انتهت صلاحية رابط التفعيل (صلاحيته 24 ساعة فقط). يرجى طلب رابط جديد.");
+        }
       }
 
       if (!targetCust) {
         return sendError(res, 400, "رمز أو رابط تفعيل البريد الإلكتروني غير صحيح أو انتهت صلاحيته.");
       }
 
-      if (targetCust.verification_expires_at && Date.now() > Number(targetCust.verification_expires_at)) {
-        return sendError(res, 400, "انتهت صلاحية رمز التفعيل (صلاحيته 24 ساعة فقط). يرجى طلب رمز جديد.");
-      }
-
+      // Successful verification: mark verified, clear tokens, and reset failed attempts counter to 0
       db.prepare(`
         UPDATE customers 
-        SET email_verified = 1, verification_token_hash = NULL, verification_code_hash = NULL, verification_expires_at = NULL, updated_at = datetime('now')
+        SET email_verified = 1, verification_token_hash = NULL, verification_code_hash = NULL, verification_expires_at = NULL, verification_attempts = 0, updated_at = datetime('now')
         WHERE id = ?
       `).run(targetCust.id);
 
@@ -1764,13 +2257,123 @@ const server = http.createServer(async (req, res) => {
       applySecurityHeaders(res);
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
-        "Set-Cookie": `kk_customer_token=${newToken}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; ${process.env.NODE_ENV === "production" ? "Secure" : ""}`
+        "Set-Cookie": `kk_customer_token=${newToken}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; ${isHttpsRequest(req) ? "Secure" : ""}`.trim()
       });
       return res.end(JSON.stringify({
         success: true,
         message: "تم تفعيل البريد الإلكتروني بنجاح ومصادقة حسابك رسمياً.",
         customer: { id: targetCust.id, name: targetCust.name, phone: targetCust.phone, email: targetCust.email, role: targetCust.role, email_verified: true }
       }));
+    }
+
+    // 6.5 RESEND EMAIL VERIFICATION (SELF-SERVICE RESET)
+    if (action === "resend_verification" && method === "POST") {
+      const allowed = await enforceRateLimit(req, res, "auth");
+      if (!allowed) return;
+
+      const rawEmail = (body?.email || "").trim().toLowerCase();
+      if (!rawEmail) {
+        return sendError(res, 400, "يرجى تحديد البريد الإلكتروني المطلوب تفعيله.");
+      }
+
+      const cust = db.prepare("SELECT * FROM customers WHERE LOWER(email) = ?").get(rawEmail);
+      if (!cust) {
+        return sendJson(res, 200, {
+          success: true,
+          message: "إذا كان هذا البريد مسجلاً لدينا، فقد تم إرسال كود ورابط تفعيل جديد إليه."
+        });
+      }
+
+      if (cust.email_verified === 1 || cust.email_verified === true) {
+        return sendJson(res, 200, {
+          success: true,
+          message: "هذا الحساب مفعّل بالفعل مسبقاً."
+        });
+      }
+
+      const newVerToken = crypto.randomBytes(32).toString("hex");
+      const newVerCode = String(crypto.randomInt(100000, 999999));
+      const tokenHash = crypto.createHash("sha256").update(newVerToken).digest("hex");
+      const codeHash = crypto.createHash("sha256").update(newVerCode).digest("hex");
+      const expiresAt = Date.now() + (24 * 60 * 60 * 1000);
+
+      db.prepare(`
+        UPDATE customers 
+        SET verification_token_hash = ?, verification_code_hash = ?, verification_expires_at = ?, verification_attempts = 0, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(tokenHash, codeHash, expiresAt, cust.id);
+
+      sendCustomerVerificationEmail(cust.email, cust.name, newVerToken, newVerCode).catch(e => {
+        console.warn("[server.js] Error sending verification email:", e.message);
+      });
+
+      return sendJson(res, 200, {
+        success: true,
+        message: "تم إرسال كود ورابط تفعيل جديد إلى بريدك الإلكتروني بنجاح (صالح لمدة 24 ساعة)."
+      });
+    }
+
+    // 7. GET CUSTOMER ORDERS (BOLA/IDOR PROTECTED)
+    if (action === "orders" && method === "GET") {
+      const customerSession = extractCustomerSession(req);
+      if (!customerSession || !customerSession.sub) {
+        return sendError(res, 401, "يجب تسجيل الدخول لعرض سجل طلباتك.");
+      }
+
+      // Query database directly to confirm customer existence and verified status (Zero-Trust DB Authority)
+      const custRecord = db.prepare("SELECT id, email, email_verified FROM customers WHERE id = ?").get(customerSession.sub);
+      if (!custRecord) {
+        return sendError(res, 401, "حساب العميل غير موجود أو تم إلغاؤه.");
+      }
+
+      const isEmailVerified = Boolean(custRecord.email_verified === 1 || custRecord.email_verified === "1" || custRecord.email_verified === true);
+      const custEmail = (custRecord.email || "").trim().toLowerCase();
+
+      // Bind strictly to customer_id; only permit matching email if verified in DB; NEVER match unverified phone
+      let query;
+      let params;
+      if (isEmailVerified && custEmail) {
+        query = "SELECT id, order_number, subtotal, delivery_fee, total, status, created_at FROM orders WHERE customer_id = ? OR (LOWER(customer_email) = ? AND customer_email IS NOT NULL) ORDER BY created_at DESC";
+        params = [custRecord.id, custEmail];
+      } else {
+        query = "SELECT id, order_number, subtotal, delivery_fee, total, status, created_at FROM orders WHERE customer_id = ? ORDER BY created_at DESC";
+        params = [custRecord.id];
+      }
+
+      const myOrders = db.prepare(query).all(...params);
+      return sendJson(res, 200, { success: true, count: myOrders.length, orders: myOrders });
+    }
+
+    // 8. ADMIN DIRECTORY (GET ALL CUSTOMERS — STRICT ADMIN RBAC & BFLA DEFENSE)
+    if (action === "list" && method === "GET") {
+      const admin = assertAdminAuthorized(req);
+      if (!admin) {
+        return sendError(res, 401, "غير مصرح بالوصول. استعراض سجل العملاء يتطلب صلاحيات الإدارة العليا.");
+      }
+      const rawPage = parseInt(parsedUrl.searchParams.get("page") || "1", 10);
+      const rawLimit = parseInt(parsedUrl.searchParams.get("limit") || "50", 10);
+      const page = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1;
+      const limit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 50) : 50;
+      const offset = (page - 1) * limit;
+
+      const totalRow = db.prepare("SELECT COUNT(*) as count FROM customers").get();
+      const total = totalRow ? totalRow.count : 0;
+      const customers = db.prepare(`
+        SELECT id, name, phone, email, avatar, role, email_verified, created_at, updated_at 
+        FROM customers 
+        ORDER BY created_at DESC 
+        LIMIT ? OFFSET ?
+      `).all(limit, offset);
+
+      return sendJson(res, 200, {
+        success: true,
+        count: customers.length,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+        customers
+      });
     }
   }
 
@@ -1835,19 +2438,24 @@ const server = http.createServer(async (req, res) => {
   }
 
   const filePath = path.join(__dirname, safePath);
+  const resolvedPath = path.resolve(filePath);
+  const resolvedRoot = path.resolve(__dirname);
+  const resolvedRootWithSep = resolvedRoot.endsWith(path.sep) ? resolvedRoot : resolvedRoot + path.sep;
 
-  // Security: Prevent Directory Traversal
-  if (!filePath.startsWith(__dirname)) {
+  // Security: Strict Directory Traversal Defense with Directory Separator Guard
+  if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(resolvedRootWithSep)) {
     res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-    return res.end("403 Forbidden");
+    return res.end("403 Forbidden: Directory Traversal Blocked");
   }
 
   // Security: Block direct downloads of server scripts, secrets, databases, and source files
   const baseName = path.basename(filePath).toLowerCase();
+  const lowerSafePath = safePath.toLowerCase().replace(/\\/g, "/");
+
   const blockedExtensions = [
     ".db", ".db-wal", ".db-shm", ".sqlite", ".env", ".log", ".yml", ".yaml",
     ".lock", ".bak", ".sql", ".tar", ".gz", ".pem", ".key", ".crt", ".config", ".mjs",
-    ".rules"
+    ".rules", ".pdf", ".md"
   ];
   const blockedFiles = [
     "server.js",
@@ -1864,30 +2472,32 @@ const server = http.createServer(async (req, res) => {
     "tsconfig.json",
     "audit_report.json"
   ];
+  const blockedPrefixes = [
+    "/scratch", "/scripts", "/migrations", "/api",
+    "/lib", "/backups", "/tests", "/docs", "/node_modules", "/coverage"
+  ];
 
   if (
     baseName.startsWith(".") ||
     blockedFiles.includes(baseName) ||
     blockedExtensions.some(ext => baseName.endsWith(ext)) ||
-    safePath.startsWith("/scratch") ||
-    safePath.startsWith("/scripts") ||
-    safePath.startsWith("/migrations") ||
-    safePath.startsWith("/api")
+    blockedPrefixes.some(p => lowerSafePath === p || lowerSafePath.startsWith(p + "/"))
   ) {
     res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
     return res.end("403 Forbidden: Protected System Resource");
   }
 
-  const isAdminSurface = baseName === "admin.html" || safePath === "/admin" || safePath.startsWith("/admin");
+  const isAdminSurface = baseName === "admin.html" || lowerSafePath === "/admin" || lowerSafePath.startsWith("/admin/") || lowerSafePath.startsWith("/admin.");
 
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
-      // Fallback for clean URLs (e.g. /admin -> admin.html)
+      // Fallback for clean URLs (e.g. /privacy -> privacy.html, /terms -> terms.html, /admin -> admin.html)
       const htmlPath = filePath + ".html";
       if (fs.existsSync(htmlPath)) {
         try {
           const fallbackStats = fs.statSync(htmlPath);
-          applySecurityHeaders(res, true);
+          const isFallbackAdmin = baseName === "admin" || lowerSafePath === "/admin";
+          applySecurityHeaders(res, isFallbackAdmin);
           res.writeHead(200, {
             "Content-Type": "text/html; charset=utf-8",
             "Content-Length": fallbackStats.size,
@@ -1919,12 +2529,23 @@ const server = http.createServer(async (req, res) => {
       }
       return;
     }
-    console.error("[ServerError] Uncaught exception:", serverErr?.message);
+    if (serverErr?.statusCode === 400) {
+      if (!res.headersSent) {
+        sendError(res, 400, serverErr.message || "بيانات الطلب غير صالحة.");
+      }
+      return;
+    }
+    safeLogError("server.js", "http-server", serverErr);
     if (!res.headersSent) {
       sendError(res, 500, "حدث خطأ داخلي في معالجة الطلب.");
     }
   }
 });
+
+// Slowloris & Slow HTTP Denial-of-Service Protection (ASVS 14.2)
+server.requestTimeout = 15000;
+server.headersTimeout = 10000;
+server.keepAliveTimeout = 5000;
 
 server.listen(PORT, HOST, () => {
   console.log(`=================================================================`);

@@ -552,12 +552,23 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
       const isAdminQuery = all === "1" || all === "true" || includeInactive === "1" || includeInactive === "true";
       const shouldIncludeDeleted = include_deleted === "1" || include_deleted === "true" || includeDeleted === "1" || includeDeleted === "true";
 
+      // Detect credentials / session tokens (Web Cache Deception Defense)
+      const rawCookie = req.headers?.cookie || req.headers?.Cookie || "";
+      const rawAuth = req.headers?.authorization || req.headers?.Authorization || "";
+      const rawAdminToken = req.headers?.["x-admin-token"] || req.headers?.["X-Admin-Token"] || "";
+      const rawCustomerToken = req.headers?.["x-customer-token"] || req.headers?.["X-Customer-Token"] || "";
+      const hasAuth = Boolean(rawCookie || rawAuth || rawAdminToken || rawCustomerToken);
+
       // Privilege Verification for Admin Reads (Axis 1 & 7)
       let isAdmin = false;
       if (isAdminQuery || shouldIncludeDeleted) {
         const admin = verifyAdminRequest(req);
         if (!admin) {
-          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+          res.setHeader("CDN-Cache-Control", "no-store");
+          res.setHeader("Vercel-CDN-Cache-Control", "no-store");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
           return res.status(401).json({
             success: false,
             error: "غير مصرح بالوصول. استعراض المنتجات المحذوفة أو بيانات التكلفة يتطلب صلاحيات الإدارة العليا."
@@ -573,30 +584,43 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
         const cleanId = sanitizePathId(String(id));
         const found = products.find(p => p && p.id === cleanId);
         if (!found) {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+          res.setHeader("CDN-Cache-Control", "no-store");
+          res.setHeader("Vercel-CDN-Cache-Control", "no-store");
           return res.status(404).json({ success: false, error: "لم يتم العثور على المنتج المطلوب." });
         }
 
         // Soft-deleted product check
         const isSoftDeleted = Boolean(found.deleted_at || found.deleted === true);
         if (isSoftDeleted && !shouldIncludeDeleted) {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+          res.setHeader("CDN-Cache-Control", "no-store");
+          res.setHeader("Vercel-CDN-Cache-Control", "no-store");
           return res.status(404).json({ success: false, error: "عفواً، هذا المنتج غير متوفر حالياً (تمت أرشفته أو حذفه)." });
         }
 
         // Public visitor looking at inactive product
         if (!isAdmin && (found.active === false || found.hidden === true || found.status === "draft" || found.status === "archived" || isSoftDeleted)) {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+          res.setHeader("CDN-Cache-Control", "no-store");
+          res.setHeader("Vercel-CDN-Cache-Control", "no-store");
           return res.status(404).json({ success: false, error: "عفواً، هذا المنتج غير متوفر حالياً." });
         }
 
+        const isPublicCacheable = req.method === "GET" && !isAdmin && !isAdminQuery && !shouldIncludeDeleted && !hasAuth;
         const outProduct = isAdmin ? found : sanitizePublicProduct(found);
-        if (isAdmin) {
-          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0");
-          res.setHeader("CDN-Cache-Control", "no-store");
-          res.setHeader("Vercel-CDN-Cache-Control", "no-store");
-        } else {
+        if (isPublicCacheable) {
           res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
           res.setHeader("CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
           res.setHeader("Vercel-CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
-          res.setHeader("Vary", "Origin, Accept-Encoding");
+          res.setHeader("Vary", "Origin, Accept-Encoding, Cookie, Authorization");
+        } else {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+          res.setHeader("CDN-Cache-Control", "no-store");
+          res.setHeader("Vercel-CDN-Cache-Control", "no-store");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+          res.setHeader("Vary", "Cookie, Authorization");
         }
         return res.status(200).json({ success: true, product: outProduct, provider });
       }
@@ -653,11 +677,21 @@ async function productsHandler(req, res, { requestId, safeBody } = {}) {
       const startIndex = (page - 1) * limit;
       const paginatedProducts = publicProducts.slice(startIndex, startIndex + limit);
 
-      // Edge Caching: 5 minutes cache, 10 minutes stale-while-revalidate
-      res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
-      res.setHeader("CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
-      res.setHeader("Vercel-CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
-      res.setHeader("Vary", "Origin, Accept-Encoding");
+      const isPublicCacheable = req.method === "GET" && !isAdmin && !isAdminQuery && !shouldIncludeDeleted && !hasAuth;
+      if (isPublicCacheable) {
+        // Edge Caching: 5 minutes cache, 10 minutes stale-while-revalidate
+        res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+        res.setHeader("CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+        res.setHeader("Vercel-CDN-Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+        res.setHeader("Vary", "Origin, Accept-Encoding, Cookie, Authorization");
+      } else {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
+        res.setHeader("CDN-Cache-Control", "no-store");
+        res.setHeader("Vercel-CDN-Cache-Control", "no-store");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+        res.setHeader("Vary", "Cookie, Authorization");
+      }
 
       return res.status(200).json({
         success: true,

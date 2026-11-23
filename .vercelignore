@@ -1,23 +1,42 @@
-# Version Control & CI/CD
-.git
-.github
+# =============================================================================
+# KASED KARIM LUXURY LIGHTING - PRODUCTION VERCEL IGNORE CONFIGURATION
+# Optimized for Vercel Serverless (Node.js) & Frontend Static Deployment
+# IMPORTANT: package.json and package-lock.json are strictly included so Vercel
+# can install dependencies (@upstash/ratelimit, disposable-email-domains, etc.)
+# =============================================================================
+
+# 1. Version Control & CI/CD
+.git/
+.github/
 .gitignore
 
-# Environment & Local Configuration
+# 2. Environment Variables & Secret Configuration Files
 .env*
 !.env.example
 
-# Sensitive Database Configuration & Package Metadata
-database.rules.json
-package.json
-package-lock.json
+# 3. Cryptographic Keys, Certificates & Credentials
+*.pem
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+*service-account*.json
+*firebase-adminsdk*.json
+*google-credentials*.json
 
-# Documentation & Markdown Files
+# 4. Sensitive Database Rules & Policies
+database.rules.json
+firestore.rules
+storage.rules
+
+# 5. Documentation & Markdown
 README.md
 *.md
 docs/
 
-# Relational Database, Standalone Server & Deployment Stack
+# 6. Relational Database, Standalone Server & Docker Stack
+# (Vercel uses /api serverless functions, not server.js or Docker)
 kased_karim.db*
 *.db
 *.db-wal
@@ -25,25 +44,31 @@ kased_karim.db*
 *.sqlite
 server.js
 Dockerfile
+.dockerignore
 docker-compose.yml
 scripts/
 migrations/
 
-# Scratch, Testing & Temporary Directories
+# 7. Scratch, Testing & Temporary Directories
 scratch/
 tests/
 test-results/
 coverage/
 
-# Internal Security Audits & PDF/HTML Reports
+# 8. Internal Security Audits & Technical Reports
 *.pdf
 Kased_Karim_*_Report.html
 Pre_Purchase_*_Report.html
 
-# Database Backups & Log Files
+# 9. Database Backups & Log Files
 backups/
 *.backup.json
 *.bak
 *.old
 *.sql
 *.log
+
+# 10. Operating System Metadata
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,198 @@
+/* =============================================================================
+   Kased Karim Luxury Lighting — Legal Pages Stylesheet (Privacy & Terms)
+   Clean External CSS — Eliminates inline styles for strict CSP compliance
+   ============================================================================= */
+
+:root {
+  --bg-warm: #FAF7F2;
+  --text-charcoal: #222222;
+  --text-muted: #555555;
+  --brass-gold: #B38A49;
+  --brass-hover: #9A7235;
+  --border-soft: #EAE5DC;
+  --card-bg: #FFFFFF;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-warm);
+  color: var(--text-charcoal);
+  font-family: 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.8;
+  padding: 0;
+}
+
+header {
+  background: #FFFFFF;
+  border-bottom: 1px solid var(--border-soft);
+  padding: 1.25rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: var(--text-charcoal);
+}
+
+.brand-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.brand-icon {
+  color: var(--brass-gold);
+  font-size: 1.25rem;
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.2rem;
+  background: var(--bg-warm);
+  color: var(--brass-gold);
+  border: 1px solid var(--brass-gold);
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.88rem;
+  transition: all 0.2s ease;
+}
+
+.back-btn:hover {
+  background: var(--brass-gold);
+  color: #FFFFFF;
+}
+
+.container {
+  max-width: 900px;
+  margin: 2.5rem auto;
+  padding: 0 1.5rem;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 2.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  margin-bottom: 2rem;
+}
+
+h1 {
+  font-size: 1.9rem;
+  font-weight: 900;
+  color: var(--text-charcoal);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.title-icon {
+  color: var(--brass-gold);
+}
+
+.effective-date {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 1.75rem;
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 1rem;
+}
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--brass-gold);
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+p, ul {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+}
+
+ul {
+  padding-right: 1.5rem;
+  list-style-type: disc;
+}
+
+li {
+  margin-bottom: 0.5rem;
+}
+
+.badge-highlight {
+  background: rgba(179, 138, 73, 0.1);
+  border-right: 4px solid var(--brass-gold);
+  padding: 1rem 1.25rem;
+  border-radius: 0 6px 6px 0;
+  margin: 1.25rem 0;
+}
+
+.badge-highlight p {
+  margin: 0;
+  color: var(--text-charcoal);
+  font-weight: 700;
+}
+
+.legal-link {
+  color: var(--brass-gold);
+  font-weight: 700;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.legal-link:hover {
+  color: var(--brass-hover);
+  text-decoration: underline;
+}
+
+.legal-divider {
+  border: 0;
+  border-top: 1px solid var(--border-soft);
+  margin: 2rem 0;
+}
+
+.title-en {
+  font-size: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.subtitle-en {
+  font-size: 1.15rem;
+}
+
+footer {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border-soft);
+  background: #FFFFFF;
+}
+
+.footer-sub {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+}

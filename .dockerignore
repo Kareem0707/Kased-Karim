@@ -1,12 +1,73 @@
-node_modules
-npm-debug.log
-.git
-.gitignore
+# =============================================================================
+# KASED KARIM LUXURY LIGHTING - PRODUCTION DOCKER IGNORE CONFIGURATION
+# Prevents leaking sensitive files, database dumps, credentials, and local state
+# =============================================================================
+
+# 1. Environment & Local Secret Configuration Files
 .env
-.env.local
-backups
-scratch
-*.pdf
+.env.*
+!.env.example
+
+# 2. Cryptographic Keys, Certificates & Service Account Credentials
+*.pem
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+*service-account*.json
+*firebase-adminsdk*.json
+*google-credentials*.json
+
+# 3. Security Rules & Database Access Policies
+database.rules.json
+firestore.rules
+storage.rules
+
+# 4. Local SQLite Databases, WAL Files & State
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+kased_karim.db*
+
+# 5. Database Dumps, Backups & SQL Files (Explicitly preserve migrations only)
+backups/
+*.backup.json
+*.bak
+*.old
+*.sql
+!migrations/*.sql
+
+# 6. Dependency Artifacts & Package Manager Logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 7. Version Control & CI/CD
+.git/
+.github/
+.gitignore
+
+# 8. Scratch, Tests & Build Artefacts
+scratch/
+tests/
+test-results/
+coverage/
 *.log
+
+# 9. Security Audits & Technical Reports
+*.pdf
+Kased_Karim_*_Report.html
+Pre_Purchase_*_Report.html
+
+# 10. Vercel & Cloud Platform Metadata
+.vercel/
+.vercelignore
+
+# 11. Operating System Metadata
 .DS_Store
 Thumbs.db
+desktop.ini

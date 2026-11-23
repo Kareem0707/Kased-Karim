@@ -2,12 +2,16 @@
   "name": "kased-karim-lighting",
   "version": "1.0.0",
   "description": "Kased Karim Luxury Lighting Showroom - Sheikh Zayed",
-  "main": "index.html",
+  "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test:db": "node scripts/verify-softdelete-and-integrity.mjs"
+    "test:db": "node scripts/verify-softdelete-and-integrity.mjs",
+    "test:security": "node scripts/test-security.mjs"
   },
   "keywords": [
     "lighting",

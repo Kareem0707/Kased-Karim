@@ -396,15 +396,24 @@ const ALLOWED_FIREBASE_PARAMS = new Set([
 
 // Fail-Closed & SSRF-Hardened Firebase RTDB URL Constructor (ASVS 2.10.3, 12.6.1 & RFC 8725)
 export function getFirebaseUrl(path = "", queryParams = {}) {
-  // 1. Strict Fail-Closed Check on Database Configuration
+  // 1. Strict Fail-Closed Check on Database Configuration (Zero-Tolerance SQLite Fallback on Vercel)
+  const isVercel = process.env.VERCEL === "1" || Boolean(process.env.VERCEL);
   const rawEnvUrl = (process.env.FIREBASE_DB_URL || "").trim();
   const secret = (process.env.FIREBASE_DB_SECRET || process.env.FIREBASE_AUTH_TOKEN || "").trim();
 
   if (!rawEnvUrl) {
-    throw new Error("Cryptographic Fail-Closed: FIREBASE_DB_URL is not configured.");
+    throw new Error(
+      isVercel
+        ? "Fail-Closed Critical: FIREBASE_DB_URL is missing in Vercel environment. Silent fallback to local SQLite is strictly prohibited on serverless to prevent order data loss."
+        : "Cryptographic Fail-Closed: FIREBASE_DB_URL is not configured."
+    );
   }
   if (!secret) {
-    throw new Error("Cryptographic Fail-Closed: FIREBASE_DB_SECRET is missing or empty.");
+    throw new Error(
+      isVercel
+        ? "Fail-Closed Critical: FIREBASE_DB_SECRET is missing in Vercel environment. Silent fallback to local SQLite is strictly prohibited on serverless to prevent order data loss."
+        : "Cryptographic Fail-Closed: FIREBASE_DB_SECRET is missing or empty."
+    );
   }
 
   // 2. Strict Protocol & Official Firebase Domain Validation
@@ -863,6 +872,77 @@ function isPrivateOrReservedHostIp(hostStr) {
   return false;
 }
 
+// Strict Binary Magic Bytes & MIME Validator for Base64 Data URI Image Uploads
+// Mitigates: File Upload Abuse, MIME Spoofing, Stored XSS via SVG/HTML, Large Payload DoS (CWE-434, CWE-79, CWE-400)
+export function validateImageDataUri(dataUri, maxBytes = 5 * 1024 * 1024) {
+  if (typeof dataUri !== "string" || !dataUri.startsWith("data:")) {
+    return { valid: false, error: "صيغة بيانات الصورة غير صالحة." };
+  }
+
+  // Max length check: 5MB binary is ~6.7MB base64
+  const maxBase64Len = Math.ceil((maxBytes * 4) / 3) + 128;
+  if (dataUri.length > maxBase64Len) {
+    return { valid: false, error: `حجم الصورة المشفرة يتجاوز الحد الأقصى المسموح به (${Math.round(maxBytes / (1024 * 1024))} ميجابايت).` };
+  }
+
+  // Ban SVG data URIs to prevent Stored XSS via script execution or XML entities
+  if (dataUri.toLowerCase().includes("image/svg") || dataUri.toLowerCase().includes("svg+xml")) {
+    return { valid: false, error: "تحميل صور SVG عبر data URI محظور أمنياً لمنع هجمات حقن الشيفرات (Stored XSS)." };
+  }
+
+  // Strictly allow only safe raster image mime types: jpeg, png, webp, avif
+  const match = dataUri.match(/^data:(image\/(jpeg|jpg|png|webp|avif));base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) {
+    return { valid: false, error: "نوع وسائط الصورة غير مدعوم أو غير صالح (يسمح فقط بـ JPEG, PNG, WEBP, AVIF)." };
+  }
+
+  const declaredMime = match[1].toLowerCase();
+  const base64Data = match[3];
+
+  // Decode first 48 base64 characters (~36 bytes) to inspect Magic Bytes
+  let headerBuffer;
+  try {
+    const chunkToDecode = base64Data.slice(0, 48);
+    headerBuffer = Buffer.from(chunkToDecode, "base64");
+  } catch (e) {
+    return { valid: false, error: "فشل فك تشفير بيانات الصورة Base64." };
+  }
+
+  if (headerBuffer.length < 8) {
+    return { valid: false, error: "ملف الصورة تالف أو قصير جداً." };
+  }
+
+  // Magic Bytes Detection:
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  const isPng = headerBuffer[0] === 0x89 && headerBuffer[1] === 0x50 && headerBuffer[2] === 0x4e && headerBuffer[3] === 0x47;
+  // JPEG: FF D8 FF
+  const isJpeg = headerBuffer[0] === 0xff && headerBuffer[1] === 0xd8 && headerBuffer[2] === 0xff;
+  // WebP: RIFF (bytes 0-3) and WEBP (bytes 8-11)
+  const isWebp = headerBuffer.length >= 12 &&
+                 headerBuffer.toString("ascii", 0, 4) === "RIFF" &&
+                 headerBuffer.toString("ascii", 8, 12) === "WEBP";
+  // AVIF: ftypavif or ftypavis
+  const isAvif = headerBuffer.length >= 12 &&
+                 headerBuffer.toString("ascii", 4, 12).includes("avif");
+
+  let detectedMime = null;
+  if (isPng) detectedMime = "image/png";
+  else if (isJpeg) detectedMime = "image/jpeg";
+  else if (isWebp) detectedMime = "image/webp";
+  else if (isAvif) detectedMime = "image/avif";
+
+  if (!detectedMime) {
+    return { valid: false, error: "التوقيع الثنائي للملف (Magic Bytes) لا يتطابق مع أي صيغة صور معتمدة (فشل التحقق الأمني من المحتوى الحقيقي للملف)." };
+  }
+
+  const normalizedDeclared = declaredMime === "image/jpg" ? "image/jpeg" : declaredMime;
+  if (detectedMime !== normalizedDeclared) {
+    return { valid: false, error: `تزييف نوع الملف (MIME Spoofing): النوع المعلن هو '${declaredMime}' بينما المحتوى الحقيقي هو '${detectedMime}'.` };
+  }
+
+  return { valid: true, sanitizedUrl: dataUri };
+}
+
 export function validateSafeImageUrl(urlStr) {
   if (typeof urlStr !== "string") {
     return { valid: false, error: "رابط الصورة يجب أن يكون نصاً صالحاً." };
@@ -876,6 +956,11 @@ export function validateSafeImageUrl(urlStr) {
   const trimmed = urlStr.trim();
   if (!trimmed) {
     return { valid: false, error: "رابط الصورة لا يمكن أن يكون فارغاً." };
+  }
+
+  // Case 0: Data URI Upload with strict binary Magic Bytes inspection
+  if (trimmed.startsWith("data:")) {
+    return validateImageDataUri(trimmed);
   }
 
   if (trimmed.length > 2048) {
@@ -1062,6 +1147,86 @@ export function extractBearerToken(authHeader) {
   return match && match[1] ? match[1].trim() : null;
 }
 
+// -----------------------------------------------------------------------------
+// TOKEN REVOCATION & BLACKLIST VAULT (RFC 7009 / ASVS 3.3.1 & 3.5.3)
+// -----------------------------------------------------------------------------
+const inMemoryRevokedTokens = new Map();
+
+export function isTokenRevoked(jti) {
+  if (!jti || typeof jti !== "string") return false;
+  const safeJti = sanitizePathId(jti);
+  if (!safeJti) return false;
+  const expiresAt = inMemoryRevokedTokens.get(safeJti);
+  if (!expiresAt) return false;
+  if (Date.now() > expiresAt) {
+    inMemoryRevokedTokens.delete(safeJti);
+    return false;
+  }
+  return true;
+}
+
+export async function isTokenRevokedAsync(jti) {
+  if (!jti || typeof jti !== "string") return false;
+  const safeJti = sanitizePathId(jti);
+  if (!safeJti) return false;
+  if (isTokenRevoked(safeJti)) return true;
+  try {
+    const res = await firebaseFetch(`_server_vault/revoked_tokens/${safeJti}.json`, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.exp && Date.now() < Number(data.exp)) {
+        inMemoryRevokedTokens.set(safeJti, Number(data.exp));
+        return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
+export async function revokeToken(rawTokenOrPayload) {
+  if (!rawTokenOrPayload) return false;
+  let jti = null;
+  let exp = Date.now() + 24 * 60 * 60 * 1000;
+
+  if (typeof rawTokenOrPayload === "string") {
+    const clean = rawTokenOrPayload.trim();
+    const parts = clean.split(".");
+    if (parts.length === 3) {
+      try {
+        const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8"));
+        if (payload && payload.jti) {
+          jti = payload.jti;
+          if (payload.exp) {
+            exp = payload.exp > 1e11 ? payload.exp : payload.exp * 1000;
+          }
+        }
+      } catch {}
+    }
+  } else if (typeof rawTokenOrPayload === "object" && rawTokenOrPayload.jti) {
+    jti = rawTokenOrPayload.jti;
+    if (rawTokenOrPayload.exp) {
+      exp = rawTokenOrPayload.exp > 1e11 ? rawTokenOrPayload.exp : rawTokenOrPayload.exp * 1000;
+    }
+  }
+
+  if (jti) {
+    const safeJti = sanitizePathId(jti);
+    if (safeJti) {
+      inMemoryRevokedTokens.set(safeJti, exp);
+      try {
+        await firebaseFetch(`_server_vault/revoked_tokens/${safeJti}.json`, {
+          method: "PUT",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jti: safeJti, exp, revokedAt: Date.now() })
+        });
+      } catch (e) {}
+      return true;
+    }
+  }
+  return false;
+}
+
 // Low-level Strict JWT Signer
 export function signJwt({ payload = {}, key, role, aud, maxTtlSec }) {
   if (!key || !Buffer.isBuffer(key) || key.length !== 32) {
@@ -1233,6 +1398,11 @@ export function verifyJwt({ token, key, keys, expectedRole, expectedAud, maxTtlS
   if (expectedRole && payload.role !== expectedRole) return null;
   if (expectedAud && payload.aud !== expectedAud) return null;
 
+  // Active Token Revocation Check (RFC 7009 / ASVS 3.3.1)
+  if (payload.jti && isTokenRevoked(payload.jti)) {
+    return null;
+  }
+
   return payload;
 }
 
@@ -1250,7 +1420,16 @@ export function createAdminToken(payload = {}, expiresInMs = 2 * 60 * 60 * 1000)
 
 export function verifyAdminToken(token) {
   const keys = getAdminSigningKeys();
-  return verifyJwt({ token, keys, expectedRole: "admin", expectedAud: "admin", maxTtlSec: 7200 });
+  const payload = verifyJwt({ token, keys, expectedRole: "admin", expectedAud: "admin", maxTtlSec: 7200 });
+  if (!payload) return null;
+
+  // Strict 2FA Enforcement Gate (NIST SP 800-63B / OWASP ASVS 2.8)
+  // All privileged admin sessions MUST strictly have verified2FA: true
+  if (payload.verified2FA !== true) {
+    return null;
+  }
+
+  return payload;
 }
 
 // Backward-compatible legacy aliases
@@ -2007,10 +2186,7 @@ export async function verifyGoogleIdToken(idToken) {
     return null;
   }
 
-  // 3. Outbound Fetch with AbortController Timeout (6 Seconds) & URL Parameter Safety
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000);
-
+  // 3. Outbound Fetch with AbortSignal Timeout (5 Seconds) & URL Parameter Safety
   try {
     const tokenUrl = new URL("https://oauth2.googleapis.com/tokeninfo");
     tokenUrl.searchParams.set("id_token", cleanToken);
@@ -2018,10 +2194,9 @@ export async function verifyGoogleIdToken(idToken) {
     const res = await fetch(tokenUrl.toString(), {
       method: "GET",
       cache: "no-store",
-      signal: controller.signal,
+      signal: AbortSignal.timeout(5000),
       headers: { "Accept": "application/json" }
     });
-    clearTimeout(timeoutId);
 
     if (!res.ok || res.status !== 200) {
       return null;

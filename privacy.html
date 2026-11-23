@@ -12,136 +12,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg-warm: #FAF7F2;
-      --text-charcoal: #222222;
-      --text-muted: #555555;
-      --brass-gold: #B38A49;
-      --brass-hover: #9A7235;
-      --border-soft: #EAE5DC;
-      --card-bg: #FFFFFF;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: var(--bg-warm);
-      color: var(--text-charcoal);
-      font-family: 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif;
-      line-height: 1.8;
-      padding: 0;
-    }
-    header {
-      background: #FFFFFF;
-      border-bottom: 1px solid var(--border-soft);
-      padding: 1.25rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .brand-logo {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      text-decoration: none;
-      color: var(--text-charcoal);
-    }
-    .brand-name {
-      font-family: 'Playfair Display', serif;
-      font-size: 1.35rem;
-      font-weight: 700;
-      letter-spacing: 1px;
-    }
-    .back-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem 1.2rem;
-      background: var(--bg-warm);
-      color: var(--brass-gold);
-      border: 1px solid var(--brass-gold);
-      border-radius: 4px;
-      text-decoration: none;
-      font-weight: 700;
-      font-size: 0.88rem;
-      transition: all 0.2s ease;
-    }
-    .back-btn:hover {
-      background: var(--brass-gold);
-      color: #FFFFFF;
-    }
-    .container {
-      max-width: 900px;
-      margin: 2.5rem auto;
-      padding: 0 1.5rem;
-    }
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border-soft);
-      border-radius: 8px;
-      padding: 2.5rem;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.03);
-      margin-bottom: 2rem;
-    }
-    h1 {
-      font-size: 1.9rem;
-      font-weight: 900;
-      color: var(--text-charcoal);
-      margin-bottom: 0.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    .effective-date {
-      color: var(--text-muted);
-      font-size: 0.85rem;
-      margin-bottom: 1.75rem;
-      border-bottom: 1px solid var(--border-soft);
-      padding-bottom: 1rem;
-    }
-    h2 {
-      font-size: 1.25rem;
-      font-weight: 800;
-      color: var(--brass-gold);
-      margin-top: 1.75rem;
-      margin-bottom: 0.75rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    p, ul {
-      color: var(--text-muted);
-      font-size: 0.95rem;
-      margin-bottom: 1rem;
-    }
-    ul {
-      padding-right: 1.5rem;
-      list-style-type: disc;
-    }
-    li { margin-bottom: 0.5rem; }
-    .badge-highlight {
-      background: rgba(179, 138, 73, 0.1);
-      border-right: 4px solid var(--brass-gold);
-      padding: 1rem 1.25rem;
-      border-radius: 0 6px 6px 0;
-      margin: 1.25rem 0;
-    }
-    footer {
-      text-align: center;
-      padding: 2.5rem 1rem;
-      color: var(--text-muted);
-      font-size: 0.85rem;
-      border-top: 1px solid var(--border-soft);
-      background: #FFFFFF;
-    }
-  </style>
+  <link rel="stylesheet" href="css/legal.css">
 </head>
 <body>
   <header>
     <a href="/" class="brand-logo">
-      <i class="fas fa-gem" style="color: var(--brass-gold); font-size: 1.25rem;"></i>
+      <i class="fas fa-gem brand-icon"></i>
       <span class="brand-name">KASED KARIM</span>
     </a>
     <a href="/" class="back-btn">
@@ -152,13 +28,13 @@
 
   <main class="container">
     <div class="card">
-      <h1><i class="fas fa-shield-halved" style="color: var(--brass-gold);"></i> سياسة الخصوصية وحماية بيانات العملاء</h1>
+      <h1><i class="fas fa-shield-halved title-icon"></i> سياسة الخصوصية وحماية بيانات العملاء</h1>
       <div class="effective-date">
         <strong>تاريخ السريان:</strong> 15 نوفمبر 2026 | معرض قاصد كريم للإضاءة الفاخرة (الشيخ زايد - مصر)
       </div>
 
       <div class="badge-highlight">
-        <p style="margin: 0; color: var(--text-charcoal); font-weight: 700;">
+        <p>
           معرض قاصد كريم للإضاءة الفاخرة يلتزم التزاماً كاملاً بحماية خصوصية عملائنا وزوارنا الكرام. نحن نطبق أحدث بروتوكولات الأمان ولا نبيع أو نشارك بياناتك مع أي طرف ثالث لأغراض إعلانية مطلقاً.
         </p>
       </div>
@@ -183,7 +59,7 @@
       <h2>3. استخدام بيانات Google وتطبيق سياسات Google OAuth</h2>
       <p>
         إن استخدام موقع معرض قاصد كريم ونقله للمعلومات الواردة من واجهات برمجة تطبيقات Google يتوافق بشكل تام مع 
-        <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer" style="color: var(--brass-gold); font-weight: 700;">سياسة بيانات مستخدم خدمات Google API</a>، بما في ذلك متطلبات الاستخدام المحدود (Limited Use requirements).
+        <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer" class="legal-link">سياسة بيانات مستخدم خدمات Google API</a>، بما في ذلك متطلبات الاستخدام المحدود (Limited Use requirements).
       </p>
       <ul>
         <li>لا نطلب أبداً الوصول إلى جهات اتصالك، بريدك الخاص (Gmail messages)، أو ملفات Google Drive، أو أي بيانات حساسة غير مصرح بها.</li>
@@ -201,36 +77,36 @@
         يحق لك في أي وقت طلب مراجعة، تعديل، أو حذف كافة بياناتك وحسابك وسجل طلباتك من خوادمنا بشكل نهائي. للقيام بذلك، يمكنك التواصل معنا مباشرة عبر:
       </p>
       <ul>
-        <li><strong>البريد الإلكتروني للإدارة:</strong> <a href="mailto:kelshafie8743@gmail.com" style="color: var(--brass-gold); font-weight: 700;">kelshafie8743@gmail.com</a></li>
-        <li><strong>خدمة عملاء المعرض بالشيخ زايد (واتساب / هاتف):</strong> <a href="https://wa.me/201012345678" target="_blank" rel="noopener noreferrer" style="color: var(--brass-gold); font-weight: 700;">01012345678</a></li>
+        <li><strong>البريد الإلكتروني الرسمي لخدمة العملاء:</strong> <a href="mailto:info@kasedkarim.com" class="legal-link">info@kasedkarim.com</a> (أو <a href="mailto:kasedkarim.lighting@gmail.com" class="legal-link">kasedkarim.lighting@gmail.com</a>)</li>
+        <li><strong>خدمة عملاء المعرض بالشيخ زايد (واتساب / هاتف):</strong> <a href="https://wa.me/201006367690" target="_blank" rel="noopener noreferrer" class="legal-link">01006367690</a></li>
         <li><strong>العنوان الرسمي للمعرض:</strong> سنتر الطاهرة، المحور المركزي، الشيخ زايد، محافظة الجيزة، مصر.</li>
       </ul>
 
-      <hr style="border: 0; border-top: 1px solid var(--border-soft); margin: 2rem 0;">
+      <hr class="legal-divider">
 
-      <h1 style="font-size: 1.5rem; margin-top: 1.5rem;"><i class="fas fa-globe" style="color: var(--brass-gold);"></i> Privacy Policy (English Version)</h1>
+      <h1 class="title-en"><i class="fas fa-globe title-icon"></i> Privacy Policy (English Version)</h1>
       <p><strong>Effective Date:</strong> November 15, 2026 | Kased Karim Luxury Lighting Showroom (Sheikh Zayed, Egypt)</p>
       <p>
         At Kased Karim Luxury Lighting, we take your privacy and personal data seriously. This Privacy Policy details our data collection, usage, and protection practices in compliance with Google OAuth 2.0 Policies.
       </p>
-      <h2 style="font-size: 1.15rem;">1. Information We Collect</h2>
+      <h2 class="subtitle-en">1. Information We Collect</h2>
       <p>
         When you sign in using Google Sign-In, we receive only your public profile information: your name, email address, and profile picture URL. When you place an order, we collect delivery coordinates (villa/apartment address, mobile phone number, delivery district in Egypt) to fulfill and inspect your luxury lighting fixtures.
       </p>
-      <h2 style="font-size: 1.15rem;">2. Use of Google User Data</h2>
+      <h2 class="subtitle-en">2. Use of Google User Data</h2>
       <p>
         We strictly use your Google user data to authenticate your identity, display your past order history in the Customer Portal, and verify ownership when tracking live orders. We do not sell, rent, or transfer your Google user data to third-party ad networks.
       </p>
-      <h2 style="font-size: 1.15rem;">3. Data Deletion and Retention</h2>
+      <h2 class="subtitle-en">3. Data Deletion and Retention</h2>
       <p>
-        You can request full deletion of your user account and associated order records at any time by emailing us at <a href="mailto:kelshafie8743@gmail.com" style="color: var(--brass-gold);">kelshafie8743@gmail.com</a>.
+        You can request full deletion of your user account and associated order records at any time by emailing us at <a href="mailto:info@kasedkarim.com" class="legal-link">info@kasedkarim.com</a>.
       </p>
     </div>
   </main>
 
   <footer>
     <p>© 2026 معرض قاصد كريم للإضاءة الفاخرة — Kased Karim Luxury Lighting. جميع الحقوق محفوظة.</p>
-    <p style="margin-top: 0.35rem; font-size: 0.78rem;">سنتر الطاهرة، المحور المركزي، الشيخ زايد، مصر</p>
+    <p class="footer-sub">سنتر الطاهرة، المحور المركزي، الشيخ زايد، مصر</p>
   </footer>
 </body>
 </html>

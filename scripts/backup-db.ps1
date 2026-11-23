@@ -19,7 +19,10 @@ if ([string]::IsNullOrWhiteSpace($DbHost)) { $DbHost = "localhost" }
 if ([string]::IsNullOrWhiteSpace($DbPort)) { $DbPort = "5432" }
 if ([string]::IsNullOrWhiteSpace($DbName)) { $DbName = "kased_karim_db" }
 if ([string]::IsNullOrWhiteSpace($DbUser)) { $DbUser = "kased_admin" }
-if ([string]::IsNullOrWhiteSpace($DbPassword)) { $DbPassword = "kased_secure_2026" }
+if ([string]::IsNullOrWhiteSpace($DbPassword)) {
+    Write-Error "Fail-Closed: DB_PASSWORD environment variable or parameter is required."
+    exit 1
+}
 
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptRoot

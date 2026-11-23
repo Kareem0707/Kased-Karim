@@ -23,7 +23,7 @@ DB_HOST="${DB_HOST:-postgres}"
 DB_PORT="${DB_PORT:-5432}"
 DB_NAME="${DB_NAME:-kased_karim_db}"
 DB_USER="${DB_USER:-kased_admin}"
-DB_PASSWORD="${DB_PASSWORD:-kased_secure_2026}"
+DB_PASSWORD="${DB_PASSWORD:?خطأ: متغير البيئة DB_PASSWORD مطلوب لتنفيذ النسخ الاحتياطي بمبدأ Fail-Closed.}"
 
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_ROOT/backups}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"

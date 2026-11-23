@@ -4,7 +4,7 @@
   "trailingSlash": false,
   "redirects": [
     {
-      "source": "/:match(database\\.rules\\.json|firestore\\.rules|storage\\.rules|firebase\\.json|package(-lock)?\\.json|vercel\\.json|README\\.md|server\\.js|kased_karim\\.db|audit_report\\.json|tsconfig\\.json)",
+      "source": "/database.rules.json",
       "destination": "/",
       "permanent": false
     },
@@ -20,11 +20,6 @@
     },
     {
       "source": "/firebase.json",
-      "destination": "/",
-      "permanent": false
-    },
-    {
-      "source": "/database.rules.json",
       "destination": "/",
       "permanent": false
     },
@@ -82,6 +77,36 @@
       "source": "/migrations/:match*",
       "destination": "/",
       "permanent": false
+    },
+    {
+      "source": "/tests/:match*",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/coverage/:match*",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/lib/:match*",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/backups/:match*",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/docs/:match*",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/node_modules/:match*",
+      "destination": "/",
+      "permanent": false
     }
   ],
   "headers": [
@@ -110,7 +135,7 @@
         },
         {
           "key": "Cross-Origin-Resource-Policy",
-          "value": "cross-origin"
+          "value": "same-origin"
         },
         {
           "key": "Permissions-Policy",
@@ -164,55 +189,6 @@
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://lh3.googleusercontent.com; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; worker-src 'none'; upgrade-insecure-requests;"
-        }
-      ]
-    },
-    {
-      "source": "/api/products",
-      "headers": [
-        {
-          "key": "Strict-Transport-Security",
-          "value": "max-age=63072000; includeSubDomains; preload"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, s-maxage=300, stale-while-revalidate=600"
-        },
-        {
-          "key": "CDN-Cache-Control",
-          "value": "public, s-maxage=300, stale-while-revalidate=600"
-        },
-        {
-          "key": "Vercel-CDN-Cache-Control",
-          "value": "public, s-maxage=300, stale-while-revalidate=600"
-        },
-        {
-          "key": "Vary",
-          "value": "Accept-Encoding, Origin"
-        },
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow, noarchive"
-        },
-        {
-          "key": "Cross-Origin-Resource-Policy",
-          "value": "same-origin"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'none'; frame-ancestors 'none'"
         }
       ]
     },
@@ -272,7 +248,8 @@
   ],
   "functions": {
     "api/**/*.js": {
-      "maxDuration": 10
+      "maxDuration": 10,
+      "memory": 1024
     }
   },
   "crons": [

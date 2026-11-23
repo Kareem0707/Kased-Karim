@@ -34,7 +34,10 @@ import {
   normalizeIpForRateLimit,
   setSecurityHeaders,
   withApiHardening,
-  safeLogError
+  safeLogError,
+  revokeToken,
+  extractCookie,
+  extractBearerToken
 } from "./_auth.js";
 
 export const dynamic = "force-dynamic";
@@ -169,14 +172,20 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
     }
 
     // -------------------------------------------------------------------------
-    // 0. CUSTOMER LOGOUT (CLEAR SECURE HTTPONLY COOKIE)
+    // 0. CUSTOMER LOGOUT (REVOKE JWT SERVER-SIDE & CLEAR SECURE HTTPONLY COOKIE)
     // -------------------------------------------------------------------------
     if (effectiveAction === "logout") {
       if (req.method !== "POST") {
         return res.status(405).json({ success: false, error: "طريقة الطلب غير مسموح بها. استخدم POST لتسجيل الخروج." });
       }
+      const tokenToRevoke = extractCookie(req.headers["cookie"], "kk_customer_token") ||
+                            extractBearerToken(req.headers["authorization"] || req.headers["Authorization"]) ||
+                            req.headers["x-customer-token"];
+      if (tokenToRevoke) {
+        await revokeToken(tokenToRevoke);
+      }
       res.setHeader("Set-Cookie", "kk_customer_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure");
-      return res.status(200).json({ success: true, message: "تم تسجيل خروج العميل بنجاح" });
+      return res.status(200).json({ success: true, message: "تم تسجيل خروج العميل بنجاح وإلغاء صلاحية الجلسة فورياً" });
     }
 
     // -------------------------------------------------------------------------
@@ -477,6 +486,9 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
       const allowed = await enforceRateLimit(req, res, "auth");
       if (!allowed) return;
 
+      const normalizedIp = normalizeIpForRateLimit(clientIp);
+      const pairKey = `${normalizedIp}_${crypto.createHash("sha256").update(identifier).digest("hex").slice(0, 16)}`;
+
       const cleanPhone = identifier.replace(/[^0-9]/g, "");
       const allCustomers = await fetchCustomers();
 
@@ -598,24 +610,20 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         }
       }
 
-      // STRICT ISOLATION FILTER: Match strictly by verified token claims
-      const customerPhone = auth.phone ? String(auth.phone).replace(/[^0-9]/g, "") : "";
+      // STRICT ISOLATION FILTER: Match strictly by customerId and verified email (IDOR/BOLA Prevention)
+      const isEmailVerified = Boolean(auth.email_verified === true || auth.emailVerified === true);
       const customerEmail = (auth.email || "").trim().toLowerCase();
 
       const myOrders = allOrders.filter(o => {
         if (!o || !o.id) return false;
         if (customerId && o.customerId && o.customerId === customerId) return true;
 
-        if (customerEmail && customerEmail.length > 3) {
+        if (isEmailVerified && customerEmail && customerEmail.length > 3) {
           const ordEmail = (o.customer?.email || o.email || "").trim().toLowerCase();
           if (ordEmail && ordEmail === customerEmail) return true;
         }
 
-        if (customerPhone && customerPhone.length === 11) {
-          const ordPhone = (o.customer?.phone || "").replace(/[^0-9]/g, "");
-          if (ordPhone === customerPhone) return true;
-        }
-
+        // Never match by unverified phone number (Zero-Trust IDOR Prevention)
         return false;
       });
 
@@ -948,16 +956,20 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
     }
 
     // -------------------------------------------------------------------------
-    // 7. VERIFY CUSTOMER EMAIL (AUTHENTICATE CODE OR TOKEN)
+    // 7. VERIFY CUSTOMER EMAIL (AUTHENTICATE CODE OR TOKEN - BRUTE FORCE & CSRF PROTECTED)
     // -------------------------------------------------------------------------
     if (effectiveAction === "verify_email") {
-      if (req.method !== "POST" && req.method !== "GET") {
-        return res.status(405).json({ success: false, error: "Method not allowed. Use GET or POST for verification." });
+      if (req.method !== "POST") {
+        return res.status(405).json({ success: false, error: "Method not allowed. Use POST for verification to prevent CSRF." });
       }
 
-      const rawToken = body?.token || req.query?.token || "";
-      const rawCode = body?.code || req.query?.code || "";
-      const rawEmail = body?.email || req.query?.email || "";
+      // Sliding Window Rate Limit: Auth (5 attempts per 15 minutes)
+      const allowed = await enforceRateLimit(req, res, "auth");
+      if (!allowed) return;
+
+      const rawToken = body?.token || "";
+      const rawCode = body?.code || "";
+      const rawEmail = body?.email || "";
 
       const inputToken = typeof rawToken === "string" ? rawToken.trim() : "";
       const inputCode = typeof rawCode === "string" ? rawCode.trim() : "";
@@ -973,12 +985,136 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
       const allCustomers = await fetchCustomers();
       let targetCustomer = null;
 
-      if (inputToken) {
+      // CASE A: 6-Digit Code Verification with Email (Target for Brute Force)
+      if (inputCode && cleanEmail) {
+        const cust = allCustomers.find(c => c && c.email && c.email.toLowerCase() === cleanEmail);
+        if (!cust) {
+          return res.status(400).json({
+            success: false,
+            error: "رمز أو كود تفعيل البريد الإلكتروني غير صحيح أو انتهت صلاحيته."
+          });
+        }
+
+        if (cust.emailVerified || cust.email_verified) {
+          return res.status(200).json({
+            success: true,
+            message: "هذا الحساب مفعّل بالفعل مسبقاً."
+          });
+        }
+
+        const currentAttempts = Number(cust.verificationAttempts || 0);
+
+        // Fail-Closed: If already 5 or more failed attempts, incinerate token
+        if (currentAttempts >= 5 || !cust.verificationCodeHash) {
+          await patchCustomer(cust.id, {
+            verificationTokenHash: null,
+            verificationCodeHash: null,
+            verificationExpiresAt: null,
+            updatedAt: Date.now()
+          });
+          return res.status(429).json({
+            success: false,
+            error: "تم تجاوز الحد الأقصى للمحاولات الخاطئة (5 محاولات). تم إتلاف رمز التفعيل لأسباب أمنية، يرجى طلب إعادة إرسال كود جديد."
+          });
+        }
+
+        if (cust.verificationExpiresAt && Date.now() > Number(cust.verificationExpiresAt)) {
+          return res.status(400).json({
+            success: false,
+            error: "انتهت صلاحية رمز التفعيل (صلاحية الرمز 24 ساعة فقط). يرجى طلب رمز تفعيل جديد."
+          });
+        }
+
+        const codeHash = crypto.createHash("sha256").update(inputCode).digest("hex");
+        const expectedBuf = Buffer.from(cust.verificationCodeHash, "hex");
+        const actualBuf = Buffer.from(codeHash, "hex");
+        const isMatch = (expectedBuf.length === actualBuf.length) && crypto.timingSafeEqual(expectedBuf, actualBuf);
+
+        if (!isMatch) {
+          const newAttempts = currentAttempts + 1;
+          if (newAttempts >= 5) {
+            // Incinerate tokens after 5 failed attempts
+            await patchCustomer(cust.id, {
+              verificationAttempts: newAttempts,
+              verificationTokenHash: null,
+              verificationCodeHash: null,
+              verificationExpiresAt: null,
+              updatedAt: Date.now()
+            });
+            return res.status(429).json({
+              success: false,
+              error: "تم تجاوز الحد الأقصى للمحاولات الخاطئة (5 محاولات). تم إتلاف رمز التفعيل لأسباب أمنية، يرجى طلب إعادة إرسال كود جديد."
+            });
+          } else {
+            await patchCustomer(cust.id, {
+              verificationAttempts: newAttempts,
+              updatedAt: Date.now()
+            });
+            const remaining = 5 - newAttempts;
+            return res.status(400).json({
+              success: false,
+              error: `كود التفعيل غير صحيح. متبقي لديك ${remaining} محاولات قبل إتلاف الرمز نهائياً.`
+            });
+          }
+        }
+
+        targetCustomer = cust;
+      } 
+      // CASE B: 32-Byte Secret Token Verification
+      else if (inputToken) {
         const tokenHash = crypto.createHash("sha256").update(inputToken).digest("hex");
         targetCustomer = allCustomers.find(c => c && c.verificationTokenHash === tokenHash);
-      } else if (inputCode && cleanEmail) {
-        const codeHash = crypto.createHash("sha256").update(inputCode).digest("hex");
-        targetCustomer = allCustomers.find(c => c && c.email && c.email.toLowerCase() === cleanEmail && c.verificationCodeHash === codeHash);
+
+        if (!targetCustomer) {
+          if (cleanEmail) {
+            const cust = allCustomers.find(c => c && c.email && c.email.toLowerCase() === cleanEmail);
+            if (cust && cust.verificationTokenHash) {
+              const newAttempts = Number(cust.verificationAttempts || 0) + 1;
+              if (newAttempts >= 5) {
+                await patchCustomer(cust.id, {
+                  verificationAttempts: newAttempts,
+                  verificationTokenHash: null,
+                  verificationCodeHash: null,
+                  verificationExpiresAt: null,
+                  updatedAt: Date.now()
+                });
+                return res.status(429).json({
+                  success: false,
+                  error: "تم تجاوز الحد الأقصى للمحاولات الخاطئة (5 محاولات). تم إتلاف رمز التفعيل لأسباب أمنية، يرجى طلب إعادة إرسال رمز جديد."
+                });
+              } else {
+                await patchCustomer(cust.id, {
+                  verificationAttempts: newAttempts,
+                  updatedAt: Date.now()
+                });
+              }
+            }
+          }
+          return res.status(400).json({
+            success: false,
+            error: "رمز أو رابط تفعيل البريد الإلكتروني غير صحيح أو انتهت صلاحيته."
+          });
+        }
+
+        if (Number(targetCustomer.verificationAttempts || 0) >= 5) {
+          await patchCustomer(targetCustomer.id, {
+            verificationTokenHash: null,
+            verificationCodeHash: null,
+            verificationExpiresAt: null,
+            updatedAt: Date.now()
+          });
+          return res.status(429).json({
+            success: false,
+            error: "تم تجاوز الحد الأقصى للمحاولات الخاطئة (5 محاولات). تم إتلاف رمز التفعيل لأسباب أمنية، يرجى طلب إعادة إرسال رمز جديد."
+          });
+        }
+
+        if (targetCustomer.verificationExpiresAt && Date.now() > Number(targetCustomer.verificationExpiresAt)) {
+          return res.status(400).json({
+            success: false,
+            error: "انتهت صلاحية رمز التفعيل (صلاحية الرمز 24 ساعة فقط). يرجى طلب رمز تفعيل جديد."
+          });
+        }
       }
 
       if (!targetCustomer) {
@@ -988,14 +1124,7 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         });
       }
 
-      if (targetCustomer.verificationExpiresAt && Date.now() > Number(targetCustomer.verificationExpiresAt)) {
-        return res.status(400).json({
-          success: false,
-          error: "انتهت صلاحية رمز التفعيل (صلاحية الرمز 24 ساعة فقط). يرجى طلب رمز تفعيل جديد."
-        });
-      }
-
-      // Mark customer verified atomically
+      // Mark customer verified atomically & reset failed attempts counter to 0
       const patchData = {
         emailVerified: true,
         email_verified: true,
@@ -1003,6 +1132,7 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         verificationTokenHash: null,
         verificationCodeHash: null,
         verificationExpiresAt: null,
+        verificationAttempts: 0,
         updatedAt: Date.now()
       };
 
@@ -1080,6 +1210,7 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         verificationTokenHash: crypto.createHash("sha256").update(newVerToken).digest("hex"),
         verificationCodeHash: crypto.createHash("sha256").update(newVerCode).digest("hex"),
         verificationExpiresAt: Date.now() + (24 * 60 * 60 * 1000),
+        verificationAttempts: 0,
         updatedAt: Date.now()
       };
 

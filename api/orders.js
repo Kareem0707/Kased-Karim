@@ -304,14 +304,16 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
 
         const authCustId = sanitizePathId(customerAuth.sub);
         const authEmail = customerAuth.email ? String(customerAuth.email).trim().toLowerCase() : "";
+        const isEmailVerified = Boolean(customerAuth.email_verified === true || customerAuth.emailVerified === true);
 
         const { orders } = await fetchOrdersFromCloud(req);
         const customerOrders = orders.filter(o => {
           if (!o) return false;
           const orderCustId = sanitizePathId(o.customerId || (o.customer && o.customer.id));
           const orderEmail = (o.customer?.email || o.email || "").trim().toLowerCase();
-          return (authCustId && orderCustId && authCustId === orderCustId) ||
-                 (authEmail && orderEmail && authEmail === orderEmail);
+          const matchCustId = Boolean(authCustId && orderCustId && authCustId === orderCustId);
+          const matchEmail = Boolean(isEmailVerified && authEmail && orderEmail && authEmail === orderEmail);
+          return matchCustId || matchEmail;
         });
 
         customerOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
@@ -433,7 +435,17 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
 
       // Check Idempotency-Key (Axis 3: Duplicate Submission & Race Condition Defense)
       const rawIdempKey = req.headers["idempotency-key"] || orderPayload.idempotencyKey || "";
-      const cleanIdempKey = typeof rawIdempKey === "string" ? rawIdempKey.trim().slice(0, 100) : "";
+      let cleanIdempKey = typeof rawIdempKey === "string" ? rawIdempKey.trim().slice(0, 100) : "";
+      
+      // Fallback synthetic idempotency lock to defend against race condition replays if client omits the header
+      if (!cleanIdempKey) {
+        const candidatePhone = (orderPayload.customer?.phone || orderPayload.phone || "").replace(/[^0-9]/g, "");
+        const itemsSignature = Array.isArray(orderPayload.items)
+          ? orderPayload.items.map(i => `${i.id || i.productId}:${i.qty || i.quantity}`).sort().join(",")
+          : "";
+        cleanIdempKey = `synth_${crypto.createHash("sha256").update(`${clientIp}:${candidatePhone}:${itemsSignature}`).digest("hex")}`;
+      }
+
       let idempPath = null;
 
       if (cleanIdempKey) {

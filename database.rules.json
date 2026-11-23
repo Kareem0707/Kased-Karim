@@ -4,21 +4,60 @@
     ".write": false,
 
     "orders": {
-      ".read": "auth != null && auth.token.email_verified === true",
-      ".write": "auth != null && auth.token.email_verified === true",
+      ".read": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
+      ".write": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
       "$orderId": {
-        ".read": "auth != null && auth.token.email_verified === true",
-        ".write": "auth != null && auth.token.email_verified === true",
+        ".read": "auth != null && auth.token.email_verified === true && (auth.token.role === 'admin' || (data.exists() && data.child('customerId').val() === auth.uid))",
+        ".write": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
         ".validate": "newData.hasChildren(['id', 'customer', 'items', 'total', 'timestamp'])",
-        "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "id": { ".validate": "newData.isString() && newData.val() === $orderId && newData.val().length <= 64" },
+        "orderNumber": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 64)" },
+        "customerId": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 64)" },
+        "email": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)" },
+        "subtotal": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)" },
+        "discount": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)" },
+        "shipping": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)" },
+        "shippingFee": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)" },
         "total": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-        "timestamp": { ".validate": "newData.isNumber()" },
-        "paymentMethod": { ".validate": "newData.isString() && (newData.val() == 'cod' || newData.val() == 'card' || newData.val() == 'instapay')" },
+        "paymentMethod": { ".validate": "!newData.exists() || (newData.isString() && (newData.val() == 'cod' || newData.val() == 'card' || newData.val() == 'instapay'))" },
+        "paymentStatus": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 50)" },
+        "paymentStatusText": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)" },
+        "status": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 50)" },
+        "statusHistory": { ".validate": "!newData.exists() || newData.exists()" },
+        "isRead": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "deliveryEstimate": { ".validate": "!newData.exists() || newData.isString() || newData.isNumber()" },
+        "couponCode": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 50)" },
+        "timestamp": { ".validate": "newData.isNumber() && newData.val() <= now" },
+        "dateFormatted": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 50)" },
+        "timeFormatted": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 50)" },
+        "adminNotes": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 1000)" },
         "customer": {
           ".validate": "newData.hasChildren(['name', 'phone', 'address'])",
+          "id": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 64)" },
           "name": { ".validate": "newData.isString() && newData.val().length <= 100" },
-          "phone": { ".validate": "newData.isString() && newData.val().length <= 20" }
-        }
+          "phone": { ".validate": "newData.isString() && newData.val().length <= 20" },
+          "address": { ".validate": "newData.isString() && newData.val().length <= 300" },
+          "city": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)" },
+          "deliveryArea": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)" },
+          "deliveryAreaId": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)" },
+          "notes": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 500)" },
+          "email": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)" },
+          "$other": { ".validate": false }
+        },
+        "items": {
+          ".validate": "newData.hasChildren()",
+          "$itemKey": {
+            ".validate": "newData.hasChildren(['id', 'name', 'price', 'qty'])",
+            "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "name": { ".validate": "newData.isString() && newData.val().length <= 150" },
+            "price": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "qty": { ".validate": "newData.isNumber() && newData.val() >= 1" },
+            "image": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 1000)" },
+            "variant": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)" },
+            "$other": { ".validate": false }
+          }
+        },
+        "$other": { ".validate": false }
       }
     },
 
@@ -27,11 +66,49 @@
       ".write": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
       "$productId": {
         ".validate": "newData.hasChildren(['id', 'name', 'price'])",
-        "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "id": { ".validate": "newData.isString() && newData.val() === $productId && newData.val().length <= 64" },
         "name": { ".validate": "newData.isString() && newData.val().length <= 150" },
+        "enName": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 150)" },
+        "category": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 60)" },
+        "categoryName": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 60)" },
         "price": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-        "category": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 50)" },
-        "stock": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)" }
+        "salePrice": { ".validate": "!newData.exists() || newData.val() == null || (newData.isNumber() && newData.val() >= 0)" },
+        "originalPrice": { ".validate": "!newData.exists() || newData.val() == null || (newData.isNumber() && newData.val() >= 0)" },
+        "costPrice": { ".validate": "!newData.exists() || newData.val() == null || (newData.isNumber() && newData.val() >= 0)" },
+        "stock": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)" },
+        "inStock": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "image": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 1000)" },
+        "secondaryImage": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 1000)" },
+        "images": {
+          "$imgIdx": { ".validate": "newData.isString() && newData.val().length <= 1000" }
+        },
+        "description": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 5000)" },
+        "shortDescription": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 500)" },
+        "style": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 60)" },
+        "warranty": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 60)" },
+        "sku": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 60)" },
+        "supplier": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)" },
+        "adminNotes": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 1000)" },
+        "active": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "status": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 30)" },
+        "featured": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "isNew": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "isExclusive": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "isBestSeller": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "variants": {
+          "$varIdx": { ".validate": "newData.hasChildren(['id', 'name'])" }
+        },
+        "specs": {
+          "$specKey": { ".validate": "newData.isString() && newData.val().length <= 200" }
+        },
+        "tags": {
+          "$tagIdx": { ".validate": "newData.isString() && newData.val().length <= 50" }
+        },
+        "createdAt": { ".validate": "!newData.exists() || newData.isNumber()" },
+        "updatedAt": { ".validate": "!newData.exists() || newData.isNumber()" },
+        "deleted": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "deleted_at": { ".validate": "!newData.exists() || newData.isString() || newData.isNumber()" },
+        "$other": { ".validate": false }
       }
     },
 
@@ -41,22 +118,59 @@
         ".read": "auth != null && auth.token.email_verified === true && (auth.uid === $customerId || auth.token.role === 'admin')",
         ".write": "auth != null && auth.token.email_verified === true && (auth.uid === $customerId || auth.token.role === 'admin')",
         ".validate": "newData.hasChildren(['id', 'name', 'createdAt'])",
-        "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
-        "name": { ".validate": "newData.isString() && newData.val().length <= 100" },
+        "id": { ".validate": "newData.isString() && newData.val() === $customerId && newData.val().length <= 64" },
+        "name": { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 100" },
         "phone": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 20)" },
-        "email": { ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 100)" }
+        "email": { ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 100)" },
+        "role": { ".validate": "!newData.exists() || (newData.isString() && (newData.val() === 'customer' || (auth.token.role === 'admin' && newData.val() === 'admin')))" },
+        "authProvider": { ".validate": "!newData.exists() || (newData.isString() && (newData.val() === 'local' || newData.val() === 'google'))" },
+        "emailVerified": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "email_verified": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "verificationTokenHash": { ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 128)" },
+        "verificationCodeHash": { ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 128)" },
+        "verificationExpiresAt": { ".validate": "!newData.exists() || newData.val() == null || newData.isNumber()" },
+        "passwordHash": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 256)" },
+        "passwordSalt": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 128)" },
+        "passwordAlg": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 30)" },
+        "createdAt": { ".validate": "newData.isNumber() && newData.val() <= now && (!data.exists() || data.val() === newData.val())" },
+        "updatedAt": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() <= now)" },
+        "address": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 300)" },
+        "city": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)" },
+        "deliveryArea": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)" },
+        "deliveryAreaName": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)" },
+        "avatar": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 500)" },
+        "picture": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 500)" },
+        "googleId": { ".validate": "!newData.exists() || newData.isBoolean() || (newData.isString() && newData.val().length <= 100)" },
+        "googleSub": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)" },
+        "status": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 30)" },
+        "disabled": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "isBlocked": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "$other": { ".validate": false }
       }
     },
 
     "reviews": {
-      ".read": true,
-      ".write": "auth != null && auth.token.email_verified === true",
+      ".read": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
+      ".write": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
       "$reviewId": {
-        ".validate": "newData.hasChildren(['id', 'productId', 'author', 'rating', 'status', 'timestamp'])",
-        "id": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        ".read": "data.child('status').val() === 'approved' || (auth != null && auth.token.email_verified === true && auth.token.role === 'admin')",
+        ".write": "auth != null && auth.token.email_verified === true && (auth.token.role === 'admin' || (!data.exists() && newData.exists() && newData.child('status').val() === 'pending'))",
+        ".validate": "newData.hasChildren(['id', 'productId', 'author', 'rating', 'comment', 'status', 'timestamp'])",
+        "id": { ".validate": "newData.isString() && newData.val() === $reviewId && newData.val().length <= 64" },
         "productId": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "productName": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 100)" },
+        "author": { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 60" },
         "rating": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 5" },
-        "status": { ".validate": "newData.isString() && (newData.val() == 'pending' || newData.val() == 'approved' || newData.val() == 'rejected')" }
+        "comment": { ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 1000" },
+        "status": { ".validate": "newData.isString() && (newData.val() === 'pending' || newData.val() === 'approved' || newData.val() === 'rejected')" },
+        "approved": { ".validate": "!newData.exists() || newData.isBoolean()" },
+        "adminReply": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 500)" },
+        "timestamp": { ".validate": "newData.isNumber() && newData.val() <= now" },
+        "createdAt": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() <= now)" },
+        "customerId": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 64)" },
+        "moderatedAt": { ".validate": "!newData.exists() || (newData.isNumber() && newData.val() <= now)" },
+        "moderatedBy": { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 64)" },
+        "$other": { ".validate": false }
       }
     },
 
@@ -74,8 +188,13 @@
 
     "sync_meta": {
       ".read": true,
-      ".write": "auth != null && auth.token.email_verified === true",
+      ".write": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
       ".validate": "newData.hasChildren(['version', 'timestamp'])"
+    },
+
+    "backups": {
+      ".read": false,
+      ".write": false
     },
 
     "security_limits": {

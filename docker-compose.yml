@@ -2,6 +2,7 @@
 # KASED KARIM LUXURY LIGHTING - UNIFIED CONTAINER STACK
 # Compatible with Docker Compose & Podman Compose
 # Architecture: Frontend + Backend + Relational PostgreSQL + 4-Hour Automated Backup
+# Security Standard: Fail-Closed Strict Enforcement (No Default Secrets Allowed)
 # =============================================================================
 
 version: '3.8'
@@ -17,7 +18,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-kased_karim_db}
       POSTGRES_USER: ${DB_USER:-kased_admin}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-kased_secure_2026}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Fail-Closed Error: DB_PASSWORD environment variable is mandatory and cannot be empty}
       TZ: Africa/Cairo
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -47,9 +48,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgres://${DB_USER:-kased_admin}:${DB_PASSWORD:-kased_secure_2026}@postgres:5432/${DB_NAME:-kased_karim_db}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change_this_in_production_2026}
-      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      DATABASE_URL: postgres://${DB_USER:-kased_admin}:${DB_PASSWORD:?Fail-Closed Error: DB_PASSWORD is required for DATABASE_URL}@postgres:5432/${DB_NAME:-kased_karim_db}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Fail-Closed Error: ADMIN_PASSWORD environment variable is mandatory and cannot be empty}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:?Fail-Closed Error: ADMIN_JWT_SECRET environment variable is mandatory and cannot be empty}
       FIREBASE_DB_URL: ${FIREBASE_DB_URL:-}
       FIREBASE_DB_SECRET: ${FIREBASE_DB_SECRET:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
@@ -75,7 +76,7 @@ services:
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-kased_karim_db}
       DB_USER: ${DB_USER:-kased_admin}
-      DB_PASSWORD: ${DB_PASSWORD:-kased_secure_2026}
+      DB_PASSWORD: ${DB_PASSWORD:?Fail-Closed Error: DB_PASSWORD environment variable is mandatory and cannot be empty for backup-service}
       BACKUP_DIR: /backups
       BACKUP_RETENTION_DAYS: 14
       TZ: Africa/Cairo

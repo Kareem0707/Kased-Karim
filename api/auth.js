@@ -22,7 +22,10 @@ import {
   maskEmail,
   setSecurityHeaders,
   withApiHardening,
-  safeLogError
+  safeLogError,
+  revokeToken,
+  extractCookie,
+  extractBearerToken
 } from "./_auth.js";
 import { enforceRateLimit, getClientIp } from "../lib/rateLimit.js";
 
@@ -80,10 +83,16 @@ async function authHandler(req, res, { requestId, safeBody } = {}) {
       }
       body = body || {};
 
-      // Handle Admin Logout (Clear Secure HttpOnly Cookie)
+      // Handle Admin Logout (Revoke JWT Server-Side & Clear Secure HttpOnly Cookie)
       if (body.action === "logout" || req.query?.action === "logout") {
+        const tokenToRevoke = extractCookie(req.headers["cookie"], "kk_admin_token") ||
+                              extractBearerToken(req.headers["authorization"] || req.headers["Authorization"]) ||
+                              req.headers["x-admin-token"];
+        if (tokenToRevoke) {
+          await revokeToken(tokenToRevoke);
+        }
         res.setHeader("Set-Cookie", "kk_admin_token=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure");
-        return res.status(200).json({ success: true, message: "تم تسجيل الخروج بنجاح" });
+        return res.status(200).json({ success: true, message: "تم تسجيل الخروج بنجاح وإلغاء صلاحية الجلسة فورياً" });
       }
 
       // -----------------------------------------------------------------------
@@ -124,7 +133,6 @@ async function authHandler(req, res, { requestId, safeBody } = {}) {
         if (!verification || !verification.valid) {
           await recordFailedRateLimitAttempt(clientIp, "admin_login_ip", 5, 15 * 60 * 1000);
           await recordFailedAttemptDistributed("admin_login_global", "global_slot", 15, 15 * 60 * 1000);
-          recordFailedAttempt(clientIp);
           await new Promise(r => setTimeout(r, 600)); // Constant delay against timing side-channel
 
           if (verification?.error === "concurrency_detected") {

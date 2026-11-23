@@ -4,6 +4,7 @@
 
 import crypto from "crypto";
 import { enforceRateLimit, getClientIp } from "../lib/rateLimit.js";
+import { verifyTurnstile, extractTurnstileToken } from "../lib/turnstile.js";
 import {
   verifyAdminRequest,
   verifyCustomerRequest,
@@ -160,6 +161,17 @@ async function reviewsHandler(req, res, { requestId, safeBody } = {}) {
 
       if (!body || typeof body !== "object" || Array.isArray(body)) {
         return res.status(400).json({ success: false, error: "بيانات التقييم غير صالحة." });
+      }
+
+      // Mandatory Cloudflare Turnstile Bot Gate (Anti-Spam & Fraud Defense)
+      const clientIp = getClientIp(req);
+      const turnstileToken = extractTurnstileToken(req, body);
+      const turnstileRes = await verifyTurnstile(turnstileToken, clientIp);
+      if (!turnstileRes.success) {
+        return res.status(400).json({
+          success: false,
+          error: turnstileRes.error || "فشل التحقق الأمني من اختبار مكافحة الروبوتات (Turnstile)."
+        });
       }
 
       // Strict Product ID Sanitation & Validation (Axis 4)
