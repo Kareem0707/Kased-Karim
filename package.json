@@ -2,7 +2,7 @@
   "name": "kased-karim-lighting",
   "version": "1.0.0",
   "description": "Kased Karim Luxury Lighting Showroom - Sheikh Zayed",
-  "main": "server.js",
+  "main": "index.html",
   "type": "module",
   "engines": {
     "node": ">=22.5.0"
