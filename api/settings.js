@@ -108,7 +108,9 @@ async function settingsHandler(req, res, { requestId, safeBody } = {}) {
           })).filter(c => c.name)
         : undefined;
 
-      const publicSettings = settings ? sanitizePublicSettings(settings) : undefined;
+      const publicSettings = settings
+        ? sanitizePublicSettings(settings)
+        : sanitizePublicSettings({});
 
       return res.status(200).json({
         success: true,

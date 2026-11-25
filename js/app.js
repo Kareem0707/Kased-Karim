@@ -536,6 +536,9 @@ function renderFooterCategories() {
 function applyDynamicSettings() {
   const settings = window.KK_DB ? window.KK_DB.getSettings() : (typeof SHOWROOM_INFO !== "undefined" ? SHOWROOM_INFO : {});
   if (!settings) return;
+  if (typeof settings.turnstileSiteKey === "string" && settings.turnstileSiteKey.trim()) {
+    window.TURNSTILE_SITE_KEY = settings.turnstileSiteKey.trim();
+  }
 
   const isEn = isCurrentEn();
   const phone = settings.phone || "01006367690";
@@ -1953,8 +1956,14 @@ function renderTurnstileWidget(containerId, options = {}, attempt = 0) {
     return null;
   }
 
-  const siteKey = (window.STATE && window.STATE.settings && window.STATE.settings.turnstileSiteKey) || window.TURNSTILE_SITE_KEY;
-  if (!siteKey) return null;
+  const dbSettings = (window.KK_DB && typeof window.KK_DB.getSettings === "function") ? window.KK_DB.getSettings() : null;
+  const siteKey = (dbSettings && dbSettings.turnstileSiteKey) || (window.STATE && window.STATE.settings && window.STATE.settings.turnstileSiteKey) || window.TURNSTILE_SITE_KEY;
+  if (!siteKey) {
+    if (attempt < 15) {
+      setTimeout(() => renderTurnstileWidget(containerId, options, attempt + 1), 300);
+    }
+    return null;
+  }
 
   try {
     container.replaceChildren();

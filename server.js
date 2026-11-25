@@ -1723,7 +1723,8 @@ const server = http.createServer(async (req, res) => {
           phone: "01006367690",
           whatsapp: "201006367690",
           freeShippingThreshold: 5000,
-          shippingFee: 150
+          shippingFee: 150,
+          turnstileSiteKey: (process.env.TURNSTILE_SITE_KEY || "").trim()
         }
       });
     }

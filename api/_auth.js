@@ -2550,6 +2550,10 @@ export function sanitizePublicSettings(raw) {
     designerUrl: "https://karimodesign.vercel.app/"
   };
 
+  const turnstileSiteKey = typeof raw.turnstileSiteKey === "string" && raw.turnstileSiteKey.trim()
+    ? raw.turnstileSiteKey.trim().slice(0, 100)
+    : (process.env.TURNSTILE_SITE_KEY || "").trim().slice(0, 100);
+
   return Object.freeze({
     phone,
     whatsapp,
@@ -2562,6 +2566,7 @@ export function sanitizePublicSettings(raw) {
     storeNameEn,
     announcement,
     googleClientId,
+    turnstileSiteKey,
     mapUrl,
     mapEmbedUrl,
     freeShippingThreshold,
