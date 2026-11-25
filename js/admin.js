@@ -3382,6 +3382,18 @@ function setupAdminListeners() {
 
   const backupFile = document.getElementById("backupFileInput");
   if (backupFile) backupFile.addEventListener("change", (e) => handleBackupFileSelected(e.target));
+  const backupDropZone = document.getElementById("backupDropZone");
+  if (backupDropZone && backupFile) {
+    backupDropZone.addEventListener("dragover", (e) => { e.preventDefault(); backupDropZone.style.borderColor = "#C5A059"; });
+    backupDropZone.addEventListener("dragleave", () => { backupDropZone.style.borderColor = "rgba(255, 255, 255, 0.2)"; });
+    backupDropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      backupDropZone.style.borderColor = "rgba(255, 255, 255, 0.2)";
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleBackupFileSelected({ files: e.dataTransfer.files });
+      }
+    });
+  }
 
   const bulkCsvFile = document.getElementById("bulkCsvFileInput");
   if (bulkCsvFile) bulkCsvFile.addEventListener("change", (e) => handleCsvFileSelected(e.target));
