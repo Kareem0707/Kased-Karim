@@ -82,7 +82,7 @@ async function saveCustomer(customer) {
   const safeId = sanitizePathId(customer.id);
   if (!safeId) return false;
   try {
-    assertSafeRtdbPayload(customer);
+    assertSafeRtdbPayload(customer, { allowNull: true });
     const res = await firebaseFetch(buildSafeRtdbPath("customers", safeId), {
       method: "PUT",
       cache: "no-store",
@@ -103,7 +103,7 @@ async function patchCustomer(safeId, patchPayload) {
   const cleanId = sanitizePathId(safeId);
   if (!cleanId) return false;
   try {
-    assertSafeRtdbPayload(patchPayload);
+    assertSafeRtdbPayload(patchPayload, { allowNull: true });
     const res = await firebaseFetch(buildSafeRtdbPath("customers", cleanId), {
       method: "PATCH",
       cache: "no-store",
@@ -447,7 +447,9 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         role: "customer",
         phone: customer.phone || "",
         name: customer.name,
-        email: customer.email
+        email: customer.email,
+        email_verified: true,
+        emailVerified: true
       });
 
       res.setHeader("Set-Cookie", `kk_customer_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400; Secure`);
@@ -482,12 +484,29 @@ async function customerHandler(req, res, { requestId, safeBody } = {}) {
         return res.status(400).json({ success: false, error: "يرجى إدخال كلمة المرور" });
       }
 
-      // Sliding Window Rate Limiting (5 attempts per 15 minutes per IP)
+      // Sliding Window + Distributed Lockout Rate Limiting (5 attempts per 15 minutes)
       const allowed = await enforceRateLimit(req, res, "auth");
       if (!allowed) return;
 
       const normalizedIp = normalizeIpForRateLimit(clientIp);
       const pairKey = `${normalizedIp}_${crypto.createHash("sha256").update(identifier).digest("hex").slice(0, 16)}`;
+
+      const ipLock = await checkDistributedRateLimit(clientIp, "customer_login_ip", 10, 15 * 60 * 1000);
+      if (ipLock && ipLock.allowed === false) {
+        res.setHeader("Retry-After", String(ipLock.remainingSec || 60));
+        return res.status(429).json({
+          success: false,
+          error: `تم تجاوز الحد الأقصى لمحاولات الدخول. يرجى الانتظار ${ipLock.remainingSec || 60} ثانية.`
+        });
+      }
+      const pairLock = await checkRateLimitDistributed("customer_login_pair", pairKey, 5, 15 * 60 * 1000);
+      if (pairLock && pairLock.allowed === false) {
+        res.setHeader("Retry-After", String(pairLock.remainingSec || 60));
+        return res.status(429).json({
+          success: false,
+          error: `تم قفل محاولات الدخول لهذا الحساب مؤقتاً لحمايتك. يرجى الانتظار ${pairLock.remainingSec || 60} ثانية.`
+        });
+      }
 
       const cleanPhone = identifier.replace(/[^0-9]/g, "");
       const allCustomers = await fetchCustomers();

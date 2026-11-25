@@ -116,7 +116,7 @@
       ".read": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
       "$customerId": {
         ".read": "auth != null && auth.token.email_verified === true && (auth.uid === $customerId || auth.token.role === 'admin')",
-        ".write": "auth != null && auth.token.email_verified === true && (auth.uid === $customerId || auth.token.role === 'admin')",
+        ".write": "auth != null && auth.token.email_verified === true && auth.token.role === 'admin'",
         ".validate": "newData.hasChildren(['id', 'name', 'createdAt'])",
         "id": { ".validate": "newData.isString() && newData.val() === $customerId && newData.val().length <= 64" },
         "name": { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 100" },

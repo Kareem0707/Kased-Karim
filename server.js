@@ -435,16 +435,19 @@ function verifyHmacJwt(token, secretKeyOrKeys) {
     if (header.alg !== "HS256" || header.typ !== "JWT") return null;
 
     const payload = JSON.parse(Buffer.from(b64Payload, "base64url").toString("utf8"));
-    if (typeof payload.exp === "number" && payload.exp < Math.floor(Date.now() / 1000)) {
-      return null; // Expired
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (typeof payload.exp !== "number" || !Number.isFinite(payload.exp) || payload.exp < nowSec) {
+      return null; // Missing or expired exp claim
     }
 
-    // Active Server-Side Token Revocation Check (RFC 7009 / ASVS 3.3.1)
+    // Active Server-Side Token Revocation Check (RFC 7009 / ASVS 3.3.1 — Fail-Closed)
     if (payload.jti) {
       try {
-        const revoked = db.prepare("SELECT 1 FROM revoked_tokens WHERE jti = ? AND expires_at > ?").get(payload.jti, Math.floor(Date.now() / 1000));
+        const revoked = db.prepare("SELECT 1 FROM revoked_tokens WHERE jti = ? AND expires_at > ?").get(payload.jti, nowSec);
         if (revoked) return null;
-      } catch (e) {}
+      } catch (e) {
+        return null;
+      }
     }
 
     return payload;
@@ -457,7 +460,12 @@ function verifyHmacJwt(token, secretKeyOrKeys) {
 function extractCookie(cookieHeader, name) {
   if (!cookieHeader || typeof cookieHeader !== "string") return null;
   const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
-  return match ? decodeURIComponent(match[1].trim()) : null;
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1].trim());
+  } catch {
+    return null;
+  }
 }
 
 // Authorize Admin Request
@@ -925,6 +933,12 @@ const server = http.createServer(async (req, res) => {
 
       const isPublicCacheable = !includeDeleted && !isAdminView && !hasAuth;
 
+      const sanitizePublicProduct = (p) => {
+        if (!p || typeof p !== "object") return p;
+        const { cost_price, costPrice, supplier, admin_notes, adminNotes, ...safe } = p;
+        return safe;
+      };
+
       if (id) {
         const prod = db.prepare("SELECT * FROM products WHERE id = ?").get(id);
         if (!prod) {
@@ -933,7 +947,7 @@ const server = http.createServer(async (req, res) => {
           res.setHeader("Vercel-CDN-Cache-Control", "no-store");
           return sendError(res, 404, "المنتج غير موجود.");
         }
-        if (prod.deleted_at && !includeDeleted) {
+        if ((prod.deleted_at || prod.active === 0) && !includeDeleted && !isAdminView) {
           res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0");
           res.setHeader("CDN-Cache-Control", "no-store");
           res.setHeader("Vercel-CDN-Cache-Control", "no-store");
@@ -952,7 +966,7 @@ const server = http.createServer(async (req, res) => {
           res.setHeader("Expires", "0");
           res.setHeader("Vary", "Cookie, Authorization");
         }
-        return sendJson(res, 200, { success: true, product: prod });
+        return sendJson(res, 200, { success: true, product: isAdminView ? prod : sanitizePublicProduct(prod) });
       }
 
       let query = "SELECT * FROM products WHERE deleted_at IS NULL AND active = 1 ORDER BY created_at DESC";
@@ -962,7 +976,8 @@ const server = http.createServer(async (req, res) => {
           : "SELECT * FROM products WHERE deleted_at IS NULL ORDER BY created_at DESC";
       }
 
-      const products = db.prepare(query).all();
+      const rawProducts = db.prepare(query).all();
+      const products = isAdminView ? rawProducts : rawProducts.map(sanitizePublicProduct);
 
       if (isPublicCacheable) {
         res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
@@ -1417,9 +1432,10 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      // Mandatory Customer Name and Phone Validation (Zero-Trust Customer Profile)
-      const customerPhone = (body.customerPhone || body.phone || customerSession?.phone || "").replace(/[^0-9]/g, "").slice(0, 20);
-      const customerName = (body.customerName || body.name || customerSession?.name || "").trim().slice(0, 100);
+      // Mandatory Customer Name and Phone Validation (Zero-Trust Customer Profile — supports flat or nested body.customer)
+      const custObj = (body.customer && typeof body.customer === "object") ? body.customer : {};
+      const customerPhone = (body.customerPhone || body.phone || custObj.phone || customerSession?.phone || "").replace(/[^0-9]/g, "").slice(0, 20);
+      const customerName = (body.customerName || body.name || custObj.name || customerSession?.name || "").trim().slice(0, 100);
 
       if (!customerName || customerName.length < 2) {
         db.prepare("DELETE FROM idempotency_locks WHERE key = ?").run(cleanIdempKey);
@@ -1434,9 +1450,9 @@ const server = http.createServer(async (req, res) => {
 
       // Extract remaining customer attributes
       const customerId = customerSession ? customerSession.sub : null;
-      const customerEmail = (body.customerEmail || body.email || customerSession?.email || "").trim().toLowerCase().slice(0, 100);
-      const shippingAddress = (body.address || body.shippingAddress || "الشيخ زايد").trim().slice(0, 250);
-      const deliveryCity = (body.city || body.deliveryCity || "الشيخ زايد").trim().slice(0, 100);
+      const customerEmail = (body.customerEmail || body.email || custObj.email || customerSession?.email || "").trim().toLowerCase().slice(0, 100);
+      const shippingAddress = (body.address || body.shippingAddress || custObj.address || "الشيخ زايد").trim().slice(0, 250);
+      const deliveryCity = (body.city || body.deliveryCity || custObj.deliveryArea || custObj.city || "الشيخ زايد").trim().slice(0, 100);
 
       const orderId = `ORD-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
       const orderNumber = `KK-${Date.now().toString().slice(-6)}`;
@@ -2084,8 +2100,14 @@ const server = http.createServer(async (req, res) => {
         `).run(id, name, email, googleSub, avatar);
         cust = { id, name, phone: null, email, avatar, role: "customer", email_verified: 1 };
       } else if (!cust.google_sub) {
-        db.prepare("UPDATE customers SET google_sub = ?, avatar = COALESCE(avatar, ?), email_verified = 1, updated_at = datetime('now') WHERE id = ?")
-          .run(googleSub, avatar, cust.id);
+        // Pre-Account Takeover Defense: If the existing account was never email-verified, invalidate any attacker-set password
+        if (!cust.email_verified) {
+          db.prepare("UPDATE customers SET google_sub = ?, avatar = COALESCE(avatar, ?), email_verified = 1, password_hash = NULL, password_salt = NULL, updated_at = datetime('now') WHERE id = ?")
+            .run(googleSub, avatar, cust.id);
+        } else {
+          db.prepare("UPDATE customers SET google_sub = ?, avatar = COALESCE(avatar, ?), email_verified = 1, updated_at = datetime('now') WHERE id = ?")
+            .run(googleSub, avatar, cust.id);
+        }
       }
 
       const token = signHmacJwt({ sub: cust.id, phone: cust.phone, name: cust.name, email: cust.email, role: cust.role, email_verified: true }, CUSTOMER_JWT_SECRET, 86400);
@@ -2418,8 +2440,15 @@ const server = http.createServer(async (req, res) => {
   // ---------------------------------------------------------------------------
   // STATIC ASSETS & FRONTEND SERVING (Directory Traversal & Secrets Defense)
   // ---------------------------------------------------------------------------
-  // Null byte injection check
-  if (pathname.includes("\0") || pathname.includes("%00")) {
+  // Strict Allowlist Static File Server (blocks .git, .env, internal reports, Windows // UNC bypass, symlinks)
+  if (method !== "GET" && method !== "HEAD") {
+    applySecurityHeaders(res);
+    res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8", "Allow": "GET, HEAD" });
+    return res.end("405 Method Not Allowed");
+  }
+
+  if (pathname.includes("\0") || /%00/i.test(pathname) || pathname.includes("\\")) {
+    applySecurityHeaders(res);
     res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
     return res.end("400 Bad Request: Malformed Path");
   }
@@ -2428,89 +2457,92 @@ const server = http.createServer(async (req, res) => {
   try {
     decodedPath = decodeURIComponent(pathname);
   } catch {
+    applySecurityHeaders(res);
     res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
     return res.end("400 Bad Request: Malformed URI Encoding");
   }
 
-  let safePath = path.normalize(decodedPath).replace(/^(\.\.[\/\\])+/, "");
-  if (safePath === "/" || safePath === "\\") {
-    safePath = "/index.html";
-  }
+  const collapsedPath = decodedPath.replace(/\\/g, "/").replace(/\/{2,}/g, "/");
+  const segments = collapsedPath.split("/").filter(Boolean);
 
-  const filePath = path.join(__dirname, safePath);
-  const resolvedPath = path.resolve(filePath);
-  const resolvedRoot = path.resolve(__dirname);
-  const resolvedRootWithSep = resolvedRoot.endsWith(path.sep) ? resolvedRoot : resolvedRoot + path.sep;
-
-  // Security: Strict Directory Traversal Defense with Directory Separator Guard
-  if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(resolvedRootWithSep)) {
-    res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-    return res.end("403 Forbidden: Directory Traversal Blocked");
-  }
-
-  // Security: Block direct downloads of server scripts, secrets, databases, and source files
-  const baseName = path.basename(filePath).toLowerCase();
-  const lowerSafePath = safePath.toLowerCase().replace(/\\/g, "/");
-
-  const blockedExtensions = [
-    ".db", ".db-wal", ".db-shm", ".sqlite", ".env", ".log", ".yml", ".yaml",
-    ".lock", ".bak", ".sql", ".tar", ".gz", ".pem", ".key", ".crt", ".config", ".mjs",
-    ".rules", ".pdf", ".md"
-  ];
-  const blockedFiles = [
-    "server.js",
-    "package.json",
-    "package-lock.json",
-    "dockerfile",
-    "docker-compose.yml",
-    "database.rules.json",
-    "firestore.rules",
-    "storage.rules",
-    "firebase.json",
-    "vercel.json",
-    "readme.md",
-    "tsconfig.json",
-    "audit_report.json"
-  ];
-  const blockedPrefixes = [
-    "/scratch", "/scripts", "/migrations", "/api",
-    "/lib", "/backups", "/tests", "/docs", "/node_modules", "/coverage"
-  ];
-
-  if (
-    baseName.startsWith(".") ||
-    blockedFiles.includes(baseName) ||
-    blockedExtensions.some(ext => baseName.endsWith(ext)) ||
-    blockedPrefixes.some(p => lowerSafePath === p || lowerSafePath.startsWith(p + "/"))
-  ) {
+  // Strictly reject any dot-segment (.git, .env, .., .vscode, etc.)
+  if (segments.some(seg => seg.startsWith(".") || seg.includes(".."))) {
+    applySecurityHeaders(res);
     res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
     return res.end("403 Forbidden: Protected System Resource");
   }
 
-  const isAdminSurface = baseName === "admin.html" || lowerSafePath === "/admin" || lowerSafePath.startsWith("/admin/") || lowerSafePath.startsWith("/admin.");
+  const ALLOWED_CLEAN_ROUTES = new Map([
+    ["/", "index.html"],
+    ["/admin", "admin.html"],
+    ["/privacy", "privacy.html"],
+    ["/terms", "terms.html"]
+  ]);
+  const ALLOWED_ROOT_FILES = new Set([
+    "index.html",
+    "admin.html",
+    "privacy.html",
+    "terms.html",
+    "robots.txt",
+    "sitemap.xml",
+    "site.webmanifest",
+    "favicon.ico",
+    "apple-touch-icon.png",
+    "google5d5a78c6da719b99.html"
+  ]);
+  const ALLOWED_PUBLIC_DIRS = new Set(["css", "js", "assets"]);
+  const ALLOWED_STATIC_EXTS = new Set([
+    ".html", ".css", ".js", ".png", ".jpg", ".jpeg", ".webp", ".avif", ".svg", ".ico", ".txt", ".xml", ".webmanifest"
+  ]);
 
-  fs.stat(filePath, (err, stats) => {
+  let relativeTarget = null;
+  const lowerCollapsed = collapsedPath.toLowerCase();
+  if (ALLOWED_CLEAN_ROUTES.has(lowerCollapsed)) {
+    relativeTarget = ALLOWED_CLEAN_ROUTES.get(lowerCollapsed);
+  } else if (segments.length === 1 && ALLOWED_ROOT_FILES.has(segments[0].toLowerCase())) {
+    relativeTarget = segments[0];
+  } else if (segments.length >= 2 && ALLOWED_PUBLIC_DIRS.has(segments[0].toLowerCase())) {
+    const ext = path.extname(segments[segments.length - 1]).toLowerCase();
+    if (ALLOWED_STATIC_EXTS.has(ext)) {
+      relativeTarget = segments.join("/");
+    }
+  }
+
+  if (!relativeTarget) {
+    applySecurityHeaders(res);
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end("404 Not Found");
+  }
+
+  const resolvedRoot = fs.realpathSync(path.resolve(__dirname));
+  const resolvedRootWithSep = resolvedRoot.endsWith(path.sep) ? resolvedRoot : resolvedRoot + path.sep;
+  const candidatePath = path.resolve(resolvedRoot, relativeTarget);
+
+  let realFilePath = null;
+  try {
+    realFilePath = fs.realpathSync(candidatePath);
+  } catch {
+    applySecurityHeaders(res);
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end("404 Not Found");
+  }
+
+  if (!realFilePath.startsWith(resolvedRootWithSep)) {
+    applySecurityHeaders(res);
+    res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end("403 Forbidden: Directory Traversal Blocked");
+  }
+
+  const isAdminSurface = relativeTarget.toLowerCase() === "admin.html";
+
+  fs.stat(realFilePath, (err, stats) => {
     if (err || !stats.isFile()) {
-      // Fallback for clean URLs (e.g. /privacy -> privacy.html, /terms -> terms.html, /admin -> admin.html)
-      const htmlPath = filePath + ".html";
-      if (fs.existsSync(htmlPath)) {
-        try {
-          const fallbackStats = fs.statSync(htmlPath);
-          const isFallbackAdmin = baseName === "admin" || lowerSafePath === "/admin";
-          applySecurityHeaders(res, isFallbackAdmin);
-          res.writeHead(200, {
-            "Content-Type": "text/html; charset=utf-8",
-            "Content-Length": fallbackStats.size,
-            "Cache-Control": "no-cache"
-          });
-          return fs.createReadStream(htmlPath).pipe(res);
-        } catch (e) {}
-      }
+      applySecurityHeaders(res);
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       return res.end("404 Not Found");
     }
 
-    const ext = path.extname(filePath).toLowerCase();
+    const ext = path.extname(realFilePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || "application/octet-stream";
 
     applySecurityHeaders(res, isAdminSurface);
@@ -2520,7 +2552,18 @@ const server = http.createServer(async (req, res) => {
       "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=86400"
     });
 
-    fs.createReadStream(filePath).pipe(res);
+    if (method === "HEAD") {
+      return res.end();
+    }
+
+    const stream = fs.createReadStream(realFilePath);
+    stream.on("error", () => {
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+      }
+      res.end();
+    });
+    stream.pipe(res);
   });
   } catch (serverErr) {
     if (serverErr?.statusCode === 413 || serverErr?.message?.includes("413") || serverErr?.message === "Payload Too Large") {

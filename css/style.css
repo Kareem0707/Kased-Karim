@@ -4,25 +4,24 @@
    Theme: Bright Neoclassical Architectural Luxury
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Cinzel:wght@400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:wght@400;500;600;700&display=swap');
+/* Fonts loaded once via <link> in HTML head (duplicate render-blocking @import removed) */
 
-/* Color Tokens: Architectural Light Luxury */
-/* Color Tokens: Architectural Warm Ivory, Charcoal, Silver & Muted Brass (PRD Core Theme) */
+/* Color Tokens: Architectural Warm Ivory, Charcoal, Silver & High-Contrast Luxury Brass */
 :root {
   --bg-primary: #FAF7F2;       /* Warm ivory background */
   --bg-surface: #FFFFFF;       /* Pure white card surface */
   --bg-ivory-soft: #F4EFEA;    /* Secondary warm ivory */
   --bg-light-grey: #ECE8E1;    /* Soft utility bar warm ivory */
-  --text-main: #222222;        /* Deep charcoal text */
-  --text-muted: #5A5854;       /* Balanced charcoal muted */
+  --text-main: #1A1A1A;        /* Deep charcoal text */
+  --text-muted: #52504C;       /* WCAG AA >= 7:1 muted charcoal */
   --border-light: #E8E4DC;     /* Soft warm ivory / silver border */
   
-  /* Muted Brass Accents (No flashy bright yellow, calm and trustworthy) */
-  --accent: #B38A49;           /* Refined muted architectural brass */
-  --accent-hover: #9E793A;     /* Deeper brass on hover */
-  --accent-gold: #B38A49;
-  --accent-gradient: linear-gradient(135deg, #B38A49 0%, #9E793A 100%);
-  --accent-glow: rgba(179, 138, 73, 0.2);
+  /* High-Contrast Architectural Brass (WCAG AA compliant >= 4.7:1 on white/ivory) */
+  --accent: #8C6726;           /* Refined high-contrast architectural brass */
+  --accent-hover: #73531D;     /* Deeper brass on hover */
+  --accent-gold: #8C6726;
+  --accent-gradient: linear-gradient(135deg, #1E1E1E 0%, #141414 100%);
+  --accent-glow: rgba(140, 103, 38, 0.22);
   
   /* Silver Metallic Palette for Architectural Accents */
   --silver-bright: #FFFFFF;
@@ -1082,22 +1081,27 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
    ========================================================================== */
 .floating-circle-whatsapp {
   position: fixed;
-  bottom: 2rem;
-  left: 2rem;
+  bottom: 1.5rem;
+  left: 1.5rem;
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  background: #1E1E1E;
+  background: #14532D;
   color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-  z-index: 999;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 90;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
   text-decoration: none;
+}
+body.overlay-open .floating-circle-whatsapp {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: scale(0.85) !important;
 }
 
 .floating-circle-whatsapp:hover {
@@ -2898,40 +2902,45 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
     width: 100% !important;
   }
   .header-inner {
-    height: 52px !important;
-    gap: 0.35rem !important;
+    height: 60px !important;
+    gap: 0.4rem !important;
   }
   .brand-link {
     gap: 0 !important;
     min-width: 0 !important;
     flex-shrink: 1 !important;
     overflow: hidden !important;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
   }
   .brand-text-col {
     min-width: 0 !important;
     overflow: hidden !important;
   }
   .brand-title-en {
-    font-size: clamp(0.85rem, 3.8vw, 1.05rem) !important;
+    font-size: clamp(0.85rem, 3.6vw, 1.05rem) !important;
     letter-spacing: 0.8px !important;
     white-space: nowrap !important;
   }
   .brand-title-ar {
-    font-size: 0.58rem !important;
+    font-size: 0.72rem !important;
     display: block !important;
     white-space: nowrap !important;
   }
 
-  /* Compact Action Buttons for Phone - No Text, No Crowding */
+  /* Thumb-Friendly >= 44x44px Mobile Header Tap Targets (Fitts's Law / WCAG 2.5.5) */
   .header-actions {
-    gap: 0.25rem !important;
+    gap: 0.35rem !important;
     flex-shrink: 0 !important;
     align-items: center !important;
   }
   .action-circle-btn, .action-icon-btn, .btn-admin-header {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 0.82rem !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    font-size: 1rem !important;
   }
   .btn-customer-account span,
   .btn-lang-header {
@@ -2939,33 +2948,34 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
   }
   .mobile-menu-toggle {
     display: flex;
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 0.82rem !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    font-size: 1rem !important;
   }
   .badge-count, .admin-badge-count {
-    top: -3px;
-    left: -3px;
-    font-size: 0.6rem;
-    min-width: 15px;
-    height: 15px;
+    top: -2px;
+    left: -2px;
+    font-size: 0.68rem;
+    min-width: 18px;
+    height: 18px;
   }
 
   .nav-menu {
     display: none;
   }
   .site-sub-bar {
-    top: 52px;
+    top: 60px;
   }
   .top-bar-links {
     display: none;
   }
 
-  /* Hero Section Mobile (Showcase Palace & Chandelier) */
+  /* Hero Section Mobile (Compact Above-the-Fold + High Contrast + 16px Body) */
   .architectural-hero {
-    min-height: 100vh;
-    min-height: 100dvh;
-    padding: 0;
+    min-height: auto;
+    padding: 0 0 1rem;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -2975,23 +2985,23 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
     max-width: 100vw;
   }
   .hero-architectural-bg {
-    object-position: center 6%;
-    filter: brightness(0.98);
+    object-position: center 12%;
+    filter: brightness(0.95);
   }
   .hero-architectural-overlay {
     background: linear-gradient(
       180deg,
-      rgba(248, 248, 250, 0.05) 0%,
-      rgba(248, 248, 250, 0.15) 25%,
-      rgba(248, 248, 250, 0.68) 52%,
-      rgba(248, 248, 250, 0.95) 75%,
-      #F8F8FA 100%
+      rgba(248, 248, 250, 0.12) 0%,
+      rgba(248, 248, 250, 0.35) 26%,
+      rgba(248, 248, 250, 0.86) 50%,
+      rgba(248, 248, 250, 0.98) 72%,
+      #FAF7F2 100%
     );
   }
   .hero-editorial-container {
     width: 100%;
     max-width: 100vw;
-    padding: 5.5rem 1rem 0;
+    padding: 7.5rem 0.9rem 0;
     min-height: auto;
     display: block;
     position: relative;
@@ -3000,45 +3010,49 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
   .hero-editorial-block {
     width: 100%;
     max-width: 100%;
-    background: rgba(255, 255, 255, 0.88);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    padding: 1.35rem 1.15rem 1.15rem;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 1.25rem 1.1rem;
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(232, 228, 220, 0.95);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
     text-align: right;
   }
   .hero-editorial-brand {
-    font-size: 1.85rem;
-    letter-spacing: 0.16em;
-    line-height: 1.05;
-    margin-bottom: 0.35rem;
+    font-size: 0.85rem;
+    letter-spacing: 0.14em;
+    line-height: 1.2;
+    margin-bottom: 0.45rem;
+    display: inline-block;
   }
   .hero-editorial-heading {
-    font-size: 1.35rem;
-    line-height: 1.3;
+    font-size: 1.45rem;
+    line-height: 1.32;
     margin-bottom: 0.6rem;
   }
   .hero-editorial-desc {
-    font-size: 0.825rem;
-    line-height: 1.7;
-    margin-bottom: 1.1rem;
-    color: #4A4A4A;
+    font-size: 0.98rem;
+    line-height: 1.65;
+    margin-bottom: 1rem;
+    color: #334155;
   }
   .btn-architectural-cta {
     width: 100%;
     justify-content: center;
-    padding: 0.75rem 1rem;
-    font-size: 0.88rem;
+    padding: 0.85rem 1.1rem;
+    min-height: 50px;
+    font-size: 0.96rem;
   }
-  .hero-bento-strip {
+  .hero-bento-strip,
+  html[dir="ltr"] .hero-bento-strip {
     display: grid !important;
     grid-template-columns: repeat(3, 1fr) !important;
     position: relative !important;
     bottom: auto !important;
     left: auto !important;
-    margin: 0.75rem 1rem 1.25rem !important;
+    right: auto !important;
+    margin: 0.75rem 0.9rem 0.5rem !important;
     gap: 0.5rem !important;
     max-width: 100% !important;
     z-index: 10;
@@ -3096,8 +3110,8 @@ body.ceremony-illuminated .lighting-reveal-bento-3 {
    ========================================================================== */
 html[dir="ltr"],
 body.is-en {
-  font-family: 'Cinzel', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  letter-spacing: 0.2px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Cairo', Helvetica, Arial, sans-serif;
+  letter-spacing: 0;
 }
 
 html[dir="ltr"] .cart-drawer {
@@ -3248,4 +3262,329 @@ html[dir="ltr"] .luxury-sort-trigger .sort-trigger-icon {
 }
 #googleOfficialBtnSlot iframe {
   margin: 0 auto !important;
+}
+
+/* ==========================================================================
+   AUDIT REMEDIATION: ACCESSIBILITY, HERO CRO, TRUST BAR, FAQ & CARD POLISH
+   ========================================================================== */
+:focus-visible {
+  outline: 2.5px solid #8C6726;
+  outline-offset: 2px;
+}
+
+/* Desktop & Mobile Top-Bar Phone + Language Button */
+.top-bar-phone-link {
+  color: #1A1A1A;
+  text-decoration: none;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 36px;
+}
+.top-bar-phone-link:hover {
+  color: var(--accent);
+}
+.top-bar-lang-link {
+  background: #FFFFFF;
+  border: 1px solid #D6D0C4;
+  border-radius: 4px;
+  color: #1A1A1A;
+  font-family: var(--font-ar);
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+  min-width: 44px;
+  min-height: 36px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.top-bar-lang-link:hover {
+  border-color: #141414;
+  color: #141414;
+}
+
+/* High-Contrast Filled Hero Primary CTA & Secondary Anxiety Reducer */
+.hero-editorial-brand {
+  display: inline-block;
+  font-size: 0.9rem !important;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--accent) !important;
+  margin-bottom: 0.6rem !important;
+  text-transform: uppercase;
+}
+.hero-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.15rem;
+}
+.btn-architectural-cta {
+  background: #141414 !important;
+  color: #FFFFFF !important;
+  border: 1.5px solid #141414 !important;
+  min-height: 52px;
+  font-weight: 800;
+  box-shadow: 0 8px 22px rgba(20, 20, 20, 0.18);
+}
+.btn-architectural-cta:hover {
+  background: #2C2C2C !important;
+  border-color: #2C2C2C !important;
+  color: #FFFFFF !important;
+  transform: translateY(-2px);
+}
+.btn-hero-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.35rem;
+  min-height: 52px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #14532D;
+  border: 1.5px solid #15803D;
+  font-family: var(--font-ar);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+.btn-hero-secondary:hover {
+  background: #F0FDF4;
+  transform: translateY(-2px);
+}
+.hero-trust-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.15rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(26, 26, 26, 0.1);
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #1E293B;
+}
+.hero-trust-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.hero-trust-item i {
+  color: var(--accent);
+}
+
+/* Labeled Clickable Bento Cards */
+.bento-card {
+  position: relative;
+  cursor: pointer;
+}
+.bento-card-label {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding: 0.45rem 0.65rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.88) 100%);
+  color: #FFFFFF;
+  font-family: var(--font-ar);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Product Card Labeled Add-to-Cart & Savings Anchor */
+.btn-card-quote-labeled {
+  width: auto !important;
+  min-width: 112px;
+  height: auto !important;
+  min-height: 44px;
+  padding: 0.55rem 0.95rem !important;
+  background: #141414 !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  border-radius: 4px !important;
+  font-family: var(--font-ar);
+  font-size: 0.86rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+.btn-card-quote-labeled:hover {
+  background: #2C2C2C !important;
+}
+.product-old-price-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.product-price-old {
+  color: #64748B !important;
+}
+.product-save-pill {
+  background: #ECFDF5;
+  color: #047857;
+  border: 1px solid rgba(4, 120, 87, 0.25);
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+}
+
+/* Why Kased Karim Risk-Reversal Band + GEO FAQ Accordion */
+.why-kased-section {
+  padding: 3.25rem 0;
+  background: #FFFFFF;
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+}
+.why-kased-header {
+  text-align: center;
+  max-width: 720px;
+  margin: 0 auto 2rem;
+}
+.why-kased-header h2 {
+  font-size: clamp(1.35rem, 2.5vw, 1.85rem);
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 0.5rem;
+}
+.why-kased-header p {
+  font-size: 0.98rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+.why-kased-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+.why-kased-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+.why-kased-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 6px;
+  background: #141414;
+  color: #FFFFFF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  margin-bottom: 0.9rem;
+}
+.why-kased-card h3 {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 0.45rem;
+}
+.why-kased-card p {
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.faq-section {
+  padding: 3.5rem 0;
+  background: var(--bg-primary);
+}
+.faq-header {
+  text-align: center;
+  max-width: 760px;
+  margin: 0 auto 2rem;
+}
+.faq-header h2 {
+  font-size: clamp(1.35rem, 2.4vw, 1.8rem);
+  font-weight: 800;
+  color: var(--text-main);
+  margin-bottom: 0.45rem;
+}
+.faq-header p {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+.faq-list {
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.faq-item {
+  background: #FFFFFF;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.faq-item summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 1.05rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 52px;
+}
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+.faq-item summary::after {
+  content: "+";
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.faq-item[open] summary::after {
+  content: "−";
+}
+.faq-answer {
+  padding: 0 1.25rem 1.15rem;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: #334155;
+  border-top: 1px dashed var(--border-light);
+  padding-top: 0.85rem;
+}
+
+/* High-Contrast Footer Legal Links */
+.footer-bottom,
+.footer-bottom a {
+  color: #CBD5E1 !important;
+}
+
+@media (max-width: 768px) {
+  .why-kased-grid {
+    grid-template-columns: 1fr;
+  }
+  .btn-hero-secondary {
+    width: 100%;
+  }
+  .cart-print-btn {
+    display: none !important;
+  }
+  .top-bar-lang-link {
+    min-height: 36px !important;
+    padding: 0.2rem 0.6rem !important;
+  }
 }

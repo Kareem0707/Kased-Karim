@@ -137,7 +137,7 @@
 
     if (feeEl) {
       feeEl.textContent = fee === 0 ? "0 ج.م (مجاناً)" : `${formatPrice(fee)} ج.م`;
-      feeEl.style.color = fee === 0 ? "#10B981" : "var(--text-main)";
+      feeEl.style.color = fee === 0 ? "#047857" : "var(--text-main)";
     }
 
     const grandTotal = subtotal + fee;
@@ -153,7 +153,14 @@
       return;
     }
 
-    // Customer account check before checkout (Guest checkout allowed)
+    // ALWAYS close Cart Drawer first so no modal can ever open occluded behind z-index 220
+    if (typeof toggleCartDrawer === "function") {
+      toggleCartDrawer(false);
+    } else if (typeof closeCartDrawer === "function") {
+      closeCartDrawer();
+    }
+
+    // Guest-First Checkout: Allow immediate booking without forcing an auth wall
     const isCustomerLoggedIn = (window.KK_DB && typeof window.KK_DB.getCustomer === "function" && window.KK_DB.getCustomer()) ||
       (() => {
         try {
@@ -161,19 +168,10 @@
           return u ? JSON.parse(u) : null;
         } catch(e) { return null; }
       })();
-    const isGuestApproved = sessionStorage.getItem("kk_guest_checkout") === "true";
 
-    if (!isCustomerLoggedIn && !isGuestApproved && typeof window.openCustomerAuthModal === "function") {
-      window.openCustomerAuthModal(() => {
-        window.openCheckoutModal();
-      });
-      return;
-    }
-
-    if (typeof toggleCartDrawer === "function") {
-      toggleCartDrawer(false);
-    } else if (typeof closeCartDrawer === "function") {
-      closeCartDrawer();
+    const optLoginBar = document.getElementById("checkoutOptionalLoginBar");
+    if (optLoginBar) {
+      optLoginBar.style.display = isCustomerLoggedIn ? "none" : "flex";
     }
 
     const modal = document.getElementById("checkoutModal");
@@ -198,7 +196,7 @@
         const img = document.createElement("img");
         img.alt = item.name || "";
         img.style.cssText = "width: 32px; height: 32px; border-radius: 4px; object-fit: cover;";
-        const fallback = "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=150&q=80";
+        const fallback = "assets/images/hero-white-palace.jpg";
         img.addEventListener("error", function () {
           if (this.src !== fallback) this.src = fallback;
         }, { once: true });
@@ -277,7 +275,12 @@
 
     if (modal) {
       modal.classList.add("active");
-      document.body.style.overflow = "hidden";
+      if (typeof window.syncOverlayOpenBodyClass === "function") {
+        window.syncOverlayOpenBodyClass();
+      } else {
+        document.body.classList.add("overlay-open");
+        document.body.style.overflow = "hidden";
+      }
 
       // Render Cloudflare Turnstile Challenge for Checkout
       if (typeof window.renderTurnstileWidget === "function") {
@@ -783,7 +786,12 @@
 
     if (modal) {
       modal.classList.add("active");
-      document.body.style.overflow = "hidden";
+      if (typeof window.syncOverlayOpenBodyClass === "function") {
+        window.syncOverlayOpenBodyClass();
+      } else {
+        document.body.classList.add("overlay-open");
+        document.body.style.overflow = "hidden";
+      }
     }
   };
 
@@ -840,7 +848,9 @@
 
   window.searchAndTrackOrder = function () {
     const orderInput = document.getElementById("trackSearchInput");
+    const phoneInput = document.getElementById("trackPhoneInput");
     const rawVal = orderInput ? orderInput.value.trim() : "";
+    const rawPhone = phoneInput ? phoneInput.value.replace(/[^0-9]/g, "").trim() : "";
 
     if (!rawVal) {
       showToast("⚠️ يرجى إدخال رقم الطلب (مثال: ORD-XXXX-XXXX)");
@@ -849,21 +859,24 @@
     }
 
     let orderId = rawVal;
-    let phone = localStorage.getItem("kk_customer_phone") || "";
+    let phone = rawPhone || localStorage.getItem("kk_customer_phone") || "";
+    if (rawPhone) {
+      try { localStorage.setItem("kk_customer_phone", rawPhone); } catch (e) {}
+    }
 
-    // If customer entered phone number instead of order ID, prompt for order ID
+    // If customer entered phone number in the order ID field, auto-resolve from recent orders or ask nicely via UI
     if (/^01[0-9]{9}$/.test(rawVal.replace(/[^0-9]/g, ""))) {
       phone = rawVal.replace(/[^0-9]/g, "");
-      localStorage.setItem("kk_customer_phone", phone);
+      try { localStorage.setItem("kk_customer_phone", phone); } catch (e) {}
+      if (phoneInput && !phoneInput.value) phoneInput.value = phone;
       const recent = JSON.parse(localStorage.getItem("kk_customer_recent_orders") || "[]");
       if (recent.length > 0) {
         orderId = recent[0];
         if (orderInput) orderInput.value = orderId;
       } else {
-        const inputId = prompt("يرجى إدخال كود الطلب الخاص بك (مثال: ORD-XXXX):");
-        if (!inputId) return;
-        orderId = inputId.trim();
-        if (orderInput) orderInput.value = orderId;
+        showToast("يرجى إدخال كود الطلب في الخانة الأولى (مثال: ORD-XXXX)");
+        orderInput?.focus();
+        return;
       }
     }
 
@@ -898,15 +911,14 @@
       const headers = { "Content-Type": "application/json" };
       if (custToken) headers["Authorization"] = `Bearer ${custToken}`;
 
-      let sendPhone = phone || (window.KK_DB && window.KK_DB.getCustomer() ? window.KK_DB.getCustomer().phone : "") || localStorage.getItem("kk_customer_phone") || "";
+      const phoneInputEl = document.getElementById("trackPhoneInput");
+      let sendPhone = phone || (phoneInputEl ? phoneInputEl.value.replace(/[^0-9]/g, "").trim() : "") || (window.KK_DB && window.KK_DB.getCustomer() ? window.KK_DB.getCustomer().phone : "") || localStorage.getItem("kk_customer_phone") || "";
 
-      // For unauthenticated guest requests: prompt for phone number upfront to authenticate tracking
+      // For unauthenticated guest requests: require phone number via visible form field (never window.prompt)
       if (!sendPhone && !custToken) {
-        const enteredPhone = prompt("لأمان وخصوصية بياناتك، يرجى إدخال رقم الهاتف المسجل لتأكيد تتبع الطلب:");
-        if (enteredPhone) {
-          sendPhone = enteredPhone.trim();
-          try { localStorage.setItem("kk_customer_phone", sendPhone); } catch (e) {}
-        }
+        showToast("⚠️ يرجى إدخال رقم الهاتف المسجل مع الطلب للتحقق من الهوية");
+        if (phoneInputEl) phoneInputEl.focus();
+        return;
       }
 
       const res = await fetch("/api/track", {
@@ -1301,7 +1313,7 @@
       checkoutForm.addEventListener("submit", handleCheckoutSubmit);
     }
 
-    const areaSelect = document.getElementById("custDeliveryArea");
+    const areaSelect = document.getElementById("custDeliveryAreaSelect") || document.getElementById("custDeliveryArea");
     if (areaSelect) {
       areaSelect.addEventListener("change", function () {
         handleDeliveryAreaChange(this.value);

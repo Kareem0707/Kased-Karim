@@ -2277,7 +2277,7 @@ export async function verifyGoogleIdToken(idToken) {
       picture: cleanPicture
     };
   } catch (e) {
-    clearTimeout(timeoutId);
+    if (typeof timeoutId !== "undefined") clearTimeout(timeoutId);
     return null;
   }
 }

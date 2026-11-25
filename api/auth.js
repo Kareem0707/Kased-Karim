@@ -96,10 +96,28 @@ async function authHandler(req, res, { requestId, safeBody } = {}) {
       }
 
       // -----------------------------------------------------------------------
-      // UPSTASH SLIDING WINDOW RATE LIMITING (5 attempts per 15 minutes per IP)
+      // UPSTASH SLIDING WINDOW + DISTRIBUTED LOCKOUT RATE LIMITING (5 / 15m)
       // -----------------------------------------------------------------------
       const allowed = await enforceRateLimit(req, res, "auth");
       if (!allowed) return;
+
+      const globalLock = await checkRateLimitDistributed("admin_login_global", "global_slot", 15, 15 * 60 * 1000);
+      if (globalLock && globalLock.allowed === false) {
+        res.setHeader("Retry-After", String(globalLock.remainingSec || 60));
+        return res.status(429).json({
+          success: false,
+          error: `تم تفعيل القفل الأمني المؤقت لبوابة الإدارة. يرجى الانتظار ${globalLock.remainingSec || 60} ثانية.`
+        });
+      }
+
+      const ipLock = await checkDistributedRateLimit(clientIp, "admin_login_ip", 5, 15 * 60 * 1000);
+      if (ipLock && ipLock.allowed === false) {
+        res.setHeader("Retry-After", String(ipLock.remainingSec || 60));
+        return res.status(429).json({
+          success: false,
+          error: `تم تجاوز الحد الأقصى لمحاولات الدخول من هذا العنوان. يرجى الانتظار ${ipLock.remainingSec || 60} ثانية.`
+        });
+      }
 
       // =======================================================================
       // STEP 2: VERIFY 6-DIGIT EMAIL OTP (MANDATORY MFA WITH CHALLENGE BINDING)

@@ -74,7 +74,7 @@ const INITIAL_PRODUCTS = [
     isNew: true,
     rating: 5.0,
     reviewsCount: 24,
-    image: "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=1200&q=80",
+    image: "assets/images/hero-white-palace.jpg",
     secondaryImage: "https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=1200&q=80",
     description: "دلاية كريستالية استثنائية صُممت خصيصاً للقصور والفلل ذات الأسقف المرتفعة (Double Height). تتألف من آلاف حبات الكريستال النقي مع هيكل نحاسي مطلي بتقنية PVD.",
     specs: {
@@ -177,7 +177,7 @@ const INITIAL_PRODUCTS = [
     enName: "Halo Dual Indirect Luxury Wall Sconce",
     category: "wall-sconces",
     categoryName: "أباليك",
-    style: "مودرن راقي",
+    style: "مودرن راقٍ",
     price: 8500,
     originalPrice: 9800,
     isExclusive: false,

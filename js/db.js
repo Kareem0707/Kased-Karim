@@ -747,6 +747,8 @@ class KasedKarimDB {
       price: parseFloat(product.price) || 0,
       originalPrice: product.originalPrice ? parseFloat(product.originalPrice) : null,
       warranty: String(product.warranty || ""),
+      stock: Math.max(0, parseInt(product.stock ?? (product.inStock === false ? 0 : 10), 10) || 0),
+      inStock: product.inStock !== false,
       image: String(product.image || ""),
       secondaryImage: String(product.secondaryImage || ""),
       description: String(product.description || ""),

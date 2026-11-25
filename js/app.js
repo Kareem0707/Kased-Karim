@@ -240,7 +240,7 @@ function loadProducts() {
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
-        STATE.products = parsed.filter(p => p && typeof p === "object" && !("__proto__" in p));
+        STATE.products = parsed.filter(p => p && typeof p === "object" && !Object.prototype.hasOwnProperty.call(p, "__proto__"));
       } else {
         STATE.products = typeof INITIAL_PRODUCTS !== "undefined" ? [...INITIAL_PRODUCTS] : [];
       }
@@ -270,7 +270,7 @@ function loadCart() {
         STATE.cart = parsed.filter(item => (
           item && 
           typeof item === "object" && 
-          !("__proto__" in item) && 
+          !Object.prototype.hasOwnProperty.call(item, "__proto__") && 
           typeof item.id === "string" &&
           typeof item.qty === "number" && 
           item.qty > 0
@@ -693,12 +693,19 @@ function createProductCard(item, { isEn, currencyStr, CAT_EN_MAP, CAT_AR_EN_MAP,
     dataset: { id: item.id }
   });
 
-  // 2. Media container
-  const mediaDiv = createSafeEl("div", { class: "product-media" });
+  // 2. Media container (fully clickable to open QuickView on desktop & touch)
+  const mediaDiv = createSafeEl("div", {
+    class: "product-media",
+    dataset: { action: "quickview", id: item.id },
+    style: "cursor: pointer;"
+  });
 
   const imgEl = createSafeEl("img", {
     class: "product-img",
-    alt: String(displayName)
+    alt: String(displayName),
+    loading: "lazy",
+    decoding: "async",
+    dataset: { action: "quickview", id: item.id }
   });
   setSafeImageWithFallback(imgEl, item.image, DEFAULT_FALLBACK_IMAGE);
   mediaDiv.appendChild(imgEl);
@@ -793,18 +800,26 @@ function createProductCard(item, { isEn, currencyStr, CAT_EN_MAP, CAT_AR_EN_MAP,
   ]);
 
   const priceColChildren = [priceCurrent];
-  if (item.originalPrice) {
-    priceColChildren.push(createSafeEl("span", {
-      class: "product-price-old",
-      textContent: `${formatPrice(item.originalPrice)} ${currencyStr}`
-    }));
+  if (item.originalPrice && Number(item.originalPrice) > Number(item.price)) {
+    const savePct = Math.round(((Number(item.originalPrice) - Number(item.price)) / Number(item.originalPrice)) * 100);
+    priceColChildren.push(createSafeEl("div", { class: "product-old-price-wrap" }, [
+      createSafeEl("span", {
+        class: "product-price-old",
+        textContent: `${formatPrice(item.originalPrice)} ${currencyStr}`
+      }),
+      ...(savePct >= 5 ? [createSafeEl("span", {
+        class: "product-save-pill",
+        textContent: isEn ? `Save ${savePct}%` : `وفر ${savePct}%`
+      })] : [])
+    ]));
   }
   const priceCol = createSafeEl("div", { class: "product-price-col" }, priceColChildren);
 
   const cartBtnAttrs = {
     type: "button",
-    class: "btn-card-quote",
-    title: isAvailable ? (isEn ? "Add to Cart" : "إضافة للسلة") : (isEn ? "Out of Stock" : "غير متوفر"),
+    class: "btn-card-quote btn-card-quote-labeled",
+    title: isAvailable ? (isEn ? "Add to Cart" : "أضف للسلة") : (isEn ? "Out of Stock" : "غير متوفر"),
+    "aria-label": isAvailable ? (isEn ? `Add ${displayName} to cart` : `أضف ${displayName} إلى السلة`) : (isEn ? "Out of Stock" : "غير متوفر"),
     dataset: { action: "add-to-cart", id: item.id }
   };
   if (!isAvailable) {
@@ -812,7 +827,8 @@ function createProductCard(item, { isEn, currencyStr, CAT_EN_MAP, CAT_AR_EN_MAP,
     cartBtnAttrs.style = "opacity: 0.5; cursor: not-allowed;";
   }
   const addBtn = createSafeEl("button", cartBtnAttrs, [
-    createSafeEl("i", { class: "fas fa-plus" })
+    createSafeEl("i", { class: "fas fa-plus", "aria-hidden": "true" }),
+    createSafeEl("span", { textContent: isAvailable ? (isEn ? "Add" : "أضف للسلة") : (isEn ? "Sold Out" : "نفد") })
   ]);
 
   const footerDiv = createSafeEl("div", { class: "product-footer" }, [priceCol, addBtn]);
@@ -1030,7 +1046,7 @@ function openQuickView(productId) {
   const descEl = document.getElementById("modalDesc");
   const specsTable = document.getElementById("modalSpecsTable");
   const qtyEl = document.getElementById("modalQtyVal");
-  const stockEl = document.getElementById("modalStockStatusBadge");
+  const stockEl = document.getElementById("modalStockStatus") || document.getElementById("modalStockStatusBadge");
 
   const isEn = isCurrentEn();
   const currencyStr = window.KK_I18N ? window.KK_I18N.t("currency") : "ج.م";
@@ -1039,20 +1055,23 @@ function openQuickView(productId) {
   // Stock Status Badge
   if (stockEl) {
     safeClearContainer(stockEl);
+    stockEl.style.display = "inline-flex";
+    stockEl.style.alignItems = "center";
+    stockEl.style.gap = "0.35rem";
     if (stock > 0) {
-      stockEl.appendChild(createSafeEl("i", { class: "fas fa-check-circle" }));
+      stockEl.appendChild(createSafeEl("i", { class: "fas fa-check-circle", "aria-hidden": "true" }));
       stockEl.appendChild(createSafeEl("span", {
         textContent: " " + (isEn ? `In Stock (${stock} units)` : `متوفر بالمعرض (${stock} قطعة)`)
       }));
-      stockEl.style.color = "#10B981";
-      stockEl.style.background = "rgba(16, 185, 129, 0.1)";
+      stockEl.style.color = "#047857";
+      stockEl.style.background = "rgba(4, 120, 87, 0.12)";
     } else {
-      stockEl.appendChild(createSafeEl("i", { class: "fas fa-times-circle" }));
+      stockEl.appendChild(createSafeEl("i", { class: "fas fa-times-circle", "aria-hidden": "true" }));
       stockEl.appendChild(createSafeEl("span", {
         textContent: " " + (isEn ? "Out of Stock" : "غير متوفر حالياً")
       }));
-      stockEl.style.color = "#EF4444";
-      stockEl.style.background = "rgba(239, 68, 68, 0.1)";
+      stockEl.style.color = "#B91C1C";
+      stockEl.style.background = "rgba(185, 28, 28, 0.12)";
     }
   }
 
@@ -1147,22 +1166,29 @@ function switchModalThumb(imgSrc, element) {
 }
 window.switchModalThumb = switchModalThumb;
 
+function syncOverlayOpenBodyClass() {
+  const anyOpen = Boolean(document.querySelector(".modal-backdrop.active, .cart-drawer-backdrop.active, .mobile-nav-drawer.active"));
+  document.body.classList.toggle("overlay-open", anyOpen);
+  document.body.style.overflow = anyOpen ? "hidden" : "";
+}
+window.syncOverlayOpenBodyClass = syncOverlayOpenBodyClass;
+
 function closeQuickView() {
   const modal = document.getElementById("quickViewModal");
   if (modal) {
     modal.classList.remove("active");
-    document.body.style.overflow = "";
+    syncOverlayOpenBodyClass();
   }
 }
 
 // 6. Cart Management (Safe Plain Text & Isolated Storage)
-function addToCart(productId, qty = 1) {
+function addToCart(productId, qty = 1, openDrawer = false) {
   const item = STATE.products.find(p => p.id === productId);
   if (!item) return;
 
   const existing = STATE.cart.find(c => c.id === productId);
   if (existing) {
-    existing.qty += qty;
+    existing.qty += Math.max(1, parseInt(qty, 10) || 1);
   } else {
     STATE.cart.push({
       id: String(item.id),
@@ -1170,14 +1196,29 @@ function addToCart(productId, qty = 1) {
       price: Number(item.price) || 0,
       image: sanitizeImageUrl(item.image),
       categoryName: String(item.categoryName || "إضاءة"),
-      qty: Math.max(1, parseInt(qty) || 1)
+      qty: Math.max(1, parseInt(qty, 10) || 1)
     });
   }
 
   saveCart();
-  toggleCartDrawer(true);
+  if (openDrawer) {
+    toggleCartDrawer(true);
+  }
   showToast(`تمت إضافة "${item.name}" إلى السلة بنجاح`);
 }
+
+function updateCartItemQty(productId, delta) {
+  const target = STATE.cart.find(item => item.id === productId);
+  if (!target) return;
+  const nextQty = (parseInt(target.qty, 10) || 1) + delta;
+  if (nextQty <= 0) {
+    removeFromCart(productId);
+    return;
+  }
+  target.qty = Math.min(99, nextQty);
+  saveCart();
+}
+window.updateCartItemQty = updateCartItemQty;
 
 function removeFromCart(productId) {
   STATE.cart = STATE.cart.filter(item => item.id !== productId);
@@ -1229,18 +1270,42 @@ function updateCartUI() {
       infoDiv.appendChild(createSafeEl("div", { class: "cart-item-name", textContent: String(item.name) }));
       infoDiv.appendChild(createSafeEl("div", {
         class: "cart-item-spec",
-        textContent: `${item.categoryName || "إضاءة"} • الكمية: ${item.qty}`
+        textContent: `${item.categoryName || "إضاءة"} • سعر القطعة: ${formatPrice(item.price)} ج.م`
       }));
+
+      const qtyStepper = createSafeEl("div", { class: "cart-qty-stepper", role: "group", "aria-label": "تعديل الكمية" }, [
+        createSafeEl("button", {
+          type: "button",
+          class: "cart-qty-btn",
+          dataset: { action: "cart-qty-dec", itemId: item.id },
+          "aria-label": "إنقاص الكمية",
+          title: "إنقاص الكمية",
+          textContent: "−"
+        }),
+        createSafeEl("span", { class: "cart-qty-val", textContent: String(item.qty) }),
+        createSafeEl("button", {
+          type: "button",
+          class: "cart-qty-btn",
+          dataset: { action: "cart-qty-inc", itemId: item.id },
+          "aria-label": "زيادة الكمية",
+          title: "زيادة الكمية",
+          textContent: "+"
+        })
+      ]);
 
       const priceRow = createSafeEl("div", { class: "cart-item-price-row" }, [
         createSafeEl("div", { class: "cart-item-price", textContent: `${formatPrice(item.price * item.qty)} ج.م` }),
-        createSafeEl("button", {
-          type: "button",
-          class: "cart-item-remove-btn",
-          dataset: { action: "remove-from-cart", itemId: item.id },
-          title: "حذف"
-        }, [
-          createSafeEl("i", { class: "fas fa-trash-alt" })
+        createSafeEl("div", { class: "cart-item-controls" }, [
+          qtyStepper,
+          createSafeEl("button", {
+            type: "button",
+            class: "cart-item-remove-btn",
+            dataset: { action: "remove-from-cart", itemId: item.id },
+            "aria-label": "حذف المنتج من السلة",
+            title: "حذف"
+          }, [
+            createSafeEl("i", { class: "fas fa-trash-alt", "aria-hidden": "true" })
+          ])
         ])
       ]);
 
@@ -1259,11 +1324,10 @@ function toggleCartDrawer(open) {
   if (!drawer) return;
   if (open) {
     drawer.classList.add("active");
-    document.body.style.overflow = "hidden";
   } else {
     drawer.classList.remove("active");
-    document.body.style.overflow = "";
   }
+  syncOverlayOpenBodyClass();
 }
 
 // 7. Send Quotation & Order via WhatsApp with Official Order Code
@@ -1749,7 +1813,7 @@ function toggleCollectionsSubBar(open) {
   const toggleBtn = document.getElementById("navCollectionsBtn");
   if (!subBar) return;
 
-  const shouldOpen = open !== undefined ? open : !subBar.classList.contains("active");
+  const shouldOpen = typeof open === "boolean" ? open : !subBar.classList.contains("active");
   if (shouldOpen) {
     subBar.classList.add("active");
     if (toggleBtn) {
@@ -1853,11 +1917,12 @@ function handleCustomerAccountClick() {
 window.handleCustomerAccountClick = handleCustomerAccountClick;
 
 function openCustomerAuthModal(onSuccessCallback) {
+  if (typeof toggleCartDrawer === "function") toggleCartDrawer(false);
   window.pendingAuthCallback = onSuccessCallback || null;
   const modal = document.getElementById("customerAuthModal");
   if (modal) {
     modal.classList.add("active");
-    document.body.style.overflow = "hidden";
+    syncOverlayOpenBodyClass();
     switchCustomerAuthTab("signin");
   }
 }
@@ -1867,21 +1932,24 @@ function closeCustomerAuthModal() {
   const modal = document.getElementById("customerAuthModal");
   if (modal) {
     modal.classList.remove("active");
-    document.body.style.overflow = "";
+    syncOverlayOpenBodyClass();
   }
 }
 window.closeCustomerAuthModal = closeCustomerAuthModal;
 
 // -----------------------------------------------------------------------------
-// Cloudflare Turnstile Integration Helpers
+// Cloudflare Turnstile Integration Helpers (Fail-Closed in Production)
 // -----------------------------------------------------------------------------
-window.TURNSTILE_SITE_KEY = window.TURNSTILE_SITE_KEY || "1x00000000000000000000AA";
+const IS_LOCAL_HOST = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+window.TURNSTILE_SITE_KEY = window.TURNSTILE_SITE_KEY || (IS_LOCAL_HOST ? "1x00000000000000000000AA" : "");
 
-function renderTurnstileWidget(containerId, options = {}) {
+function renderTurnstileWidget(containerId, options = {}, attempt = 0) {
   const container = document.getElementById(containerId);
   if (!container) return null;
   if (!window.turnstile) {
-    setTimeout(() => renderTurnstileWidget(containerId, options), 300);
+    if (attempt < 15) {
+      setTimeout(() => renderTurnstileWidget(containerId, options, attempt + 1), 300);
+    }
     return null;
   }
 
@@ -2138,7 +2206,8 @@ async function handleCustomerSignIn(e) {
 
   try {
     const res = await window.KK_DB.customerLogin(identifier, password);
-    showToast(`مرحباً بك مجدداً يا ${res.customer.name}!`);
+    const custName = (res && res.data && res.data.customer && res.data.customer.name) || (res && res.customer && res.customer.name) || "";
+    showToast(custName ? `مرحباً بك مجدداً يا ${custName}!` : "تم تسجيل الدخول بنجاح!");
     closeCustomerAuthModal();
     updateCustomerButtonUI();
 
@@ -2788,6 +2857,31 @@ function initEventDelegation() {
         const itemId = trigger.dataset.itemId;
         const fn = (typeof window !== "undefined" && window.removeFromCart) || (typeof removeFromCart === "function" ? removeFromCart : null);
         if (itemId && fn) fn(itemId);
+        break;
+      }
+      case "cart-qty-inc": {
+        const itemId = trigger.dataset.itemId;
+        if (itemId) updateCartItemQty(itemId, 1);
+        break;
+      }
+      case "cart-qty-dec": {
+        const itemId = trigger.dataset.itemId;
+        if (itemId) updateCartItemQty(itemId, -1);
+        break;
+      }
+      case "checkout-open-login": {
+        if (typeof closeCheckoutModal === "function") closeCheckoutModal();
+        if (typeof openCustomerAuthModal === "function") {
+          openCustomerAuthModal(() => {
+            if (typeof openCheckoutModal === "function") openCheckoutModal();
+          });
+        }
+        break;
+      }
+      case "browse-catalog-from-empty-cart": {
+        if (typeof toggleCartDrawer === "function") toggleCartDrawer(false);
+        const catEl = document.getElementById("catalog");
+        if (catEl) catEl.scrollIntoView({ behavior: "smooth" });
         break;
       }
       case "view-order-details": {
