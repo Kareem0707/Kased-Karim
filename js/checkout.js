@@ -22,6 +22,18 @@
       .replace(/'/g, "&#39;");
   };
 
+  // Safe DOM helpers: never parse strings as HTML.
+  function clearElement(element) {
+    if (element) element.replaceChildren();
+  }
+
+  function setIconLabel(element, iconClass, label) {
+    if (!element) return;
+    const icon = document.createElement("i");
+    icon.className = iconClass;
+    element.replaceChildren(icon, document.createTextNode(` ${label}`));
+  }
+
   const formatPrice = window.formatPrice || function (num) {
     if (!num && num !== 0) return "0";
     const n = Math.round(Number(num) || 0);
@@ -174,11 +186,7 @@
     if (totalEl) totalEl.textContent = `${formatPrice(totalAmount)} ج.م`;
 
     if (summaryList) {
-      if (typeof summaryList.replaceChildren === "function") {
-        summaryList.replaceChildren();
-      } else {
-        summaryList.innerHTML = "";
-      }
+      clearElement(summaryList);
 
       cartItems.forEach(item => {
         const row = document.createElement("div");
@@ -229,11 +237,7 @@
       const areas = window.KK_DB.getDeliveryAreas();
       if (areas && areas.length > 0) {
         const curVal = areaSelect.value || "sheikh-zayed";
-        if (typeof areaSelect.replaceChildren === "function") {
-          areaSelect.replaceChildren();
-        } else {
-          areaSelect.innerHTML = "";
-        }
+        clearElement(areaSelect);
         areas.forEach(a => {
           const opt = document.createElement("option");
           opt.value = a.id;
@@ -608,10 +612,14 @@
 
     // Lock submission state
     isSubmittingOrder = true;
-    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : "";
+    const originalBtnNodes = submitBtn ? Array.from(submitBtn.childNodes).map(node => node.cloneNode(true)) : [];
     if (submitBtn) {
       submitBtn.disabled = true;
-      submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>جارٍ تأكيد الطلب وحجزه سحابياً...</span>`;
+      const loadingIcon = document.createElement("i");
+      loadingIcon.className = "fas fa-spinner fa-spin";
+      const loadingText = document.createElement("span");
+      loadingText.textContent = "جارٍ تأكيد الطلب وحجزه سحابياً...";
+      submitBtn.replaceChildren(loadingIcon, document.createTextNode(" "), loadingText);
     }
 
     try {
@@ -657,7 +665,7 @@
       isSubmittingOrder = false;
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = originalBtnHtml;
+        submitBtn.replaceChildren(...originalBtnNodes);
       }
     }
   };
@@ -918,7 +926,7 @@
           if (resultBox) resultBox.style.display = "none";
           if (emptyState) {
             emptyState.style.display = "block";
-            emptyState.innerHTML = "";
+            clearElement(emptyState);
 
             const icon = document.createElement("i");
             icon.className = "fas fa-shield-halved";
@@ -936,7 +944,9 @@
             retryBtn.type = "button";
             retryBtn.className = "btn-secondary";
             retryBtn.style.cssText = "margin: 0 auto 0.6rem auto; padding: 0.45rem 0.9rem; font-size: 0.8rem; display: block;";
-            retryBtn.innerHTML = `<i class="fas fa-phone"></i> إعادة إدخال رقم الهاتف المسجل`;
+            const retryIcon = document.createElement("i");
+            retryIcon.className = "fas fa-phone";
+            retryBtn.append(retryIcon, document.createTextNode(" إعادة إدخال رقم الهاتف المسجل"));
             retryBtn.addEventListener("click", () => {
               const reprompt = prompt("يرجى إدخال رقم الهاتف المسجل مع الطلب:");
               if (reprompt) {
@@ -949,7 +959,9 @@
             waBtn.type = "button";
             waBtn.className = "btn-whatsapp-customer";
             waBtn.style.cssText = "margin: 0 auto; padding: 0.5rem 1rem; font-size: 0.8rem;";
-            waBtn.innerHTML = `<i class="fab fa-whatsapp"></i> استفسار المعرض عبر واتساب`;
+            const waIcon = document.createElement("i");
+            waIcon.className = "fab fa-whatsapp";
+            waBtn.append(waIcon, document.createTextNode(" استفسار المعرض عبر واتساب"));
             waBtn.addEventListener("click", () => {
               const waNumber = window.SHOWROOM_INFO?.whatsapp || "201006367690";
               const text = encodeURIComponent(`مرحباً معرض قاصد كريم، أود الاستفسار عن حالة طلبي رقم #${cleanId}.`);
@@ -997,11 +1009,7 @@
       } else if (order.timeFormatted) {
         dateText = `${order.dateFormatted} • ${order.timeFormatted}`;
       }
-      if (typeof dateDisplay.replaceChildren === "function") {
-        dateDisplay.replaceChildren();
-      } else {
-        dateDisplay.innerHTML = "";
-      }
+      clearElement(dateDisplay);
       const clockIcon = document.createElement("i");
       clockIcon.className = "fas fa-clock";
       dateDisplay.appendChild(clockIcon);
@@ -1016,11 +1024,7 @@
         ? order.items
         : (order.items && typeof order.items === "object" ? Object.values(order.items) : []);
 
-      if (typeof itemsContainer.replaceChildren === "function") {
-        itemsContainer.replaceChildren();
-      } else {
-        itemsContainer.innerHTML = "";
-      }
+      clearElement(itemsContainer);
 
       itemsList.forEach(item => {
         const row = document.createElement("div");
@@ -1085,7 +1089,7 @@
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-pending";
         badgeDisplay.style.cssText = "";
-        badgeDisplay.innerHTML = `<i class="fas fa-clock"></i> تم الاستلام والتوثيق`;
+        setIconLabel(badgeDisplay, "fas fa-clock", "تم الاستلام والتوثيق");
       }
       if (msgBox) {
         msgBox.style.background = "#FFFBEB";
@@ -1100,7 +1104,7 @@
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-confirmed";
         badgeDisplay.style.cssText = "";
-        badgeDisplay.innerHTML = `<i class="fas fa-check-double"></i> تم التأكيد والمعاينة الفنية`;
+        setIconLabel(badgeDisplay, "fas fa-check-double", "تم التأكيد والمعاينة الفنية");
       }
       if (msgBox) {
         msgBox.style.background = "#EFF6FF";
@@ -1116,7 +1120,7 @@
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-processing";
         badgeDisplay.style.cssText = "";
-        badgeDisplay.innerHTML = `<i class="fas fa-boxes-packing"></i> جاري التجهيز والتجميع`;
+        setIconLabel(badgeDisplay, "fas fa-boxes-packing", "جاري التجهيز والتجميع");
       }
       if (msgBox) {
         msgBox.style.background = "#F5F3FF";
@@ -1132,7 +1136,7 @@
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-processing";
         badgeDisplay.style.cssText = "";
-        badgeDisplay.innerHTML = `<i class="fas fa-box-open"></i> تم التغليف والتأمين`;
+        setIconLabel(badgeDisplay, "fas fa-box-open", "تم التغليف والتأمين");
       }
       if (msgBox) {
         msgBox.style.background = "#F5F3FF";
@@ -1149,7 +1153,7 @@
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-shipped";
         badgeDisplay.style.cssText = "";
-        badgeDisplay.innerHTML = `<i class="fas fa-truck-fast"></i> خرج للشحن والتوصيل`;
+        setIconLabel(badgeDisplay, "fas fa-truck-fast", "خرج للشحن والتوصيل");
       }
       if (msgBox) {
         msgBox.style.background = "#FFF7ED";
@@ -1163,7 +1167,7 @@
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-delivered";
         badgeDisplay.style.cssText = "";
-        badgeDisplay.innerHTML = `<i class="fas fa-circle-check"></i> تم التسليم بالضمان المعتمد`;
+        setIconLabel(badgeDisplay, "fas fa-circle-check", "تم التسليم بالضمان المعتمد");
       }
       if (msgBox) {
         msgBox.style.background = "#F0FDF4";
@@ -1176,7 +1180,7 @@
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-cancelled";
         badgeDisplay.style.cssText = "background: rgba(239, 68, 68, 0.15) !important; color: #DC2626 !important; border-color: rgba(239, 68, 68, 0.3) !important;";
-        badgeDisplay.innerHTML = `<i class="fas fa-ban"></i> طلب ملغي`;
+        setIconLabel(badgeDisplay, "fas fa-ban", "طلب ملغي");
       }
       if (msgBox) {
         msgBox.style.background = "#FEF2F2";
@@ -1189,7 +1193,7 @@
       if (badgeDisplay) {
         badgeDisplay.className = "status-badge-live status-failed";
         badgeDisplay.style.cssText = "background: rgba(220, 38, 38, 0.15) !important; color: #DC2626 !important; border-color: rgba(220, 38, 38, 0.3) !important;";
-        badgeDisplay.innerHTML = `<i class="fas fa-triangle-exclamation"></i> تعذر التسليم`;
+        setIconLabel(badgeDisplay, "fas fa-triangle-exclamation", "تعذر التسليم");
       }
       if (msgBox) {
         msgBox.style.background = "#FEF2F2";
@@ -1212,7 +1216,7 @@
       const recent = JSON.parse(localStorage.getItem("kk_customer_recent_orders") || "[]");
       if (recent.length > 0) {
         wrap.style.display = "block";
-        container.innerHTML = "";
+        clearElement(container);
         recent.forEach(id => {
           const btn = document.createElement("button");
           btn.type = "button";

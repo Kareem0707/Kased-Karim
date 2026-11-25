@@ -1889,7 +1889,7 @@ function renderTurnstileWidget(containerId, options = {}) {
   if (!siteKey) return null;
 
   try {
-    container.innerHTML = "";
+    container.replaceChildren();
     return window.turnstile.render(`#${containerId}`, {
       sitekey: siteKey,
       theme: "auto",

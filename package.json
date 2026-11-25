@@ -11,7 +11,8 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test:db": "node scripts/verify-softdelete-and-integrity.mjs",
-    "test:security": "node scripts/test-security.mjs"
+    "test:security": "node scripts/test-security.mjs",
+    "test:xss": "node scripts/check-xss-sinks.mjs"
   },
   "keywords": [
     "lighting",
