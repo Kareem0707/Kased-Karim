@@ -539,14 +539,14 @@ class KasedKarimDB {
         }, 15000);
       }
 
-      // Catalog & Settings polling: every 20s
+      // Catalog & Settings polling: every 90s (reduces redundant storefront bandwidth by 78%)
       catalogInterval = setInterval(() => {
         if (typeof document !== "undefined" && !document.hidden) {
           this.syncProductsFromCloud(true);
           this.syncCategoriesFromCloud();
           this.syncSettingsFromCloud();
         }
-      }, 20000);
+      }, 90000);
     };
 
     const stopBackgroundSync = () => {
@@ -722,13 +722,25 @@ class KasedKarimDB {
     }
   }
 
+  clearSensitiveMemory() {
+    this.#inMemoryOrders = [];
+    this.#knownOrderIds.clear();
+    try {
+      localStorage.removeItem(DB_KEYS.BACKUPS);
+      localStorage.removeItem("kk_orders");
+    } catch (e) {}
+  }
+
   async forceSyncNow() {
-    await Promise.allSettled([
+    const tasks = [
       this.syncProductsFromCloud(false),
       this.syncCategoriesFromCloud(),
-      this.syncSettingsFromCloud(),
-      this.syncFromCloud(false)
-    ]);
+      this.syncSettingsFromCloud()
+    ];
+    if (typeof this.isAdminUser === "function" && this.isAdminUser()) {
+      tasks.push(this.syncFromCloud(false));
+    }
+    await Promise.allSettled(tasks);
   }
 
   // --------------------------------------------------------------------------
@@ -1742,7 +1754,7 @@ class KasedKarimDB {
       if (!p) return p;
       let cleanImg = p.image || "";
       if (typeof cleanImg === "string" && cleanImg.startsWith("data:") && cleanImg.length > 5000) {
-        cleanImg = "https://images.unsplash.com/photo-1543198126-a8ad8e47fb22?auto=format&fit=crop&w=600&q=80";
+        cleanImg = "assets/images/hero-white-palace.jpg";
       }
       return { ...p, image: cleanImg };
     });
@@ -1750,6 +1762,12 @@ class KasedKarimDB {
     const safeBackupData = {
       ...backupData,
       products: safeProducts
+    };
+
+    // Privacy Defense (CWE-312): NEVER persist customer PII (orders) in browser localStorage
+    const piiFreeLocalData = {
+      ...safeBackupData,
+      orders: []
     };
 
     const newPoint = {
@@ -1763,28 +1781,34 @@ class KasedKarimDB {
       data: safeBackupData
     };
 
-    // Store up to 100 recent points in local cache, with permanent storage on the database server
-    points = [newPoint, ...points.filter(p => p && p.id !== newPoint.id)].slice(0, 100);
+    const localPointSummary = {
+      ...newPoint,
+      data: piiFreeLocalData
+    };
+
+    // Store at most 15 PII-free metadata snapshots in local cache; full snapshot lives server-side only
+    points = [localPointSummary, ...points.filter(p => p && p.id !== localPointSummary.id)].slice(0, 15);
     try {
       localStorage.setItem(DB_KEYS.BACKUPS, JSON.stringify(points));
     } catch (e) {
       try {
-        points = [newPoint, ...points.slice(1, 15)];
+        points = [localPointSummary, ...points.slice(1, 5)];
         localStorage.setItem(DB_KEYS.BACKUPS, JSON.stringify(points));
       } catch (err) {}
     }
 
-    // Push snapshot to /api/restore-points server endpoint for permanent long-term archive (1+ years)
-    safeApiFetch("/api/restore-points", {
-      method: "POST",
-      body: JSON.stringify(newPoint)
-    }).catch(() => null);
+    // Push snapshot to /api/restore-points and /api/backup ONLY when authenticated as admin
+    if (typeof this.isAdminUser === "function" && this.isAdminUser()) {
+      safeApiFetch("/api/restore-points", {
+        method: "POST",
+        body: JSON.stringify(newPoint)
+      }).catch(() => null);
 
-    // Push snapshot to /api/backup serverless endpoint
-    safeApiFetch("/api/backup", {
-      method: "POST",
-      body: JSON.stringify(newPoint)
-    }).catch(() => null);
+      safeApiFetch("/api/backup", {
+        method: "POST",
+        body: JSON.stringify(newPoint)
+      }).catch(() => null);
+    }
 
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("kk_restore_points_updated"));

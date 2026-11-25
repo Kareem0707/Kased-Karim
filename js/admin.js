@@ -805,6 +805,9 @@ function cleanupAdminDomOnLogout() {
 
   if (typeof adminCustomersCache !== "undefined") adminCustomersCache = [];
   if (typeof validatedBulkCsvRows !== "undefined") validatedBulkCsvRows = [];
+  if (window.KK_DB && typeof window.KK_DB.clearSensitiveMemory === "function") {
+    window.KK_DB.clearSensitiveMemory();
+  }
 }
 
 // Global System Initializer (Axis 1)
@@ -4273,20 +4276,16 @@ function checkDailyBackupSchedule() {
     window.KK_DB.checkAndCreateDailyRestorePoint();
   }
 
-  // 2. AUTOMATIC DAILY BACKUP DOWNLOAD TO DEVICE (Once per day on admin visit)
-  if (isAdminPage && autoDownloadedDate !== today) {
-    setTimeout(() => {
-      if (window.KK_DB) {
-        window.KK_DB.downloadBackupFile("نسخة يومية تلقائية للجهاز");
-        localStorage.setItem("kk_auto_backup_downloaded_date", today);
-        localStorage.setItem("kk_last_downloaded_backup_date", today);
-        showToast("🛡️ تم تنزيل النسخة الاحتياطية اليومية للمتجر والمبيعات تلقائياً على جهازك!");
-        if (banner) banner.style.display = "none";
-        if (lastDownloadInfo) {
-          safeClearContainer(lastDownloadInfo); lastDownloadInfo.appendChild(createSafeEl("i", { class: "fas fa-circle-check", style: "color: #10B981;" })); lastDownloadInfo.appendChild(createSafeEl("span", { textContent: ` تم تنزيل نسخة اليوم على جهازك تلقائياً بنجاح (${today})` }));
-        }
-      }
-    }, 1500);
+  // 2. Manual opt-in daily backup reminder (never auto-download PII files silently to shared devices)
+  if (isAdminPage && lastDownload !== today && autoDownloadedDate !== today) {
+    const isDismissed = sessionStorage.getItem("kk_dismissed_backup_banner_date") === today;
+    if (banner) banner.style.display = isDismissed ? "none" : "flex";
+    if (lastDownloadInfo) {
+      safeClearContainer(lastDownloadInfo);
+      lastDownloadInfo.appendChild(createSafeEl("i", { class: "fas fa-shield-halved", style: "color: #8C6726;" }));
+      lastDownloadInfo.appendChild(createSafeEl("span", { textContent: " يُنصح بتحميل نسخة احتياطية يدوية آمنة اليوم من زر النسخ الاحتياطي." }));
+    }
+    return;
   }
 
   if (lastDownload === today || autoDownloadedDate === today) {

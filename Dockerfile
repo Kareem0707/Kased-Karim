@@ -16,14 +16,12 @@ WORKDIR /app
 # Copy package descriptors
 COPY package*.json ./
 
-# Install production dependencies
-RUN npm install --omit=dev --legacy-peer-deps || npm install --omit=dev
+# Install production dependencies deterministically
+RUN npm ci --omit=dev || npm install --omit=dev
 
-# Copy application source code
+# Copy application source code & pre-create writable uploads and SQLite data dirs
 COPY . .
-
-# Set secure file permissions and non-root execution
-RUN chown -R node:node /app
+RUN mkdir -p /app/assets/uploads /data && chown -R node:node /app /data
 
 USER node
 

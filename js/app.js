@@ -546,7 +546,15 @@ function applyDynamicSettings() {
   const location = isEn ? "Sheikh Zayed - 1st District, University Center, Giza, Egypt" : (settings.location || "الشيخ زايد - الحي الأول، سنتر الطاهرة، الجيزة");
   const hours = isEn ? "Daily: 10:00 AM – 10:00 PM" : (settings.workingHours || "يومياً من 11:00 صباحاً حتى 11:00 مساءً");
   const mapUrl = sanitizeUrl(settings.mapUrl || "https://maps.app.goo.gl/EzzitFCzNSpQc7w77?g_st=ic");
-  const mapEmbed = sanitizeUrl(settings.mapEmbedUrl || "https://maps.google.com/maps?q=%D9%82%D8%A7%D8%B5%D8%AF%20%D9%83%D8%B1%D9%8A%D9%85%202%20%D9%84%D9%84%D8%A7%D8%AF%D9%88%D8%A7%D8%AA%20%D8%A7%D9%84%D9%83%D9%87%D8%B1%D8%A8%D8%A7%D8%A6%D9%8A%D8%A9%2C%20%D8%B1%D9%82%D9%85%2039%D8%8C%20%D8%A3%D9%88%D9%84%20%D8%A7%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B2%D8%A7%D9%8A%D8%AF%D8%8C%20%D9%85%D8%AD%D8%A7%D9%81%D8%B8%D8%A9%20%D8%A7%D9%84%D8%AC%D9%8A%D8%B2%D8%A9&t=&z=14&ie=UTF8&iwloc=&output=embed");
+  const defaultMapEmbed = "https://maps.google.com/maps?q=%D9%82%D8%A7%D8%B5%D8%AF%20%D9%83%D8%B1%D9%8A%D9%85%202%20%D9%84%D9%84%D8%A7%D8%AF%D9%88%D8%A7%D8%AA%20%D8%A7%D9%84%D9%83%D9%87%D8%B1%D8%A8%D8%A7%D8%A6%D9%8A%D8%A9%2C%20%D8%B1%D9%82%D9%85%2039%D8%8C%20%D8%A3%D9%88%D9%84%20%D8%A7%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B2%D8%A7%D9%8A%D8%AF%D8%8C%20%D9%85%D8%AD%D8%A7%D9%81%D8%B8%D8%A9%20%D8%A7%D9%84%D8%AC%D9%8A%D8%B2%D8%A9&t=&z=14&ie=UTF8&iwloc=&output=embed";
+  const rawMapEmbed = sanitizeUrl(settings.mapEmbedUrl || defaultMapEmbed);
+  let mapEmbed = defaultMapEmbed;
+  try {
+    const parsedEmbed = new URL(rawMapEmbed);
+    if (parsedEmbed.protocol === "https:" && (parsedEmbed.hostname === "maps.google.com" || parsedEmbed.hostname === "www.google.com")) {
+      mapEmbed = parsedEmbed.href;
+    }
+  } catch (e) {}
   const social = settings.social || {};
 
   // Top bar phone & location
@@ -1626,6 +1634,7 @@ function setupEventListeners() {
   if (mobileToggle && mobileDrawer) {
     mobileToggle.addEventListener("click", () => {
       mobileDrawer.classList.toggle("active");
+      syncOverlayOpenBodyClass();
     });
   }
 
@@ -1671,20 +1680,11 @@ function setupEventListeners() {
     if (typeof updateCustomerButtonUI === "function") updateCustomerButtonUI();
   });
 
-  // Deep-link / Modal Query Trigger Support
+  // Safe Deep-link Support (profile & order tracking only — no checkout cart injection)
   try {
     const urlParams = new URLSearchParams(window.location.search);
-    const modalParam = urlParams.get("modal") || (window.location.hash ? window.location.hash.replace("#", "") : "");
-    if (modalParam === "checkout") {
-      setTimeout(() => {
-        if (!window.STATE?.cart || window.STATE.cart.length === 0) {
-          window.STATE = window.STATE || {};
-          window.STATE.cart = [{ id: "p1", name: "دلاية قاصد كريم الفاخرة", price: 86400, qty: 1, image: "assets/images/hero-white-palace.jpg" }];
-        }
-        sessionStorage.setItem("kk_guest_checkout", "true");
-        if (typeof openCheckoutModal === "function") openCheckoutModal();
-      }, 400);
-    } else if (modalParam === "profile") {
+    const modalParam = urlParams.get("modal") || "";
+    if (modalParam === "profile") {
       setTimeout(() => {
         if (typeof openCustomerProfileModal === "function") openCustomerProfileModal();
       }, 400);

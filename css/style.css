@@ -3588,3 +3588,71 @@ html[dir="ltr"] .luxury-sort-trigger .sort-trigger-icon {
     padding: 0.2rem 0.6rem !important;
   }
 }
+
+
+/* CLS Prevention on CSR Catalog Grid + GEO Lighting Comparison Table + Reduced Motion */
+.products-grid {
+  min-height: 460px;
+}
+
+.geo-guide-section {
+  padding: 3.25rem 0;
+  background: #FFFFFF;
+  border-top: 1px solid var(--border-light);
+}
+.geo-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: #FFFFFF;
+}
+.geo-comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+  font-size: 0.92rem;
+  text-align: right;
+}
+.geo-comparison-table thead th {
+  background: #141414;
+  color: #FFFFFF;
+  font-weight: 800;
+  padding: 0.9rem 1rem;
+  white-space: nowrap;
+}
+.geo-comparison-table tbody td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-light);
+  color: #1E293B;
+  line-height: 1.55;
+}
+.geo-comparison-table tbody tr:nth-child(even) {
+  background: #FAF7F2;
+}
+.checkout-coupon-details {
+  margin-top: 0.75rem;
+  border: 1px dashed var(--border-light);
+  border-radius: 6px;
+  padding: 0.6rem 0.85rem;
+  background: #FAF7F2;
+}
+.checkout-coupon-details summary {
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.checkout-coupon-row {
+  margin-top: 0.65rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

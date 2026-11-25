@@ -48,6 +48,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      SQLITE_DB_PATH: /data/kased_karim.db
       DATABASE_URL: postgres://${DB_USER:-kased_admin}:${DB_PASSWORD:?Fail-Closed Error: DB_PASSWORD is required for DATABASE_URL}@postgres:5432/${DB_NAME:-kased_karim_db}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Fail-Closed Error: ADMIN_PASSWORD environment variable is mandatory and cannot be empty}
       ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:?Fail-Closed Error: ADMIN_JWT_SECRET environment variable is mandatory and cannot be empty}
@@ -58,6 +59,7 @@ services:
       - "3000:3000"
     volumes:
       - app_uploads:/app/assets/uploads
+      - sqlite_data:/data
     networks:
       - kased_internal_net
 
@@ -87,10 +89,9 @@ services:
       /bin/sh -c "
       apk add --no-cache postgresql-client bash tzdata gzip curl &&
       cp /usr/share/zoneinfo/Africa/Cairo /etc/localtime &&
-      chmod +x /usr/local/bin/backup-db.sh &&
-      echo '0 */4 * * * /usr/local/bin/backup-db.sh >> /backups/cron.log 2>&1' > /etc/crontabs/root &&
+      echo '0 */4 * * * /bin/bash /usr/local/bin/backup-db.sh >> /backups/cron.log 2>&1' > /etc/crontabs/root &&
       echo '▶ Starting Automated 4-Hour Database Backup Daemon...' &&
-      /usr/local/bin/backup-db.sh &&
+      /bin/bash /usr/local/bin/backup-db.sh &&
       crond -f -l 2
       "
     networks:
@@ -101,6 +102,8 @@ volumes:
     name: kased_postgres_data
   app_uploads:
     name: kased_app_uploads
+  sqlite_data:
+    name: kased_sqlite_data
 
 networks:
   kased_internal_net:

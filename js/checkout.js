@@ -361,13 +361,13 @@
 
   window.validateCustomerAddress = function (address) {
     if (!address || typeof address !== "string") {
-      return { valid: false, message: "⚠️ يرجى إدخال عنوان التسليم بالتفصيل" };
+      return { valid: false, message: "⚠️ يرجى كتابة اسم الكمبوند أو الشارع ورقم الفيلا/الشقة" };
     }
     const clean = address.trim();
-    if (clean.length < 15) {
+    if (clean.length < 8) {
       return {
         valid: false,
-        message: `⚠️ تفاصيل العنوان قصيرة (${clean.length} حرفاً)! يجب ألا يقل العنوان عن 15 حرفاً (مثال: كمبوند بيفرلي هيلز - فيلا 42)`,
+        message: `⚠️ يرجى كتابة تفاصيل أوضح للعنوان (${clean.length} / 8 أحرف كحد أدنى، مثال: بيفرلي هيلز فيلا 42)`,
         cleanAddress: clean
       };
     }
@@ -424,11 +424,11 @@
       addressInput.addEventListener("input", () => {
         const len = addressInput.value.trim().length;
         if (addressCounter) {
-          if (len >= 15) {
-            addressCounter.textContent = `✓ ${len} حرفاً (مكتمل)`;
+          if (len >= 8) {
+            addressCounter.textContent = `✓ ${len} أحرف (مكتمل)`;
             addressCounter.className = "form-char-counter valid";
           } else {
-            addressCounter.textContent = `${len} / 15 حرفاً كحد أدنى`;
+            addressCounter.textContent = `${len} / 8 أحرف كحد أدنى`;
             addressCounter.className = "form-char-counter invalid";
           }
         }
@@ -438,7 +438,7 @@
           addressInput.classList.remove("is-invalid");
           addressInput.classList.add("is-valid");
           if (addressError) addressError.classList.remove("show");
-        } else if (len >= 15) {
+        } else if (len >= 8) {
           addressInput.classList.remove("is-invalid");
         }
       });

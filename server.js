@@ -9,6 +9,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { validateEmail } from "./lib/emailValidator.js";
@@ -257,6 +258,13 @@ db.exec(`
     expires_at INTEGER NOT NULL,
     revoked_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE INDEX IF NOT EXISTS idx_products_active_deleted ON products(active, deleted_at, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
+  CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+  CREATE INDEX IF NOT EXISTS idx_customers_email_lower ON customers(LOWER(email));
+  CREATE INDEX IF NOT EXISTS idx_revoked_tokens_exp ON revoked_tokens(expires_at);
 
   CREATE TABLE IF NOT EXISTS coupons (
     code TEXT PRIMARY KEY,
@@ -2418,7 +2426,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      const cutoffTime = new Date(Date.now() - (24 * 60 * 60 * 1000)).toISOString();
+      // SQLite datetime('now') uses 'YYYY-MM-DD HH:MM:SS' (space separator, not ISO 'T')
+      const cutoffTime = new Date(Date.now() - (24 * 60 * 60 * 1000)).toISOString().replace("T", " ").slice(0, 19);
       const deleted = db.prepare(`
         DELETE FROM customers 
         WHERE (email_verified IS NULL OR email_verified = 0 OR email_verified = 'false')
@@ -2544,15 +2553,34 @@ const server = http.createServer(async (req, res) => {
 
     const ext = path.extname(realFilePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || "application/octet-stream";
+    const cacheControl = ext === ".html" ? "no-cache" : "public, max-age=86400";
+    const etag = `W/"${stats.size}-${Math.floor(stats.mtimeMs)}"`;
 
     applySecurityHeaders(res, isAdminSurface);
-    res.writeHead(200, {
-      "Content-Type": contentType,
-      "Content-Length": stats.size,
-      "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=86400"
-    });
+    res.setHeader("ETag", etag);
+    res.setHeader("Vary", "Accept-Encoding");
+
+    if (req.headers["if-none-match"] === etag) {
+      res.writeHead(304, { "Cache-Control": cacheControl, "ETag": etag });
+      return res.end();
+    }
+
+    const acceptEncoding = String(req.headers["accept-encoding"] || "");
+    const compressibleExts = new Set([".html", ".css", ".js", ".svg", ".xml", ".txt", ".webmanifest", ".json"]);
+    const canCompress = compressibleExts.has(ext) && stats.size >= 1024;
+    const encoding = canCompress
+      ? (acceptEncoding.includes("br") ? "br" : (acceptEncoding.includes("gzip") ? "gzip" : null))
+      : null;
 
     if (method === "HEAD") {
+      const headHeaders = {
+        "Content-Type": contentType,
+        "Cache-Control": cacheControl,
+        "ETag": etag
+      };
+      if (!encoding) headHeaders["Content-Length"] = stats.size;
+      else headHeaders["Content-Encoding"] = encoding;
+      res.writeHead(200, headHeaders);
       return res.end();
     }
 
@@ -2563,7 +2591,22 @@ const server = http.createServer(async (req, res) => {
       }
       res.end();
     });
-    stream.pipe(res);
+
+    if (encoding === "br") {
+      res.writeHead(200, { "Content-Type": contentType, "Content-Encoding": "br", "Cache-Control": cacheControl, "ETag": etag });
+      stream.pipe(zlib.createBrotliCompress()).pipe(res);
+    } else if (encoding === "gzip") {
+      res.writeHead(200, { "Content-Type": contentType, "Content-Encoding": "gzip", "Cache-Control": cacheControl, "ETag": etag });
+      stream.pipe(zlib.createGzip()).pipe(res);
+    } else {
+      res.writeHead(200, {
+        "Content-Type": contentType,
+        "Content-Length": stats.size,
+        "Cache-Control": cacheControl,
+        "ETag": etag
+      });
+      stream.pipe(res);
+    }
   });
   } catch (serverErr) {
     if (serverErr?.statusCode === 413 || serverErr?.message?.includes("413") || serverErr?.message === "Payload Too Large") {

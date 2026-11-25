@@ -51,9 +51,15 @@ export function redactSecrets(val) {
   if (dbSecret && dbSecret.length >= 8) {
     sanitized = sanitized.split(dbSecret).join("[REDACTED_DB_SECRET]");
   }
-  const masterSecret = process.env.MASTER_JWT_SECRET;
-  if (masterSecret && masterSecret.length >= 8) {
-    sanitized = sanitized.split(masterSecret).join("[REDACTED_JWT_SECRET]");
+  const jwtSecrets = [
+    process.env.ADMIN_JWT_SECRET,
+    process.env.CUSTOMER_JWT_SECRET,
+    process.env.MASTER_JWT_SECRET
+  ];
+  for (const s of jwtSecrets) {
+    if (s && s.length >= 8) {
+      sanitized = sanitized.split(s).join("[REDACTED_JWT_SECRET]");
+    }
   }
   const admin2faSecret = process.env.ADMIN_2FA_SECRET;
   if (admin2faSecret && admin2faSecret.length >= 8) {

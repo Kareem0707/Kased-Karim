@@ -656,7 +656,9 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
           });
         }
 
-        const canonicalPrice = parseFloat(canonicalProduct.price);
+        const basePrice = parseFloat(canonicalProduct.price);
+        const salePrice = canonicalProduct.salePrice !== undefined && canonicalProduct.salePrice !== null ? parseFloat(canonicalProduct.salePrice) : NaN;
+        const canonicalPrice = (!isNaN(salePrice) && Number.isFinite(salePrice) && salePrice > 0 && salePrice < basePrice) ? salePrice : basePrice;
         if (isNaN(canonicalPrice) || !Number.isFinite(canonicalPrice) || canonicalPrice <= 0) {
           return res.status(400).json({
             success: false,
@@ -698,6 +700,7 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
       // 4. Coupon Discount Calculation from Central Server Rules (Axis 1)
       let discountCents = 0;
       let appliedCouponCode = null;
+      let appliedCouponId = null;
 
       if (orderPayload.couponCode || orderPayload.coupon) {
         const rawCode = orderPayload.couponCode || orderPayload.coupon;
@@ -744,6 +747,7 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
         // Ensure discount never exceeds subtotal (Axis 1)
         discountCents = Math.min(discountCents, subtotalCents);
         appliedCouponCode = coupon.code || String(rawCode).toUpperCase();
+        appliedCouponId = coupon.id || appliedCouponCode;
       }
 
       // 5. Authoritative Shipping Fee Calculation (Axis 1)
@@ -908,6 +912,14 @@ async function ordersHandler(req, res, { requestId, safeBody } = {}) {
           success: false,
           error: "تعذر تسجيل الطلب على الخادم في الوقت الحالي. يرجى المحاولة مرة أخرى أو التواصل معنا عبر واتساب."
         });
+      }
+
+      // Increment coupon usage count atomically via CAS so usageLimit cannot be bypassed infinitely
+      if (appliedCouponId) {
+        await firebaseCas(buildSafeRtdbPath("coupons", appliedCouponId), (current) => {
+          if (!current || typeof current !== "object") return false;
+          return { ...current, usedCount: (Number(current.usedCount) || 0) + 1, updatedAt: Date.now() };
+        }).catch(() => null);
       }
 
       // Update Idempotency Record to completed state
