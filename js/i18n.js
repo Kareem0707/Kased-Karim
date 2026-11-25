@@ -60,7 +60,7 @@
       heroHeadingHighlight: "وإضاءة معمارية",
       heroHeadingSuffix: " في الشيخ زايد",
       heroEditorialDesc: "يقدم معرض قاصد كريم بسنتر الطاهرة بالشيخ زايد نجفاً مودرن وثريات كريستال عصفور وأنظمة ماجنتيك تراك (48V) بدرجة وضوح ألوان CRI > 95، مع ضمان يصل إلى 5 سنوات ومعاينة كاملة قبل الدفع.",
-      heroSubtitle: "نجف مودرن وثريات كريستال وماجنتيك تراك بضمان يصل إلى 5 سنوات ومعاينة قبل الدفع وتوصيل مجاني بالشيخ زايد.",
+      heroSubtitle: "نجف مودرن وثريات كريستال وماجنتيك تراك بضمان يصل إلى 5 سنوات ومعاينة قبل الدفع وشحن مؤمّن ضد الكسر لجميع المحافظات.",
       heroBtnExplore: "تصفح النجف والأسعار",
       heroBtnVisit: "تفضل بزيارة صالة العرض",
       exclusiveCollectionsTag: "كتالوج النجف والإضاءة المعمارية",
@@ -85,7 +85,7 @@
       btnDirectCheckout: "تأكيد الحجز — الدفع بعد المعاينة",
       btnWhatsAppQuote: "لديك استفسار؟ تواصل عبر واتساب",
       btnPrintQuote: "طباعة تفاصيل الطلب",
-      freeShippingNote: "شحن مجاني لكافة طلبات الشيخ زايد والطلبات فوق 5,000 ج.م",
+      freeShippingNote: "شحن وتغليف مؤمّن ضد الكسر للشيخ زايد وكافة المحافظات",
 
       // Customer Auth Modal
       authModalTitle: "تسجيل الدخول / إنشاء حساب عميل",
@@ -155,7 +155,7 @@
       status_failed: "فشل التوصيل",
 
       // Delivery Areas
-      area_sheikh_zayed: "الشيخ زايد (توصيل مجاني خلال 1-2 يوم)",
+      area_sheikh_zayed: "الشيخ زايد (خلال 1-2 يوم عمل)",
       area_october: "السادس من أكتوبر (50 ج.م - 1-2 يوم)",
       area_new_cairo: "القاهرة الجديدة والتجمع (75 ج.م - 2-3 أيام)",
       area_giza: "الجيزة والدقي والمهندسين (60 ج.م - 2-3 أيام)",
@@ -259,7 +259,7 @@
       btnDirectCheckout: "Proceed to Direct Checkout",
       btnWhatsAppQuote: "Send Order Details to Sales via WhatsApp",
       btnPrintQuote: "Print Quotation Summary",
-      freeShippingNote: "Free delivery on all Sheikh Zayed orders & orders over 5,000 EGP",
+      freeShippingNote: "Insured anti-breakage shipping across Sheikh Zayed & Egypt",
 
       // Customer Auth Modal
       authModalTitle: "Sign In / Create Customer Account",

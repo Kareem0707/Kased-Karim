@@ -809,7 +809,7 @@ let SHOWROOM_INFO = { ...INITIAL_SHOWROOM_INFO };
 
 // مناطق التوصيل المعتمدة ورسوم الشحن (PRD Section 5)
 const INITIAL_DELIVERY_AREAS = [
-  { id: "sheikh-zayed", name: "الشيخ زايد وبيفرلي هيلز والربوة", names: ["الشيخ زايد", "بيفرلي هيلز", "الربوة", "الخمائل", "جرين هيلز"], nameAr: "الشيخ زايد", nameEn: "Sheikh Zayed & Beverly Hills", fee: 0, days: "1 - 2 أيام عمل", daysEn: "1 - 2 Business Days", active: true },
+  { id: "sheikh-zayed", name: "الشيخ زايد", names: ["الشيخ زايد"], nameAr: "الشيخ زايد", nameEn: "Sheikh Zayed", fee: 0, days: "1 - 2 أيام عمل", daysEn: "1 - 2 Business Days", active: true },
   { id: "october", name: "السادس من أكتوبر وحدائق الأهرام", names: ["السادس من أكتوبر", "أكتوبر الجديدة", "حدائق الأكتوبر", "حدائق الأهرام"], nameAr: "السادس من أكتوبر", nameEn: "6th of October & Hadayek", fee: 50, days: "1 - 2 أيام عمل", daysEn: "1 - 2 Business Days", active: true },
   { id: "new-cairo", name: "القاهرة الجديدة والتجمع والرحاب ومدينتي", names: ["القاهرة الجديدة", "التجمع الخامس", "التجمع الأول", "الرحاب", "مدينتي", "المستقبل"], nameAr: "القاهرة الجديدة والتجمع", nameEn: "New Cairo & Tagamoa", fee: 75, days: "2 - 3 أيام عمل", daysEn: "2 - 3 Business Days", active: true },
   { id: "giza", name: "الجيزة والدقي والمهندسين والزمالك", names: ["الجيزة", "الدقي", "المهندسين", "الزمالك", "العجوزة"], nameAr: "الجيزة والدقي والمهندسين", nameEn: "Giza, Dokki & Mohandessin", fee: 60, days: "2 - 3 أيام عمل", daysEn: "2 - 3 Business Days", active: true },

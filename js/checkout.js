@@ -239,7 +239,7 @@
         areas.forEach(a => {
           const opt = document.createElement("option");
           opt.value = a.id;
-          opt.textContent = `${a.name} (${a.fee === 0 ? "توصيل مجاني" : a.fee + " ج.م"} - ${a.days || "1-3 أيام"})`;
+          opt.textContent = `${a.name} (${a.fee > 0 ? a.fee + " ج.م - " : ""}${a.days || "1-3 أيام"})`;
           if (a.id === curVal) opt.selected = true;
           areaSelect.appendChild(opt);
         });
@@ -367,7 +367,7 @@
     if (clean.length < 8) {
       return {
         valid: false,
-        message: `⚠️ يرجى كتابة تفاصيل أوضح للعنوان (${clean.length} / 8 أحرف كحد أدنى، مثال: بيفرلي هيلز فيلا 42)`,
+        message: `⚠️ يرجى كتابة تفاصيل أوضح للعنوان (${clean.length} / 8 أحرف كحد أدنى، مثال: الحي الأول - فيلا 42)`,
         cleanAddress: clean
       };
     }
